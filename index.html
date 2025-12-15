@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gradient Designer</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="shortcut icon" href="./LOGO.svg" type="image/x-icon">
+</head>
+
+<body>
+  <div id="zoomIndicator" class="zoom-indicator">100%</div>
+  <header>
+    <img class="logo" src="./LOGO.svg" alt="logo">
+    <h1 class="name">Gradient Designer</h1>
+
+  </header>
+  <div class="aspect-ratio-continer">
+    <!-- Aspect Ratio Buttons -->
+    <div class="aspect-ratio-row">
+      <label class="Aspect-Ratio-label">Aspect Ratio</label>
+      <div class="aspect-ratio-btns" id="aspectBtns">
+        <button class="aspect-btn active" data-ratio="free" title="Free">
+          Free
+        </button>
+        <button class="aspect-btn" data-ratio="1:1" title="Square">1:1</button>
+        <button class="aspect-btn" data-ratio="4:3" title="4:3">4:3</button>
+        <button class="aspect-btn" data-ratio="16:9" title="Widescreen">16:9</button>
+        <button class="aspect-btn" data-ratio="9:16" title="Portrait">9:16</button>
+      </div>
+    </div>
+    <!-- Aspect Ratio Inputs -->
+    <div class="aspect-input-row">
+      <input type="number" id="aspectW" class="aspect-input-num" placeholder="W" min="1" max="100" title="Aspect Width">
+      <span class="aspect-separator">:</span>
+      <input type="number" id="aspectH" class="aspect-input-num" placeholder="H" min="1" max="100"
+        title="Aspect Height">
+      <button class="aspect-lock-btn" id="aspectLockBtn" title="Lock Aspect Ratio (L)">
+        <img src="./icon/unlock.svg" alt="unlock" id="aspectLockIcon">
+      </button>
+    </div>
+    <div class="resolution-presets">
+      <label class="size-label">size</label>
+      <div class="preset-btns">
+        <button class="preset-btn" data-w="1280" data-h="720">HD</button>
+        <button class="preset-btn" data-w="1920" data-h="1080">FHD</button>
+        <button class="preset-btn" data-w="2560" data-h="1440">2K</button>
+        <button class="preset-btn" data-w="3840" data-h="2160">4K</button>
+      </div>
+    </div>
+  <!-- Size Inputs -->
+  <div class="size-inputs-row">
+    <div class="size-input-group">
+      <label>W</label>
+      <input type="number" id="canvasWidth" class="num-input" min="200" max="3840" value="800">
+    </div>
+
+    <button class="size-link-btn" id="sizeLinkBtn" title="Link dimensions">
+      <img src="./icon/link.svg" alt="link">
+    </button>
+
+    <div class="size-input-group">
+      <label>H</label>
+      <input type="number" id="canvasHeight" class="num-input" min="200" max="2160" value="600">
+    </div>
+  </div>
+    <!-- Swap Button -->
+    <button class="swap-size-btn" id="swapSizeBtn" title="Swap dimensions (X)">
+      <img src="./icon/swap.svg" alt="swap">
+      <span>Swap</span>
+    </button>
+  </div>
+
+
+  <div class="canvas-wrap">
+    <div class="canvas-container">
+      <div class="canvas-wrapper">
+        <canvas id="canvas"></canvas>
+        <div class="resize-w">
+          <div id="resizeWidthHandle" class="resize-width"></div>
+          <button id="btnLock" class="tool-btn" title="Lock to Center">
+            <img src="./icon/unlock.svg" alt="unlocked">
+          </button>
+        </div>
+        <div class="resize-h">
+          <button id="toggleHandles" class="handle-toggle-btn" title="Toggle handle visibility (H)"><img
+              src="./icon/eye.svg" alt="show handel"></button>
+          <div id="resizeHeightHandle" class="resize-height"></div>
+        </div>
+      </div>
+    </div>
+    <!-- Zoom Controls -->
+    <div class="zoom-controls">
+      <button id="zoomOut" title="Zoom Out (Ctrl -)"><img src="./icon/minus.svg" alt="Zoom Out"></button>
+      <input type="range" id="zoomSlider" class="zoom-slider" min="25" max="400" value="100">
+      <button id="zoomIn" title="Zoom In (Ctrl +)"><img src="./icon/plus.svg" alt="Zoom in"></button>
+      <span id="zoomValue" class="zoom-value">100%</span>
+      <!-- <button id="zoomReset" class="zoom-btn" title="Reset (Ctrl 0)">Reset</button> -->
+      <button id="zoomFit" class="zoom-btn" title="Fit (F)"><img src="./icon/fit.svg" alt="Fit"></button>
+    </div>
+  </div>
+
+  <aside class="panel">
+        <div class="section">
+      <div class="section-title" style="margin-bottom: 1rem;">BackGraond</div>
+    <div class="color-swatch" id="bgBtn">
+      <div class="color-swatch-inner" id="bgPreview"></div>
+    </div></div>
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">Layers</div>
+        <div class="toolbar">
+          <button id="btnRadial" class="primary">Radial</button>
+          <button id="btnLinear">Linear</button>
+          <button id="btnConic" class="btn">Conic</button>
+        </div>
+        <!-- <button id="btnReset" style="color:var(--danger)">Clear</button> -->
+      </div>
+      <div id="list"></div>
+    </div>
+    <div class="section">
+      <div class="section-title" style="margin-bottom: 1rem;">Properties</div>
+      <div id="inspector"></div>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title">
+          Output</div>
+        <div class="export-btns">
+          <select id="exportSelect">
+            <option value="">Export As...</option>
+            <option value="png">PNG</option>
+            <option value="jpg">JPG</option>
+            <option value="svg">SVG</option>
+          </select>
+        </div>
+        <div class="Format">
+          <select id="cssFormat">
+            <option value="hex">HEX</option>
+            <option value="rgba" selected>RGBA</option>
+            <option value="hsla">HSLA</option>
+          </select>
+        </div>
+        <button id="copyBtn" class="copy-btn" onclick="copyCSS()">
+          <img src="./icon/copy.svg" alt="copy">
+          </svg>
+          <span>Copy</span>
+      </div>
+      <iframe id="css" class="css-output"></iframe>
+    </div>
+  </aside>
+  </div>
+
+  <div class="picker-overlay" id="pickerOverlay">
+    <div class="picker-modal">
+      <div class="picker-header">
+        <span class="picker-title">Color</span>
+        <button class="picker-close" id="pickerClose">
+          <img src="./icon/close.svg" alt="close">
+        </button>
+      </div>
+
+      <div class="sb-box" id="sbBox">
+        <div class="sb-cursor" id="sbCursor"></div>
+      </div>
+
+      <div class="slider-track hue-track" id="hueTrack">
+        <div class="slider-thumb" id="hueThumb"></div>
+      </div>
+
+      <div class="slider-track alpha-track" id="alphaTrack">
+        <div class="slider-thumb" id="alphaThumb"></div>
+      </div>
+
+      <!-- Recent Colors -->
+      <div class="recent-colors" id="recentColors">
+        <div class="recent-colors-title">Recent</div>
+        <div class="recent-colors-list" id="recentColorsList"></div>
+      </div>
+
+      <div class="picker-inputs">
+        <div class="format-btns">
+          <button class="format-btn" data-f="hex">HEX</button>
+          <button class="format-btn" data-f="rgb">RGB</button>
+          <button class="format-btn" data-f="hsl">HSL</button>
+        </div>
+        <div class="picker-fields" id="fields"></div>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+
+</html>
