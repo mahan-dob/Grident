@@ -152,63 +152,14 @@ function simplifyRatio(w, h, maxValue = 50) {
   w = Math.round(w);
   h = Math.round(h);
 
-  // اول با GCD ساده کن
+  // فقط نسبت واقعی را با GCD ساده کن
   const gcd = getGCD(w, h);
   let simpleW = w / gcd;
   let simpleH = h / gcd;
 
-  // اگر اعداد کوچیکن، همین خوبه
-  if (simpleW <= maxValue && simpleH <= maxValue) {
-    return { w: simpleW, h: simpleH };
-  }
-
-  // اگر بزرگن، به نزدیک‌ترین نسبت معروف تبدیل کن
-  const ratio = w / h;
-
-  const commonRatios = [
-    { w: 1, h: 1 },
-    { w: 4, h: 3 },
-    { w: 3, h: 4 },
-    { w: 16, h: 9 },
-    { w: 9, h: 16 },
-    { w: 21, h: 9 },
-    { w: 9, h: 21 },
-    { w: 3, h: 2 },
-    { w: 2, h: 3 },
-    { w: 5, h: 4 },
-    { w: 4, h: 5 },
-    { w: 16, h: 10 },
-    { w: 10, h: 16 },
-    { w: 2, h: 1 },
-    { w: 1, h: 2 },
-    { w: 7, h: 5 },
-    { w: 5, h: 7 },
-    { w: 6, h: 5 },
-    { w: 5, h: 6 },
-  ];
-
-  // پیدا کردن نزدیک‌ترین نسبت
-  let closest = { w: simpleW, h: simpleH };
-  let minDiff = Infinity;
-
-  for (const cr of commonRatios) {
-    const diff = Math.abs(ratio - cr.w / cr.h);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = cr;
-    }
-  }
-
-  // اگر نزدیکه (کمتر از 2% اختلاف)، از نسبت معروف استفاده کن
-  if (minDiff < 0.02) {
-    return { w: closest.w, h: closest.h };
-  }
-
-  // در غیر این صورت، مقیاس کن به اعداد کوچکتر
-  const scale = maxValue / Math.max(simpleW, simpleH);
   return {
-    w: Math.round(simpleW * scale) || 1,
-    h: Math.round(simpleH * scale) || 1,
+    w: simpleW || 1,
+    h: simpleH || 1,
   };
 }
 // ========== COLOR FUNCTIONS ==========
@@ -468,15 +419,15 @@ function setCustomAspectRatio(w, h, applyToCanvas = true) {
     return;
   }
 
-  // نسبت دقیقا با همان اعدادی که کاربر وارد کرده ذخیره شود
-  dimensionState.aspectW = w;
-  dimensionState.aspectH = h;
+  const simple = simplifyRatio(w, h);
+  dimensionState.aspectW = simple.w;
+  dimensionState.aspectH = simple.h;
   dimensionState.aspectRatio = w / h;
   dimensionState.aspectLocked = true;
 
   // چک کن آیا با یک preset مطابقت داره
   for (const [name, preset] of Object.entries(aspectPresets)) {
-    if (preset.w === w && preset.h === h) {
+    if (preset.w === simple.w && preset.h === simple.h) {
       dimensionState.activeAspectPreset = name;
       break;
     }
@@ -756,19 +707,16 @@ function updateAspectInputsUI() {
 
   if (!inputW || !inputH) return;
 
-  // اگر کاربر نسبت دلخواه وارد کرده، همان مقادیر را نمایش بده
-  if (
-    dimensionState.aspectLocked &&
-    dimensionState.aspectW &&
-    dimensionState.aspectH
-  ) {
-    inputW.value = dimensionState.aspectW;
-    inputH.value = dimensionState.aspectH;
-  } else {
-    // در غیر این صورت، نسبت ساده‌شده‌ی بوم را نشان بده
-    const simple = simplifyRatio(state.canvasWidth, state.canvasHeight);
-    inputW.value = simple.w;
-    inputH.value = simple.h;
+  // همیشه محاسبه و نمایش بده
+  const simple = simplifyRatio(state.canvasWidth, state.canvasHeight);
+  inputW.value = simple.w;
+  inputH.value = simple.h;
+
+  // ذخیره در state اگر lock فعاله
+  if (dimensionState.aspectLocked) {
+    dimensionState.aspectW = simple.w;
+    dimensionState.aspectH = simple.h;
+    dimensionState.aspectRatio = state.canvasWidth / state.canvasHeight;
   }
 }
 
@@ -2428,7 +2376,7 @@ function renderInspector() {
           <span>Color Stops</span>
           <button class="sm" onclick="addColorStop(getStop('${
             s.id
-          }'))">Add Color</button>
+          }'))">Color</button>
         </div>
         ${s.stops
           .map(
@@ -3282,8 +3230,7 @@ function initDimensionEvents() {
   const aspectH = document.getElementById("aspectH");
 
   if (aspectW && aspectH) {
-    // فقط وقتی هر دو مقدار وارد شدند و کاربر ادیت را تمام کرد اعمال شود
-    const applyAspectInputs = () => {
+    const handleAspectInput = () => {
       const w = aspectW.value;
       const h = aspectH.value;
 
@@ -3294,19 +3241,8 @@ function initDimensionEvents() {
       }
     };
 
-    // روی input لحظه‌ای اعمال نکن؛ فقط بعد از اتمام ویرایش
-    aspectW.addEventListener("blur", applyAspectInputs);
-    aspectH.addEventListener("blur", applyAspectInputs);
-
-    // اما اگر کاربر در حال اسکراب کردن (drag) روی input است، همزمان اعمال شود
-    const handleAspectInputScrub = () => {
-      if (window.__isNumberScrubbing) {
-        applyAspectInputs();
-      }
-    };
-
-    aspectW.addEventListener("input", handleAspectInputScrub);
-    aspectH.addEventListener("input", handleAspectInputScrub);
+    aspectW.addEventListener("input", handleAspectInput);
+    aspectH.addEventListener("input", handleAspectInput);
 
     aspectW.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -3319,7 +3255,7 @@ function initDimensionEvents() {
     aspectH.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        applyAspectInputs();
+        handleAspectInput();
         aspectH.blur();
       }
       if (e.key === "Escape") aspectH.blur();
@@ -3358,13 +3294,6 @@ function initDimensionEvents() {
       handleWidthChange(e.target.value, true);
     });
 
-    // هنگام اسکراب روی width به صورت زنده اعمال شود
-    canvasWidth.addEventListener("input", (e) => {
-      if (window.__isNumberScrubbing) {
-        handleWidthChange(e.target.value, true);
-      }
-    });
-
     canvasWidth.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.target.blur(); // یا مستقیم handleWidthChange
@@ -3375,13 +3304,6 @@ function initDimensionEvents() {
     // برای height
     canvasHeight.addEventListener("blur", (e) => {
       handleHeightChange(e.target.value, true);
-    });
-
-    // هنگام اسکراب روی height به صورت زنده اعمال شود
-    canvasHeight.addEventListener("input", (e) => {
-      if (window.__isNumberScrubbing) {
-        handleHeightChange(e.target.value, true);
-      }
     });
 
     canvasHeight.addEventListener("keydown", (e) => {
@@ -3538,9 +3460,6 @@ if (document.readyState === "loading") {
 
   const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
-  // فلگ سراسری برای تشخیص اسکرابینگ روی inputهای عددی
-  window.__isNumberScrubbing = false;
-
   document.addEventListener("pointerdown", (e) => {
     const input = e.target.closest('input[type="number"]');
     if (!input) return;
@@ -3567,7 +3486,6 @@ if (document.readyState === "loading") {
     startX = e.clientX;
     startValue = parseFloat(input.value) || 0;
 
-    window.__isNumberScrubbing = true;
     document.body.style.cursor = "ew-resize";
   });
 
@@ -3601,7 +3519,6 @@ if (document.readyState === "loading") {
     } catch {}
     activeInput = null;
     document.body.style.cursor = "";
-    window.__isNumberScrubbing = false;
   };
 
   document.addEventListener("pointerup", end);
