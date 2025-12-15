@@ -2052,7 +2052,7 @@ function renderInspector() {
       <div class="form-group">
         <div class="form-group-title">
           <span>Color Stops</span>
-          <button class="sm" onclick="addColorStop(getStop('${s.id}'))"><img src="./icon/plus.svg" alt="add color">Add</button>
+          <button class="sm" onclick="addColorStop(getStop('${s.id}'))">Color</button>
         </div>
         ${s.stops.map((cs, i) => `
           <div class="color-stop-row">

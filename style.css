@@ -2,20 +2,37 @@
    CSS VARIABLES
 ======================================== */
 :root {
-  --bg: #000000;
-  --panel: #1c1c1c;
-  --card: #3b3b3b;
+  --bg: #0b0d10;
+  --sec-bg: #1c1c1c;
+  --text-primary: #e8eef4;
+  --text-contrast: #000000;
+  --text-muted: #8da2b8;
   --white-color: #e1e9e5;
-  --accent:   linear-gradient(135deg, rgba(0, 255, 136, 1.00) 0%, rgba(0, 212, 255, 1.00) 100%);
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
   --muted: #6b7a8a;
   --danger: #ff4757;
   --primary: #00d4ff;
   --secondary: #00ff88;
+  --btn-transition: 0.25s ease;
 }
+
+[data-theme="light"] {
+  --bg: #f7f9fb;
+  --sec-bg: #ffffff;
+  --card: #f0f4f8;
+  --surface-hover: #e9eff5;
+  --text-primary: #0f1720;
+  --text-muted: #4a5868;
+  --border: rgba(0, 0, 0, 0.08);
+  --accent: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
+  --text-contrast: #ffffff;
+}
+
 @font-face {
-    font-family: "SF Pro";
-    src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot");
-    src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot?#iefix")format("embedded-opentype"),
+  font-family: "SF Pro";
+  src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot");
+  src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot?#iefix")format("embedded-opentype"),
     url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.woff2")format("woff2"),
     url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.woff")format("woff"),
     url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.ttf")format("truetype"),
@@ -23,14 +40,15 @@
 }
 
 @font-face {
-    font-family: "Filson Soft";
-    src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot");
-    src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot?#iefix")format("embedded-opentype"),
+  font-family: "Filson Soft";
+  src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot");
+  src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot?#iefix")format("embedded-opentype"),
     url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.woff2")format("woff2"),
     url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.woff")format("woff"),
     url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.ttf")format("truetype"),
     url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.svg#Filson Soft")format("svg");
 }
+
 /* ========================================
    RESET & BASE STYLES
 ======================================== */
@@ -38,16 +56,17 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-    -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
 body {
   height: 100%;
   background: var(--bg);
-  color: #e8eef4;
+  color: var(--text-primary);
   font-family: "SF Pro";
   font-size: 12px;
+  transition: background-color var(--btn-transition), color var(--btn-transition);
 }
 
 /* ========================================
@@ -56,15 +75,17 @@ body {
 body {
   display: grid;
   grid-template-columns: 70% 30%;
+  transition: background-color var(--btn-transition), color var(--btn-transition);
 }
+
 /* ========================================
    input
 ======================================== */
 input[type="number"] {
-  cursor: ew-resize;       
-  user-select: none;      
-  touch-action: none;      
-  transition: border-color 0.2s;
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+  transition: border-color var(--btn-transition), color var(--btn-transition), background-color var(--btn-transition);
 }
 
 input[type="number"]:focus {
@@ -74,6 +95,7 @@ input[type="number"]:focus {
 input[type="number"]:hover {
   border-color: #999;
 }
+
 input[type="number"]:active {
   border-color: #666;
 }
@@ -89,7 +111,7 @@ input[type="number"]::-webkit-outer-spin-button {
 ======================================== */
 header {
   grid-column: 1 / -1;
-  background: var(--panel);
+  background: var(--sec-bg);
   padding: 8px 14px;
   display: flex;
   align-items: center;
@@ -102,11 +124,12 @@ header h1 {
   font-size: 13px;
   font-weight: 600;
 }
+
 /* ========================================
    LOGO
 ======================================== */
 
-.logo{
+.logo {
   width: 6rem;
   height: 6rem;
 }
@@ -120,6 +143,7 @@ header h1 {
   color: transparent;
   font-family: "Filson Soft";
 }
+
 /* ========================================
    CANVAS AREA
 ======================================== */
@@ -192,10 +216,11 @@ header h1 {
 .panel {
   grid-column: 2/3;
   grid-row: 3/4;
-  background: var(--panel);
+  background: var(--sec-bg);
   border-left: 1px solid rgba(255, 255, 255, 0.05);
   overflow-y: auto;
   padding: 10px;
+  transition: background-color var(--btn-transition), border-color var(--btn-transition), color var(--btn-transition);
 }
 
 /* ========================================
@@ -209,9 +234,9 @@ header h1 {
   position: relative;
 }
 
-.section-header{
+.section-header {
   display: flex;
-    justify-content: space-between;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
   gap: 12px;
@@ -229,11 +254,12 @@ header h1 {
   width: max-content;
 }
 
+
 /* ========================================
    STOP ITEMS
 ======================================== */
 .stop-item {
-  background: var(--panel);
+  background: var(--sec-bg);
   border-radius: 6px;
   margin-bottom: 5px;
   border: 2px solid transparent;
@@ -255,7 +281,7 @@ header h1 {
   cursor: pointer;
 }
 
-.color-stop-header{
+.color-stop-header {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -302,7 +328,7 @@ header h1 {
   gap: 2px;
 }
 
-.pos-lock{
+.pos-lock {
   width: 1.4rem;
   height: 1.4rem;
 }
@@ -372,7 +398,7 @@ select {
   font-size: 10px;
 }
 
-.color-stop-fields{
+.color-stop-fields {
   width: 12rem;
 }
 
@@ -394,9 +420,9 @@ select {
   margin: 4px;
 }
 
-.color-stop-row{
+.color-stop-row {
   display: flex;
-  background: var(--panel);
+  background: var(--sec-bg);
   width: 100%;
   justify-content: space-between;
   margin-block: 4px;
@@ -409,52 +435,44 @@ select {
    BUTTONS
 ======================================== */
 button {
-  background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--sec-bg);
+  border: 1px solid var(--border);
   color: inherit;
   padding: 6px 12px;
   border-radius: 999px;
   cursor: pointer;
-    animation: pulse 0.3s ease;
-    transition: all 0.2s;
+  animation: pulse 0.3s ease;
+  transition: all var(--btn-transition);
 }
 
 button:hover {
-  background: #2a3642;
-}
-
-button.primary {
-  background: var(--accent);
-  color: #000;
-  font-weight: 600;
-  text-shadow: 1px 1px 12px #000;
+  background: var(--surface-hover);
 }
 
 button.sm {
-  background: var(--accent);
-  padding: 2px 8px 2px 2px;
+  padding: .5rem 1rem;
   font-size: .9rem;
   display: flex;
   align-items: center;
-  color: #000;
   text-shadow: 1px 1px 12px #000;
-    animation: pulse 0.3s ease;
-    transition: all 0.2s;
+
 }
 
-.sm:hover img{
-  transform: rotate(45deg);
-  transition: all 0.2s;
-}
-button img{
- width: 1.8rem; 
- height: 1.8rem; 
+.sm:hover {
+  background: var(--accent);
+  color: var(--text-contrast);
 }
 
-.sm img{
+button img {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+.sm img {
   height: 1.8rem;
   width: 1.8rem;
 }
+
 #btnReset {
   justify-self: end;
 }
@@ -487,12 +505,12 @@ button img{
 
 /* Copy Button */
 
-#cssFormat{
+#cssFormat {
   background: none;
   border-radius: 8px;
 }
 
-#exportSelect{
+#exportSelect {
   background: var(--accent);
   font-weight: 600;
   border-radius: 8px;
@@ -549,6 +567,7 @@ button img{
   position: absolute;
   inset: 0;
 }
+
 /* ========================================
    ASPECT RATIO CONTROLS
 ======================================== */
@@ -597,8 +616,15 @@ button img{
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .aspect-separator {
@@ -645,10 +671,10 @@ button img{
   filter: brightness(0);
 }
 
-.size-label{
+.size-label {
   position: absolute;
   top: -2rem;
-    color: #888;
+  color: #888;
   font-size: 1.1rem;
 }
 
@@ -665,7 +691,7 @@ button img{
   color: var(--muted);
   width: 14px;
   position: absolute;
-margin-bottom: 2px;
+  margin-bottom: 2px;
   right: 0;
 }
 
@@ -712,34 +738,35 @@ margin-bottom: 2px;
 }
 
 .preset-btns {
-    display: flex;
-    gap: 2px;
-    flex: 1;
-    border-radius: 8px;
-    padding: 2px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  border-radius: 8px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .preset-btn {
-flex: 1;
-    padding: 6px 4px;
-    font-weight: 600;
-    width: 3.4rem;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  flex: 1;
+  padding: 6px 4px;
+  font-weight: 600;
+  width: 3.4rem;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preset-btn.selected {
   background: var(--accent);
   color: #000;
 }
+
 /* ========================================
    COLOR PICKER MODAL
 ======================================== */
@@ -747,7 +774,7 @@ flex: 1;
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   z-index: 1000;
   display: none;
   align-items: center;
@@ -1100,6 +1127,26 @@ flex: 1;
   display: flex;
   width: min-content;
   gap: 1rem;
+  height: 2rem;
+}
+
+
+.gradient-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 1.1rem;
+  width: max-content;
+  border: 1px solid transparent;
+
+}
+
+.gradient-btn:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  background: var(--accent);
+  color: var(--text-contrast);
 }
 
 .tool-btn {
@@ -1110,7 +1157,7 @@ flex: 1;
   right: -6px;
   top: -60px;
   padding: 8px;
-    background: rgba(28, 28, 28, 0.6);
+  background: rgba(28, 28, 28, 0.6);
   backdrop-filter: blur(2px);
 }
 
@@ -1120,14 +1167,14 @@ flex: 1;
   height: 1.8rem;
 }
 
-.active{
-      background: rgba(80, 40, 40, 0.9);
-    border-color: rgba(255, 100, 100, 0.3);
+.active {
+  background: rgba(80, 40, 40, 0.9);
+  border-color: rgba(255, 100, 100, 0.3);
 }
 
-.active:hover{
-      background: rgba(80, 40, 40, 0.9);
-    border-color: rgba(255, 100, 100, 0.3);
+.active:hover {
+  background: rgba(80, 40, 40, 0.9);
+  border-color: rgba(255, 100, 100, 0.3);
 }
 
 /* ========================================
@@ -1135,8 +1182,7 @@ flex: 1;
 ======================================== */
 .zoom-controls {
   position: sticky;
-  bottom: 0;
-margin-bottom: 1rem;
+  bottom: 1rem;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1164,17 +1210,18 @@ margin-bottom: 1rem;
   transition: all 0.2s;
 }
 
-.zoom-controls button img{
+.zoom-controls button img {
   width: 1.8rem;
   height: 1.8rem;
 }
+
 .zoom-controls button:active {
   background: var(--accent);
   transform: scale(1.1);
 }
 
-.zoom-controls button:active img{
-    filter: invert(1) brightness(0);
+.zoom-controls button:active img {
+  filter: invert(1) brightness(0);
 }
 
 .zoom-controls .zoom-btn {
@@ -1250,7 +1297,7 @@ margin-bottom: 1rem;
    CSS OUTPUT
 ======================================== */
 .css-output {
-  background: var(--panel);
+  background: var(--sec-bg);
   border: none;
   border-radius: 6px;
   padding: 12px;
@@ -1271,69 +1318,41 @@ margin-bottom: 1rem;
 .css-output .property {
   color: #9cdcfe;
 }
+
 .css-output .value {
   color: #ce9178;
 }
+
 .css-output .function {
   color: #dcdcaa;
-}
-
-/* Scrollbar Base */
-.css-output {
-  scrollbar-width: thin;              /* Firefox */
-  scrollbar-color: #ff2d55 #1a1a1a;   /* Firefox */
-}
-
-/* Chrome / Edge / Safari */
-.css-output::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-/* Track */
-.css-output::-webkit-scrollbar-track {
-  background: #1a1a1a;
-  border-radius: 10px;
-}
-
-/* Thumb */
-.css-output::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #000000, #ff2d55);
-  border-radius: 10px;
-  transition: background 0.25s ease;
-}
-
-/* Hover */
-.css-output::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #ff8a00, #ff3b6f);
 }
 
 /* ========================================
    ASPECT RATIO CONTROLS
 ======================================== */
 
-.aspect-ratio-continer{
+.aspect-ratio-continer {
   display: grid;
   align-items: center;
-  gap:8px;
+  gap: 8px;
   justify-content: space-between;
   width: 100%;
   grid-row: 2/3;
   grid-column: 1/3;
-background: var(--panel);
-padding: 2.5rem .8rem .8rem;
+  background: var(--sec-bg);
+  padding: 2.5rem .8rem .8rem;
 }
 
-.Aspect-Ratio-label{
+.Aspect-Ratio-label {
   position: absolute;
   top: -2rem;
-    color: #888;
+  color: #888;
   font-size: 1.1rem;
 }
 
 .aspect-ratio-row {
   position: relative;
-  grid-column: 1/2
+  grid-column: 1/2;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1473,7 +1492,7 @@ padding: 2.5rem .8rem .8rem;
 
 /* Swap Button */
 .swap-size-btn {
-width: max-content;
+  width: max-content;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1524,7 +1543,7 @@ width: max-content;
    handle toggle
 ======================================== */
 
-  .handle-toggle-btn {
+.handle-toggle-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1532,15 +1551,15 @@ width: max-content;
   right: 140px;
   top: -5px;
   padding: 8px;
-    background: rgba(28, 28, 28, 0.6);
+  background: rgba(28, 28, 28, 0.6);
   backdrop-filter: blur(2px);
   z-index: 9999;
-  }
-  
-  .handle-toggle-btn.handles-hidden {
-    background: rgba(80, 40, 40, 0.9);
-    border-color: rgba(255, 100, 100, 0.3);
-  }
+}
+
+.handle-toggle-btn.handles-hidden {
+  background: rgba(80, 40, 40, 0.9);
+  border-color: rgba(255, 100, 100, 0.3);
+}
 
 /* ========================================
    UTILITY
@@ -1560,8 +1579,8 @@ width: max-content;
     display: block;
     font-size: 20px;
   }
-  
-  .canvas-wrap{
+
+  .canvas-wrap {
     height: 70%;
   }
 
@@ -1569,63 +1588,75 @@ width: max-content;
     width: 100%;
   }
 
-  .aspect-ratio-continer{
+  .aspect-ratio-continer {
     justify-content: space-around;
   }
-  .aspect-ratio-row{
+
+  .aspect-ratio-row {
     grid-row: 1/2;
   }
-.aspect-ratio-btns{
-  grid-column: 1/2;
-  grid-row: 2/3;
-}
-.aspect-input-row{
-        grid-column: 1 / 2;
-        grid-row: 2 / 3;
-}
-.resolution-presets{
+
+  .aspect-ratio-btns {
+    grid-column: 1/2;
+    grid-row: 2/3;
+  }
+
+  .aspect-input-row {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+  }
+
+  .resolution-presets {
     grid-column: 2/3;
-  grid-row: 1/2;
-}
-.size-inputs-row{
+    grid-row: 1/2;
+  }
+
+  .size-inputs-row {
     grid-column: 2/3;
-  grid-row: 2/3;
-}
-.swap-size-btn{
-      grid-column: 3/4;
+    grid-row: 2/3;
+  }
+
+  .swap-size-btn {
+    grid-column: 3/4;
     grid-row: 1/3;
     width: 100%;
-}
+  }
 }
 
 @media (max-width: 1000px) {
 
-  .aspect-ratio-continer{
+  .aspect-ratio-continer {
     justify-content: stretch;
   }
-  .aspect-ratio-row{
+
+  .aspect-ratio-row {
     grid-row: 1/2;
   }
-.aspect-ratio-btns{
-  grid-column: 1/2;
-  grid-row: 2/3;
-}
-.aspect-input-row{
-        grid-column: 1 / 2;
-        grid-row: 3 / 4;
-}
-.resolution-presets{
-  margin-top: 2rem;
+
+  .aspect-ratio-btns {
     grid-column: 1/2;
-  grid-row: 4/5;
-}
-.size-inputs-row{
+    grid-row: 2/3;
+  }
+
+  .aspect-input-row {
+    grid-column: 1 / 2;
+    grid-row: 3 / 4;
+  }
+
+  .resolution-presets {
+    margin-top: 2rem;
     grid-column: 1/2;
-  grid-row: 5/6;
-}
-.swap-size-btn{
-      grid-column: 1/2;
+    grid-row: 4/5;
+  }
+
+  .size-inputs-row {
+    grid-column: 1/2;
+    grid-row: 5/6;
+  }
+
+  .swap-size-btn {
+    grid-column: 1/2;
     grid-row: 6/7;
     width: 100%;
-}
+  }
 }
