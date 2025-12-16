@@ -2261,7 +2261,8 @@ function renderInspector() {
           s.name
         }" onchange="getStop('${s.id}').name=this.value;refresh()">
       </div>
-      <div class="form-row">
+      <div class="form-row pos-continer">
+      <div class="pos-iput">
         <label>X</label>
         <input type="number" class="num-input" min="0" max="100" value="${Math.round(
           s.x * 100
@@ -2270,7 +2271,7 @@ function renderInspector() {
             s.id
           }').x = +this.value / 100; draw(); updateCSS()">
       </div>
-      <div class="form-row">
+      <div class="pos-iput">
         <label>Y</label>
         <input type="number" class="num-input" min="0" max="100" value="${Math.round(
           s.y * 100
@@ -2284,6 +2285,7 @@ function renderInspector() {
             ? '<span style="font-size:9px;color:#666;"><img class="pos-lock" src="./icon/lock.svg" alt="lock position"></span>'
             : ""
         }
+      </div>
       </div>
     </div>
   `;
@@ -2313,7 +2315,7 @@ function renderInspector() {
         </div>
         <div class="form-row">
           <label>Feather</label>
-          <input type="number" class="num-input" min="0" max="100" value="${Math.round(
+          <input type="number" class="num-input" min="1" max="100" value="${Math.round(
             s.feather
           )}" 
             oninput="getStop('${s.id}').feather=+this.value;draw();updateCSS()">
@@ -2333,7 +2335,7 @@ function renderInspector() {
     h += `
       <div class="form-group">
         <div class="form-group-title">Angle</div>
-        <div class="form-row" style="align-items: center; gap: 15px;">
+        <div class="form-row Angle" style="align-items: center; gap: 15px;">
           <div class="angle-picker" onmousedown="startAngleDrag(event, '${s.id}')" ontouchstart="startAngleDrag(event, '${s.id}')">
             <div class="angle-dial">
               <div class="angle-handle" id="angleHandle_${s.id}" style="transform: rotate(${s.angle}deg)">
@@ -2353,7 +2355,7 @@ function renderInspector() {
     h += `
       <div class="form-group">
         <div class="form-group-title">Angle</div>
-        <div class="form-row" style="align-items: center; gap: 15px;">
+        <div class="form-row Angle" style="align-items: center; gap: 15px;">
           <div class="angle-picker" onmousedown="startConicAngleDrag(event, '${s.id}')" ontouchstart="startConicAngleDrag(event, '${s.id}')">
             <div class="angle-dial">
               <div class="angle-handle" id="conicAngleHandle_${s.id}" style="transform: rotate(${s.startAngle}deg)">
