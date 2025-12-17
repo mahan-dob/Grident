@@ -13,6 +13,7 @@ select.addEventListener('change', e => {
   applyTheme(e.target.value);
 });
 
+
 // ========== CONFIGURATION ==========
 const CONFIG = {
   canvas: {
@@ -984,12 +985,35 @@ function delColorStop(s, i) {
     refresh();
   }
 }
+
+function safeButtonAction(action) {
+  isButtonInteraction = true;
+  
+  try {
+    action();
+  } finally {
+    // بعد از 100ms فلگ رو برگردون
+    setTimeout(() => {
+      isButtonInteraction = false;
+    }, 100);
+  }
+}
 // ========== TOGGLE HANDLES ==========
 const toggleBtn = document.getElementById("toggleHandles");
+let lastToggleTime = 0;
 
 function handleToggleClick(e) {
-  e.preventDefault();
-  e.stopPropagation();
+  // ✅ اول همه event ها رو متوقف کن
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  }
+  
+  // جلوگیری از اجرای دوباره (debounce)
+  const now = Date.now();
+  if (now - lastToggleTime < 300) return;
+  lastToggleTime = now;
 
   state.showHandles = !state.showHandles;
 
@@ -999,13 +1023,28 @@ function handleToggleClick(e) {
       : '<img src="./icon/eye-close.svg" alt="hide handel">';
     toggleBtn.classList.toggle("handles-hidden", !state.showHandles);
   }
+  
+  // فقط draw، نه refresh
   draw();
 }
 
 if (toggleBtn) {
+  // ✅ استفاده از click به جای pointerup (ساده‌تر و مطمئن‌تر)
   toggleBtn.addEventListener("click", handleToggleClick);
-  toggleBtn.addEventListener("touchend", handleToggleClick, { passive: false });
+  
+  // جلوگیری از همه رفتارهای پیش‌فرض touch
+  toggleBtn.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, { passive: false });
+  
+  toggleBtn.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleToggleClick(e);
+  }, { passive: false });
 }
+
 
 // ========== DRAWING FUNCTIONS ==========
 function getLinearGradientPoints(angle, width, height) {
@@ -1637,28 +1676,65 @@ document.addEventListener("touchmove", onPointerMove, { passive: false });
 document.addEventListener("mouseup", onPointerUp);
 document.addEventListener("touchend", onPointerUp);
 
+function refreshUI() {
+  draw();
+  renderList();
+  renderInspector();
+  updateCSS();
+  updateBgPreview();
+}
+
 // ========== LOCK BUTTON ==========
 const btnLock = document.getElementById("btnLock");
+let lastLockTime = 0;
 
 function handleLockClick(e) {
-  e.preventDefault();
-  e.stopPropagation();
+  // ✅ اول همه event ها رو متوقف کن
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  }
+  
+  // جلوگیری از اجرای دوباره
+  const now = Date.now();
+  if (now - lastLockTime < 300) return;
+  lastLockTime = now;
 
   state.lockVertical = !state.lockVertical;
-  btnLock.classList.toggle("active", state.lockVertical);
+  
+  if (btnLock) {
+    btnLock.classList.toggle("active", state.lockVertical);
+    btnLock.innerHTML = state.lockVertical
+      ? '<img src="./icon/lock.svg" alt="locked">'
+      : '<img src="./icon/unlock.svg" alt="unlocked">';
+  }
 
   if (state.lockVertical) {
-    btnLock.innerHTML = '<img src="./icon/lock.svg" alt="locked">';
     state.stops.forEach((s) => (s.y = 0.5));
-  } else {
-    btnLock.innerHTML = '<img src="./icon/unlock.svg" alt="unlocked">';
   }
-  refresh();
+  
+  // فقط UI آپدیت بشه
+  draw();
+  renderList();
+  renderInspector();
+  updateCSS();
+  updateBgPreview();
 }
 
 if (btnLock) {
   btnLock.addEventListener("click", handleLockClick);
-  btnLock.addEventListener("touchend", handleLockClick, { passive: false });
+  
+  btnLock.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, { passive: false });
+  
+  btnLock.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleLockClick(e);
+  }, { passive: false });
 }
 
 // ========== COLOR PICKER ==========
@@ -2241,19 +2317,47 @@ function updateBgPreview() {
   if (el) el.style.background = rgba(state.bgColor, state.bgAlpha / 100);
 }
 
+// ========== getGradPreview ==========
 function getGradPreview(s) {
-  if (s.type === "radial")
-    return `radial-gradient(circle, ${rgba(
-      s.color,
-      s.opacity / 100
-    )}, transparent)`;
-  if (s.type === "conic")
-    return `conic-gradient(from ${s.startAngle}deg, ${s.stops
-      .map((c) => rgba(c.color, c.opacity / 100) + " " + c.pos + "%")
-      .join(", ")})`;
-  return `linear-gradient(${s.angle}deg, ${s.stops
-    .map((c) => rgba(c.color, c.opacity / 100) + " " + c.pos + "%")
-    .join(", ")})`;
+  if (s.type === "radial") {
+    const solidEnd = 1 - (s.feather || 60) / 100;
+    const color = rgba(s.color, s.opacity / 100);
+    const transparent = rgba(s.color, 0);
+    
+    // اگر feather وجود داره، رنگ تا یک نقطه solid باشه و بعد fade کنه
+    if (solidEnd > 0 && solidEnd < 1) {
+      return `radial-gradient(circle at center, ${color} 0%, ${color} ${Math.round(solidEnd * 100)}%, ${transparent} 100%)`;
+    }
+    // اگر feather کامل هست (100%)، مستقیم fade کن
+    return `radial-gradient(circle at center, ${color} 0%, ${transparent} 100%)`;
+  }
+  
+  if (s.type === "conic") {
+    // چک کردن وجود stops
+    if (!s.stops || s.stops.length === 0) {
+      return `conic-gradient(from ${s.startAngle || 0}deg at center, #ff0066 0%, #00ff88 100%)`;
+    }
+    
+    // مرتب‌سازی stops
+    const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
+    const stopsStr = sortedStops
+      .map(c => `${rgba(c.color, c.opacity / 100)} ${c.pos}%`)
+      .join(", ");
+    
+    return `conic-gradient(from ${s.startAngle || 0}deg at center, ${stopsStr})`;
+  }
+  
+  // linear
+  if (!s.stops || s.stops.length === 0) {
+    return `linear-gradient(${s.angle || 0}deg, #ff0066 0%, #00ff88 100%)`;
+  }
+  
+  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
+  const stopsStr = sortedStops
+    .map(c => `${rgba(c.color, c.opacity / 100)} ${c.pos}%`)
+    .join(", ");
+  
+  return `linear-gradient(${s.angle || 0}deg, ${stopsStr})`;
 }
 
 // ========== LIVE UPDATE STOP ITEMS ==========
@@ -2484,7 +2588,7 @@ function renderInspector() {
         </div>
         <div class="form-row">
           <label>Feather</label>
-          <input type="number" class="num-input" min="0" max="100" value="${Math.round(s.feather)}" 
+          <input type="number" class="num-input" min="1" max="100" value="${Math.round(s.feather)}" 
             oninput="getStop('${s.id}').feather=+this.value;liveUpdate('${s.id}')">
         </div>
         <div class="form-row">
@@ -3218,63 +3322,63 @@ function setupWheelZoom() {
 }
 
 function setupTouchZoom() {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
+  // const wrap = document.querySelector(".canvas-wrap");
+  // if (!wrap) return;
 
-  let initialPinchDist = 0;
-  let initialZoom = 100;
+  // let initialPinchDist = 0;
+  // let initialZoom = 100;
 
-  function getPinchDist(touches) {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.hypot(dx, dy);
-  }
+  // function getPinchDist(touches) {
+  //   const dx = touches[0].clientX - touches[1].clientX;
+  //   const dy = touches[0].clientY - touches[1].clientY;
+  //   return Math.hypot(dx, dy);
+  // }
 
-  function getPinchCenter(touches) {
-    return {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-  }
+  // function getPinchCenter(touches) {
+  //   return {
+  //     x: (touches[0].clientX + touches[1].clientX) / 2,
+  //     y: (touches[0].clientY + touches[1].clientY) / 2,
+  //   };
+  // }
 
-  wrap.addEventListener(
-    "touchstart",
-    (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        initialPinchDist = getPinchDist(e.touches);
-        initialZoom = zoomState.current;
-      }
-    },
-    { passive: false }
-  );
+  // wrap.addEventListener(
+  //   "touchstart",
+  //   (e) => {
+  //     if (e.touches.length === 2) {
+  //       e.preventDefault();
+  //       initialPinchDist = getPinchDist(e.touches);
+  //       initialZoom = zoomState.current;
+  //     }
+  //   },
+  //   { passive: false }
+  // );
 
-  wrap.addEventListener(
-    "touchmove",
-    (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
+  // wrap.addEventListener(
+  //   "touchmove",
+  //   (e) => {
+  //     if (e.touches.length === 2) {
+  //       e.preventDefault();
 
-        const currentDist = getPinchDist(e.touches);
-        const scale = currentDist / initialPinchDist;
-        const newZoom = Math.round(initialZoom * scale);
+  //       const currentDist = getPinchDist(e.touches);
+  //       const scale = currentDist / initialPinchDist;
+  //       const newZoom = Math.round(initialZoom * scale);
 
-        const center = getPinchCenter(e.touches);
-        const rect = canvas.getBoundingClientRect();
-        const canvasCenter = {
-          x: (center.x - rect.left) / (zoomState.current / 100),
-          y: (center.y - rect.top) / (zoomState.current / 100),
-        };
+  //       const center = getPinchCenter(e.touches);
+  //       const rect = canvas.getBoundingClientRect();
+  //       const canvasCenter = {
+  //         x: (center.x - rect.left) / (zoomState.current / 100),
+  //         y: (center.y - rect.top) / (zoomState.current / 100),
+  //       };
 
-        setZoom(newZoom, canvasCenter);
-      }
-    },
-    { passive: false }
-  );
+  //       setZoom(newZoom, canvasCenter);
+  //     }
+  //   },
+  //   { passive: false }
+  // );
 
-  wrap.addEventListener("touchend", () => {
-    initialPinchDist = 0;
-  });
+  // wrap.addEventListener("touchend", () => {
+  //   initialPinchDist = 0;
+  // });
 }
 
 function setupKeyboardZoom() {
@@ -3341,16 +3445,40 @@ function setupKeyboardZoom() {
   });
 }
 
+let isButtonInteraction = false; // ✅ فلگ برای جلوگیری از resize هنگام کلیک دکمه
+
 function setupResizeObserver() {
   const wrap = document.querySelector(".canvas-wrap");
   if (!wrap) return;
 
-  const observer = new ResizeObserver(() => {
-    const newMin = calcDynamicMinZoom();
-    if (zoomState.current < newMin) {
-      setZoom(newMin);
+  let resizeTimeout = null;
+  let lastWidth = wrap.clientWidth;
+  let lastHeight = wrap.clientHeight;
+
+  const observer = new ResizeObserver((entries) => {
+    // ✅ اگر در حال تعامل با دکمه هستیم، نادیده بگیر
+    if (isButtonInteraction) return;
+    
+    const entry = entries[0];
+    const newWidth = entry.contentRect.width;
+    const newHeight = entry.contentRect.height;
+    
+    // اگر تغییر کمتر از 10px است، نادیده بگیر (از 5 به 10 افزایش)
+    if (Math.abs(newWidth - lastWidth) < 10 && Math.abs(newHeight - lastHeight) < 10) {
+      return;
     }
-    updateZoomUI();
+    
+    lastWidth = newWidth;
+    lastHeight = newHeight;
+
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      const newMin = calcDynamicMinZoom();
+      if (zoomState.current < newMin) {
+        setZoom(newMin);
+      }
+      updateZoomUI();
+    }, 200); // از 150 به 200 افزایش
   });
 
   observer.observe(wrap);
@@ -3801,16 +3929,27 @@ window.addEventListener("resize", () => draw());
 
 // ========== MOBILE OPTIMIZATIONS ==========
 function initMobile() {
+  // جلوگیری از double-tap zoom
   let lastTouchEnd = 0;
-  document.addEventListener(
-    "touchend",
-    (e) => {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) e.preventDefault();
-      lastTouchEnd = now;
-    },
-    { passive: false }
-  );
+  document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  // ✅ جلوگیری از pinch-to-zoom روی کل صفحه
+  document.addEventListener("touchmove", (e) => {
+    if (e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // ✅ جلوگیری از gesturestart در iOS
+  document.addEventListener("gesturestart", (e) => {
+    e.preventDefault();
+  }, { passive: false });
 
   if (isMobile()) {
     state.canvasWidth = Math.min(state.canvasWidth, window.innerWidth - 40);

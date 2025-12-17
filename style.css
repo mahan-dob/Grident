@@ -2,6 +2,7 @@
   --bg: #1c1c1c;
   --sec-bg: #2b2b2b;
   --TransParent-bg: #1c1c1c66;
+  --Zoom-ui-color:#e1e9e533;
   --text-primary: #e8eef4;
   --text-contrast: #000000;
   --hover: rgba(255, 255, 255, 0.1);
@@ -11,6 +12,7 @@
   --sec-border: rgba(255, 255, 255, 0.4);
   --accent: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
   /* --text-muted: #6b7a8a; */
+  --handel: #fff;
   --primary: #00d4ff;
   --secondary: #00ff88;
   --btn-transition: all 0.25s ease;
@@ -19,12 +21,16 @@
 [data-theme="light"] {
   --bg: #ffffff;              
   --sec-bg: #f9fafb;
-  --TransParent-bg: #fffffc66;        
+  --TransParent-bg: #fffffc66; 
+  --Zoom-ui-color:#2b2b2b33;       
   --hover: #e5e7eb;
   --text-primary: #111827; 
   --text-muted: #6b7280;
   --border: rgba(0, 0, 0, 0.1); 
   --text-contrast: #ffffff;
+  --handel: #000;
+  --svg: invert(1) brightness(0);
+  
 }
 
 [data-theme="dep-dark"] {
@@ -120,7 +126,7 @@ body {
   color: var(--text-primary);
   font-size: 12px;
   text-align: center;
-
+  padding: 6px 12px;
 }
 
 .theme-select .arrow {
@@ -197,6 +203,7 @@ button:hover {
 button img {
   width: 1.8rem;
   height: 1.8rem;
+  filter: var(--svg);
 }
 
 /* ========================================
@@ -427,7 +434,7 @@ header h1 {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
-  color: var(--white-color);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
@@ -459,7 +466,6 @@ header h1 {
 
 .aspect-lock-btn:hover {
   border-color: var(--accent);
-  background: rgba(0, 212, 255, 0.1);
 }
 
 .aspect-lock-btn.locked {
@@ -666,13 +672,14 @@ header h1 {
   width: max-content;
   padding: 1rem;
   border-radius: 999px;
+  border: 1px solid var(--border);
 }
 
 #resizeHeightHandle {
   height: 0.3rem;
   width: 8rem;
   border-radius: 999px;
-  background: white;
+  background: var(--handel);
   user-select: none;
 }
 
@@ -689,13 +696,14 @@ header h1 {
   cursor: ew-resize;
   padding: 1rem;
   border-radius: 999px;
+  border: 1px solid var(--border);
 }
 
 #resizeWidthHandle {
   width: 0.3rem;
   height: 8rem;
   border-radius: 999px;
-  background: white;
+  background: var(--handel);
 }
 
 .Handle-btn {
@@ -709,6 +717,7 @@ header h1 {
   z-index: 1;
   border-radius: 999;
   overflow: hidden;
+  border: 1px solid var(--border);
 }
 
 .Handle-btn::before {
@@ -762,9 +771,9 @@ header h1 {
   gap: 10px;
   background: var(--TransParent-bg);
   backdrop-filter: blur(4px);
-  padding: 10px 20px;
+  padding: 8px 10px;
   border-radius: 30px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   border: 1px solid var(--border);
   z-index: 1000;
 }
@@ -774,7 +783,7 @@ header h1 {
   height: 32px;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--Zoom-ui-color);
   transition: var(--btn-transition);
 }
 
@@ -799,7 +808,7 @@ header h1 {
   width: 120px;
   height: 6px;
   -webkit-appearance: none;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--Zoom-ui-color);
   border: var(--sec-border);
   border-radius: 3px;
   cursor: pointer;
@@ -821,13 +830,13 @@ header h1 {
 }
 
 .zoom-value {
-  color: var(--white-color);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   text-align: center;
   width: 50px;
   text-align: center;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--Zoom-ui-color);
   padding: 4px 10px;
   border-radius: 12px;
 }
@@ -837,8 +846,7 @@ header h1 {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.8);
-  background: rgba(28, 28, 28, 0.6);
-  color: white;
+  background: var(--TransParent-bg);
   padding: 15px 30px;
   border-radius: 12px;
   font-size: 20px;
@@ -1012,7 +1020,7 @@ button.sm {
   font-size: 0.9rem;
   display: flex;
   align-items: center;
-  text-shadow: 1px 1px 12px #000;
+  transition: var(--btn-transition);
 }
 
 .sm:hover {
@@ -1037,9 +1045,8 @@ button.sm {
   height: 100%;
   border-radius: 50%;
   background: none;
-  border: 2px solid var(--white-color);
+  border: 2px solid var(--handel);
   position: relative;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .angle-handle {
@@ -1062,8 +1069,8 @@ button.sm {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  border: 2px solid #fff;
-  box-shadow: 0 0 8px rgba(28, 28, 28, 0.8);
+  border: 2px solid var(--handel);
+  box-shadow: 0 0 3px rgba(28, 28, 28, 0.8);
 }
 
 .angle-center {
@@ -1073,7 +1080,7 @@ button.sm {
   transform: translate(-50%, -50%);
   font-size: 11px;
   font-weight: bold;
-  color: #fff;
+  color: var(--text-primary);
   pointer-events: none;
 }
 
@@ -1152,6 +1159,7 @@ button.sm {
 .pos-lock {
   width: 1.4rem;
   height: 1.4rem;
+  filter: var(--svg);
 }
 
 .control-btn {
@@ -1227,7 +1235,7 @@ button.sm {
 }
 
 .picker-modal {
-  background: rgba(28, 28, 28, 0.8);
+  background: var(--bg);
   backdrop-filter: blur(8px);
   border-radius: 10px;
   padding: 12px;
@@ -1508,7 +1516,7 @@ button.sm {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--white-color);
+  color: var(--text-primary);
   padding: 5px 10px;
   border-radius: 8px;
   cursor: pointer;
