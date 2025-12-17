@@ -1,3 +1,18 @@
+const select = document.getElementById('themeSelect');
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('theme', theme);
+}
+
+const saved = localStorage.getItem('theme') || 'ocean';
+select.value = saved;
+applyTheme(saved);
+
+select.addEventListener('change', e => {
+  applyTheme(e.target.value);
+});
+
 // ========== CONFIGURATION ==========
 const CONFIG = {
   canvas: {
@@ -2241,6 +2256,54 @@ function getGradPreview(s) {
     .join(", ")})`;
 }
 
+// ========== LIVE UPDATE STOP ITEMS ==========
+
+// به‌روزرسانی یک stop-item خاص بدون re-render کل لیست
+function updateStopItem(stopId) {
+  const s = getStop(stopId);
+  if (!s) return;
+
+  const item = document.querySelector(`.stop-item[data-id="${stopId}"]`);
+  if (!item) return;
+
+  // به‌روزرسانی preview
+  const previewInner = item.querySelector('.stop-preview-inner');
+  if (previewInner) {
+    previewInner.style.background = getGradPreview(s);
+  }
+
+  // به‌روزرسانی meta info
+  const meta = item.querySelector('.stop-meta');
+  if (meta) {
+    meta.textContent = `${s.type} · ${
+      s.type === "radial"
+        ? Math.round(s.size) + "px"
+        : s.type === "conic"
+        ? s.startAngle + "°"
+        : s.angle + "°"
+    }`;
+  }
+
+  // به‌روزرسانی name
+  const name = item.querySelector('.stop-name');
+  if (name && name.textContent !== s.name) {
+    name.textContent = s.name;
+  }
+
+  // به‌روزرسانی visibility icon
+  const visBtn = item.querySelector('.control-btn img[alt="eye"], .control-btn img[alt="eye-close"]');
+  if (visBtn) {
+    visBtn.src = s.visible ? './icon/eye.svg' : './icon/eye-close.svg';
+    visBtn.alt = s.visible ? 'eye' : 'eye-close';
+  }
+}
+
+// به‌روزرسانی همه stop-items
+function updateAllStopItems() {
+  state.stops.forEach(s => updateStopItem(s.id));
+}
+
+// ========== به‌روزرسانی renderList با data-id ==========
 function renderList() {
   const el = document.getElementById("list");
   if (!state.stops.length) {
@@ -2251,13 +2314,13 @@ function renderList() {
   el.innerHTML = state.stops
     .map(
       (s) => `
-    <div class="stop-item ${state.selected === s.id ? "selected" : ""} ${
-        !s.visible ? "hidden" : ""
-      }" onclick="state.selected='${s.id}';refresh()">
+    <div class="stop-item ${state.selected === s.id ? "selected" : ""} ${!s.visible ? "hidden" : ""}" 
+         data-id="${s.id}"
+         onclick="state.selected='${s.id}';refresh()">
       <div class="stop-header">
-        <div class="stop-preview"><div class="stop-preview-inner" style="background:${getGradPreview(
-          s
-        )}"></div></div>
+        <div class="stop-preview">
+          <div class="stop-preview-inner" style="background:${getGradPreview(s)}"></div>
+        </div>
         <div class="stop-info">
           <div class="stop-name">${s.name}</div>
           <div class="stop-meta">${s.type} · ${
@@ -2269,19 +2332,18 @@ function renderList() {
       }</div>
         </div>
         <div class="stop-actions">
-          <button class="control-btn" onclick="event.stopPropagation();toggleVis('${
-            s.id
-          }')">${
-        s.visible
-          ? '<img src="./icon/eye.svg" alt="eye">'
-          : '<img src="./icon/eye-close.svg" alt="eye-close">'
-      }</button>
-          <button class="control-btn" onclick="event.stopPropagation();dupStop('${
-            s.id
-          }')"><img src="./icon/copy.svg" alt="copy"></button>
-          <button class="control-btn" onclick="event.stopPropagation();delStop('${
-            s.id
-          }')"><img src="./icon/close.svg" alt="close"></button>
+          <button class="control-btn" onclick="event.stopPropagation();toggleVis('${s.id}')">
+            ${s.visible
+              ? '<img src="./icon/eye.svg" alt="eye">'
+              : '<img src="./icon/eye-close.svg" alt="eye-close">'
+            }
+          </button>
+          <button class="control-btn" onclick="event.stopPropagation();dupStop('${s.id}')">
+            <img src="./icon/copy.svg" alt="copy">
+          </button>
+          <button class="control-btn" onclick="event.stopPropagation();delStop('${s.id}')">
+            <img src="./icon/close.svg" alt="close">
+          </button>
         </div>
       </div>
     </div>
@@ -2290,6 +2352,91 @@ function renderList() {
     .join("");
 }
 
+// ========== تابع یکپارچه برای به‌روزرسانی همه چیز ==========
+function liveUpdate(stopId = null) {
+  draw();
+  updateCSS();
+  
+  if (stopId) {
+    updateStopItem(stopId);
+    updateInspectorPreview(stopId);
+  } else if (state.selected) {
+    updateStopItem(state.selected);
+    updateInspectorPreview(state.selected);
+  }
+}
+
+// به‌روزرسانی preview در inspector
+function updateInspectorPreview(stopId) {
+  const s = getStop(stopId);
+  if (!s) return;
+
+  // برای radial
+  if (s.type === "radial") {
+    const container = document.querySelector(`[data-stop-id="${stopId}"]`);
+    if (container) {
+      const swatch = container.querySelector('.color-swatch-inner');
+      if (swatch) {
+        swatch.style.background = rgba(s.color, s.opacity / 100);
+      }
+    }
+  }
+
+  // برای color stops در linear/conic
+  s.stops?.forEach((cs, i) => {
+    const row = document.querySelector(`[data-stop-id="${stopId}"][data-color-stop="${i}"]`);
+    if (row) {
+      const swatch = row.querySelector('.color-swatch-inner');
+      if (swatch) {
+        swatch.style.background = rgba(cs.color, cs.opacity / 100);
+      }
+    }
+  });
+}
+
+// ========== به‌روزرسانی توابع موجود ==========
+
+function updateStopOpacity(stopId, value) {
+  const s = getStop(stopId);
+  if (!s) return;
+  
+  s.opacity = clamp(+value, 0, 100);
+  liveUpdate(stopId);
+}
+
+function updateColorStopOpacity(stopId, index, value) {
+  const s = getStop(stopId);
+  if (!s || !s.stops[index]) return;
+  
+  s.stops[index].opacity = clamp(+value, 0, 100);
+  liveUpdate(stopId);
+}
+
+function updateAngleFromInput(stopId, value) {
+  let angle = parseInt(value) || 0;
+  angle = clamp(angle, 0, 360);
+
+  const stop = getStop(stopId);
+  if (stop) {
+    stop.angle = angle;
+    document.getElementById(`angleHandle_${stopId}`).style.transform = `rotate(${angle}deg)`;
+    document.getElementById(`angleCenter_${stopId}`).textContent = `${angle}°`;
+    liveUpdate(stopId);
+  }
+}
+
+function updateConicAngleFromInput(id, val) {
+  val = clamp(+val, 0, 360);
+  const stop = getStop(id);
+  if (stop) {
+    stop.startAngle = val;
+    document.getElementById(`conicAngleHandle_${id}`).style.transform = `rotate(${val}deg)`;
+    document.getElementById(`conicAngleCenter_${id}`).textContent = val + "°";
+    liveUpdate(id);
+  }
+}
+
+// ========== به‌روزرسانی renderInspector ==========
 function renderInspector() {
   const el = document.getElementById("inspector");
   const s = getStop(state.selected);
@@ -2303,73 +2450,47 @@ function renderInspector() {
       <div class="form-group-title">General</div>
       <div class="form-row">
         <label>Name</label>
-        <input class="num-input" style="width:100%;text-align:left" value="${
-          s.name
-        }" onchange="getStop('${s.id}').name=this.value;refresh()">
+        <input class="num-input" style="width:100%;text-align:left" value="${s.name}" 
+          onchange="getStop('${s.id}').name=this.value;liveUpdate('${s.id}')">
       </div>
       <div class="form-row">
         <label>X</label>
-        <input type="number" class="num-input" min="0" max="100" value="${Math.round(
-          s.x * 100
-        )}" 
-          oninput="getStop('${
-            s.id
-          }').x = +this.value / 100; draw(); updateCSS()">
+        <input type="number" class="num-input" min="0" max="100" value="${Math.round(s.x * 100)}" 
+          oninput="getStop('${s.id}').x = +this.value / 100; liveUpdate('${s.id}')">
       </div>
       <div class="form-row">
         <label>Y</label>
-        <input type="number" class="num-input" min="0" max="100" value="${Math.round(
-          s.y * 100
-        )}" 
-          oninput="getStop('${
-            s.id
-          }').y = +this.value / 100; draw(); updateCSS()"
+        <input type="number" class="num-input" min="0" max="100" value="${Math.round(s.y * 100)}" 
+          oninput="getStop('${s.id}').y = +this.value / 100; liveUpdate('${s.id}')"
           ${state.lockVertical ? "disabled" : ""}>
-        ${
-          state.lockVertical
-            ? '<span style="font-size:9px;color:#666;"><img class="pos-lock" src="./icon/lock.svg" alt="lock position"></span>'
-            : ""
-        }
+        ${state.lockVertical ? '<span style="font-size:9px;color:#666;"><img class="pos-lock" src="./icon/lock.svg" alt="lock position"></span>' : ""}
       </div>
     </div>
   `;
 
   if (s.type === "radial") {
     h += `
-      <div class="form-group">
+      <div class="form-group" data-stop-id="${s.id}">
         <div class="form-group-title">Radial</div>
         <div class="form-row">
-          <div class="color-swatch" onclick="openPicker('${s.color}',${
-      s.opacity
-    },(c,a)=>{getStop('${s.id}').color=c;getStop('${
-      s.id
-    }').opacity=a;refresh()})">
-            <div class="color-swatch-inner" style="background:${rgba(
-              s.color,
-              s.opacity / 100
-            )}"></div>
+          <div class="color-swatch" onclick="openStopColorPicker('${s.id}')">
+            <div class="color-swatch-inner" style="background:${rgba(s.color, s.opacity / 100)}"></div>
           </div>
         </div>
         <div class="form-row">
           <label>Size</label>
-          <input type="number" class="num-input" min="10" max="600" value="${Math.round(
-            s.size
-          )}" 
-            oninput="getStop('${s.id}').size=+this.value;draw();updateCSS()">
+          <input type="number" class="num-input" min="10" max="600" value="${Math.round(s.size)}" 
+            oninput="getStop('${s.id}').size=+this.value;liveUpdate('${s.id}')">
         </div>
         <div class="form-row">
           <label>Feather</label>
-          <input type="number" class="num-input" min="0" max="100" value="${Math.round(
-            s.feather
-          )}" 
-            oninput="getStop('${s.id}').feather=+this.value;draw();updateCSS()">
+          <input type="number" class="num-input" min="0" max="100" value="${Math.round(s.feather)}" 
+            oninput="getStop('${s.id}').feather=+this.value;liveUpdate('${s.id}')">
         </div>
         <div class="form-row">
           <label>Opacity</label>
-          <input type="number" class="num-input" min="0" max="100" value="${Math.round(
-            s.opacity
-          )}" 
-            oninput="getStop('${s.id}').opacity=+this.value;draw();updateCSS()">
+          <input type="number" class="num-input" id="opacity_${s.id}" min="0" max="100" value="${Math.round(s.opacity)}" 
+            oninput="updateStopOpacity('${s.id}', this.value)">
         </div>
       </div>
     `;
@@ -2420,62 +2541,218 @@ function renderInspector() {
       <div class="form-group">
         <div class="form-group-title">
           <span>Color Stops</span>
-          <button class="sm" onclick="addColorStop(getStop('${
-            s.id
-          }'))">Add Color</button>
+          <button class="sm" onclick="addColorStop(getStop('${s.id}'))">Add Color</button>
         </div>
-        ${s.stops
-          .map(
-            (cs, i) => `
-          <div class="color-stop-row">
+        ${s.stops.map((cs, i) => `
+          <div class="color-stop-row" data-stop-id="${s.id}" data-color-stop="${i}">
             <div class="color-stop-header">
-              <div class="color-swatch" onclick="openPicker('${cs.color}',${
-              cs.opacity
-            },(c,a)=>{getStop('${s.id}').stops[${i}].color=c;getStop('${
-              s.id
-            }').stops[${i}].opacity=a;refresh()})">
-                <div class="color-swatch-inner" style="background:${rgba(
-                  cs.color,
-                  cs.opacity / 100
-                )}"></div>
+              <div class="color-swatch" onclick="openStopColorPicker('${s.id}', true, ${i})">
+                <div class="color-swatch-inner" style="background:${rgba(cs.color, cs.opacity / 100)}"></div>
               </div>
               <span style="flex:1;font-size:10px">Stop ${i + 1}</span>
             </div>
             <div class="color-stop-fields">
               <div class="field-group">
                 <label>Position</label>
-                <input type="number" class="num-input" min="0" max="100" value="${
-                  cs.pos
-                }" 
-                  oninput="getStop('${
-                    s.id
-                  }').stops[${i}].pos=+this.value;draw();updateCSS()">
+                <input type="number" class="num-input" min="0" max="100" value="${cs.pos}" 
+                  oninput="getStop('${s.id}').stops[${i}].pos=+this.value;liveUpdate('${s.id}')">
               </div>
               <div class="field-group">
                 <label>Opacity</label>
-                <input type="number" class="num-input" min="0" max="100" value="${
-                  cs.opacity
-                }" 
-                  oninput="getStop('${
-                    s.id
-                  }').stops[${i}].opacity=+this.value;draw();updateCSS()">
+                <input type="number" class="num-input" min="0" max="100" value="${cs.opacity}" 
+                  oninput="updateColorStopOpacity('${s.id}', ${i}, this.value)">
               </div>
             </div>
-            ${
-              s.stops.length > 2
-                ? `<button class="control-btn" onclick="delColorStop(getStop('${s.id}'),${i})"><img src="./icon/close.svg" alt="delete color"></button>`
-                : ""
-            }
+            ${s.stops.length > 2 ? `<button class="control-btn" onclick="delColorStop(getStop('${s.id}'),${i})"><img src="./icon/close.svg" alt="delete color"></button>` : ""}
           </div>
-        `
-          )
-          .join("")}
+        `).join("")}
       </div>
     `;
   }
 
   el.innerHTML = h;
 }
+
+// ========== به‌روزرسانی onPointerMove برای canvas drag ==========
+function onPointerMove(e) {
+  if (!drag) return;
+  e.preventDefault();
+
+  const pos = getEventPos(e);
+  const mx = pos.x;
+  const my = pos.y;
+  const cx = drag.s.x * W;
+  const cy = drag.s.y * H;
+
+  switch (drag.t) {
+    case "move":
+      drag.s.x = clamp(mx / W, 0, 1);
+      if (!state.lockVertical) {
+        drag.s.y = clamp(my / H, 0, 1);
+      }
+      break;
+
+    case "cs":
+      const { x1, y1, x2, y2 } = drag;
+      const dx = x2 - x1, dy = y2 - y1;
+      const len2 = dx * dx + dy * dy;
+      const t = clamp(((mx - x1) * dx + (my - y1) * dy) / len2, 0, 1);
+      drag.s.stops[drag.i].pos = Math.round(t * 100);
+      break;
+
+    case "angle":
+      let newAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
+      if (newAngle < 0) newAngle += 360;
+      drag.s.angle = Math.round(newAngle) % 360;
+      break;
+
+    case "conic-angle":
+      let conicAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
+      if (conicAngle < 0) conicAngle += 360;
+      drag.s.startAngle = Math.round(conicAngle) % 360;
+      break;
+
+    case "conic-cs":
+      const startAngleRad = ((drag.s.startAngle - 90) * Math.PI) / 180;
+      let relAngle = Math.atan2(my - cy, mx - cx) - startAngleRad;
+      if (relAngle < 0) relAngle += Math.PI * 2;
+      drag.s.stops[drag.i].pos = clamp(Math.round((relAngle / (Math.PI * 2)) * 100), 0, 100);
+      break;
+  }
+
+  // ✅ Live update هنگام drag
+  throttledDraw();
+  updateStopItem(drag.s.id);
+}
+
+// ========== به‌روزرسانی angle drag ==========
+function handleAngleMove(e) {
+  if (!activeAnglePicker) return;
+  e.preventDefault();
+
+  const stopId = activeAnglePicker;
+  const handle = document.getElementById(`angleHandle_${stopId}`);
+  const pickerEl = handle?.closest(".angle-picker");
+  if (!pickerEl) return;
+
+  const rect = pickerEl.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+
+  let clientX, clientY;
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+
+  let angle = Math.atan2(clientX - centerX, centerY - clientY) * (180 / Math.PI);
+  angle = Math.round((angle + 360) % 360);
+
+  const stop = getStop(stopId);
+  if (stop) {
+    stop.angle = angle;
+    handle.style.transform = `rotate(${angle}deg)`;
+    document.getElementById(`angleCenter_${stopId}`).textContent = `${angle}°`;
+    document.getElementById(`angleNum_${stopId}`).value = angle;
+    
+    // ✅ Live update
+    draw();
+    updateCSS();
+    updateStopItem(stopId);
+  }
+}
+
+// ========== به‌روزرسانی conic angle drag ==========
+function startConicAngleDrag(e, id) {
+  e.preventDefault();
+
+  function move(ev) {
+    ev.preventDefault();
+    const center = document.querySelector(`#conicAngleCenter_${id}`);
+    const handle = document.querySelector(`#conicAngleHandle_${id}`);
+    if (!center || !handle) return;
+
+    const rect = center.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    let clientX, clientY;
+    if (ev.touches && ev.touches.length > 0) {
+      clientX = ev.touches[0].clientX;
+      clientY = ev.touches[0].clientY;
+    } else {
+      clientX = ev.clientX;
+      clientY = ev.clientY;
+    }
+
+    let ang = (Math.atan2(clientY - cy, clientX - cx) * 180) / Math.PI;
+    ang = (ang + 360) % 360;
+
+    const stop = getStop(id);
+    if (stop) {
+      stop.startAngle = Math.round(ang);
+      handle.style.transform = `rotate(${ang}deg)`;
+      center.textContent = stop.startAngle + "°";
+      document.getElementById(`conicAngleNum_${id}`).value = stop.startAngle;
+      
+      // ✅ Live update
+      draw();
+      updateCSS();
+      updateStopItem(id);
+    }
+  }
+
+  function up() {
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("mouseup", up);
+    document.removeEventListener("touchmove", move);
+    document.removeEventListener("touchend", up);
+  }
+
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+  document.addEventListener("touchmove", move, { passive: false });
+  document.addEventListener("touchend", up);
+}
+
+// ========== به‌روزرسانی color picker callback ==========
+function openStopColorPicker(stopId, isColorStop = false, colorStopIndex = 0) {
+  const s = getStop(stopId);
+  if (!s) return;
+
+  if (isColorStop) {
+    const cs = s.stops[colorStopIndex];
+    if (!cs) return;
+    openPicker(cs.color, cs.opacity, (c, a) => {
+      const stop = getStop(stopId);
+      if (stop && stop.stops[colorStopIndex]) {
+        stop.stops[colorStopIndex].color = c;
+        stop.stops[colorStopIndex].opacity = a;
+        liveUpdate(stopId);
+      }
+    });
+  } else {
+    openPicker(s.color, s.opacity, (c, a) => {
+      const stop = getStop(stopId);
+      if (stop) {
+        stop.color = c;
+        stop.opacity = a;
+        liveUpdate(stopId);
+      }
+    });
+  }
+}
+
+// ========== GLOBALS ==========
+window.liveUpdate = liveUpdate;
+window.updateStopItem = updateStopItem;
+window.updateAllStopItems = updateAllStopItems;
+window.openStopColorPicker = openStopColorPicker;
+window.updateStopOpacity = updateStopOpacity;
+window.updateColorStopOpacity = updateColorStopOpacity;
 
 // ========== CSS OUTPUT ==========
 function updateCSS() {
@@ -2534,7 +2811,7 @@ background-blend-mode: screen;`;
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{
-  background:#1c1c1c;
+  background:none;
   color:#b8c4ce;
   font-family:'Fira Code',monospace;
   font-size:11px;

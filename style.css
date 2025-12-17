@@ -1,6 +1,7 @@
 :root {
   --bg: #1c1c1c;
   --sec-bg: #2b2b2b;
+  --TransParent-bg: #1c1c1c66;
   --text-primary: #e8eef4;
   --text-contrast: #000000;
   --hover: rgba(255, 255, 255, 0.1);
@@ -10,24 +11,43 @@
   --sec-border: rgba(255, 255, 255, 0.4);
   --accent: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
   /* --text-muted: #6b7a8a; */
-  --Handel: rgba(28, 28, 28, 0.6);
   --primary: #00d4ff;
   --secondary: #00ff88;
   --btn-transition: all 0.25s ease;
 }
 
 [data-theme="light"] {
-  --bg: #f7f9fb;
-  --sec-bg: #ffffff;
-  --card: #f0f4f8;
-  --hover: #e9eff5;
-  --text-primary: #0f1720;
-  --text-muted: #4a5868;
-  --border: rgba(0, 0, 0, 0.08);
-  --accent: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
+  --bg: #ffffff;              
+  --sec-bg: #f9fafb;
+  --TransParent-bg: #fffffc66;        
+  --hover: #e5e7eb;
+  --text-primary: #111827; 
+  --text-muted: #6b7280;
+  --border: rgba(0, 0, 0, 0.1); 
   --text-contrast: #ffffff;
 }
 
+[data-theme="dep-dark"] {
+  --bg: #09090b;           
+  --sec-bg: #18181b; 
+  --TransParent-bg: #09090b66;        
+  --hover: #2f2f35;          
+  --text-primary: #e4e4e7;   
+  --text-muted: #71717a;     
+  --border: rgba(255, 255, 255, 0.08); 
+  --text-contrast: #ffffff;
+}
+
+[data-theme="midnight"] {
+  --bg: #1e2127;          
+  --sec-bg: #21252c;
+  --TransParent-bg: #1e212766;         
+  --hover: #334155;        
+  --text-primary: #d9e7f5;   
+  --text-muted: #94a3b8;     
+  --border: rgba(148, 163, 184, 0.15); 
+  --text-contrast: #ffffff;
+}
 @font-face {
   font-family: "SF Pro";
   src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot");
@@ -87,6 +107,27 @@ body {
 }
 
 /* ========================================
+   theme
+======================================== */
+.theme-select {
+  position: relative;
+}
+
+.theme-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+
+}
+
+.theme-select .arrow {
+  display: none;
+}
+
+/* ========================================
    input
 ======================================== */
 input {
@@ -103,7 +144,7 @@ input[type="number"]:hover {
 
 select {
   background: var(--bg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   color: inherit;
   padding: 3px 6px;
   border-radius: 4px;
@@ -213,7 +254,7 @@ header h1 {
 .Aspect-Ratio-label {
   position: absolute;
   top: -2rem;
-  color: #888;
+  color: var(--text-muted);
   font-size: 1.1rem;
 }
 
@@ -410,7 +451,7 @@ header h1 {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
@@ -440,7 +481,7 @@ header h1 {
 .size-label {
   position: absolute;
   top: -2rem;
-  color: #888;
+  color: var(--text-muted);
   font-size: 1.1rem;
 }
 
@@ -480,7 +521,7 @@ header h1 {
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
@@ -509,7 +550,7 @@ header h1 {
   flex: 1;
   border-radius: 8px;
   padding: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
 }
 
 .preset-btn {
@@ -575,11 +616,11 @@ header h1 {
   position: relative;
   overflow: hidden;
   height: 100%;
-  background-color: #2a2a2a;
-  background-image: linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
-    linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
-    linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+  background-color: var(--sec-bg);
+  background-image: linear-gradient(45deg, var(--bg) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg) 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
   border-top-right-radius: 12px;
@@ -610,25 +651,6 @@ header h1 {
   margin: 0 50px 40px 0;
 }
 
-.canvas-ui {
-  position: absolute;
-  right: 9rem;
-  bottom: 50px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(28, 28, 28, 0.8);
-  border-radius: 999px;
-  padding: 6px 10px;
-  z-index: 10;
-  backdrop-filter: blur(8px);
-}
-
-.canvas-ui label {
-  font-size: 1.2rem;
-  color: var(--white-color);
-}
-
 /* ========================================
    RESIZE HANDLES
 ======================================== */
@@ -637,7 +659,7 @@ header h1 {
   align-items: center;
   justify-content: center;
   justify-self: anchor-center;
-  background: var(--Handel);
+  background: var(--TransParent-bg);
   backdrop-filter: blur(2px);
   margin-top: -29px;
   cursor: ns-resize;
@@ -660,7 +682,7 @@ header h1 {
   flex-direction: column;
   position: absolute;
   align-self: anchor-center;
-  background: var(--Handel);
+  background: var(--TransParent-bg);
   backdrop-filter: blur(2px);
   right: 0.5rem;
   top: 0;
@@ -693,7 +715,7 @@ header h1 {
   content: "";
   position: absolute;
   inset: 0;
-  background: var(--Handel);
+  background: var(--TransParent-bg);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   z-index: -1;
@@ -738,12 +760,12 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(28, 28, 28, 0.6);
+  background: var(--TransParent-bg);
   backdrop-filter: blur(4px);
   padding: 10px 20px;
   border-radius: 30px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   z-index: 1000;
 }
 
@@ -872,7 +894,7 @@ header h1 {
   align-items: center;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   width: max-content;
 }
@@ -911,7 +933,7 @@ header h1 {
   align-items: center;
   flex-wrap: wrap;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg);
   border-radius: 6px;
   padding: 8px;
   margin-bottom: 6px;
@@ -944,7 +966,7 @@ header h1 {
 
 .num-input {
   background: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   color: inherit;
   padding: 4px 5px;
   border-radius: 8px;
@@ -980,7 +1002,7 @@ header h1 {
   justify-content: space-between;
   margin-block: 4px;
   padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -1094,11 +1116,11 @@ button.sm {
   border-radius: 5px;
   position: relative;
   overflow: hidden;
-  background-color: #555;
-  background-image: linear-gradient(45deg, #333 25%, transparent 25%),
-    linear-gradient(-45deg, #333 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #333 75%),
-    linear-gradient(-45deg, transparent 75%, #333 75%);
+  background-color: var(--sec-bg);
+  background-image: linear-gradient(45deg, var(--bg) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg) 75%);
   background-size: 6px 6px;
   background-position: 0 0, 0 3px, 3px -3px, -3px 0px;
 }
@@ -1151,14 +1173,15 @@ button.sm {
   height: 18px;
 }
 
-.control-btn:hover {
+/* .control-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-}
+} */
 
 .empty-msg{
   color: var(--text-muted);
   text-align: center;
+  font-size: 12px;
 }
 
 /* ========================================
@@ -1171,12 +1194,13 @@ button.sm {
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  background-color: #555;
-  background-image: linear-gradient(45deg, #333 25%, transparent 25%),
-    linear-gradient(-45deg, #333 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #333 75%),
-    linear-gradient(-45deg, transparent 75%, #333 75%);
+  background-color: var(--sec-bg);
+  background-image: linear-gradient(45deg, var(--bg) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg) 75%);
   background-size: 6px 6px;
+  background-position: 0 0, 0 3px, 3px -3px, -3px 0px;
 }
 
 .color-swatch-inner {
@@ -1312,7 +1336,7 @@ button.sm {
 .picker-preview {
   width: 36px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   overflow: hidden;
   position: relative;
   background-color: var(--text-muted);
@@ -1345,7 +1369,7 @@ button.sm {
   font-size: 0.8rem;
   font-weight: 600;
   background: var(--bg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   color: var(--text-muted);
 }
 
@@ -1377,7 +1401,7 @@ button.sm {
   width: 100%;
   background: none;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   color: inherit;
   padding: 3px;
   text-align: center;
