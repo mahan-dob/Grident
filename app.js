@@ -8,12 +8,6 @@ const CONFIG = {
     minHeight: 200,
     maxHeight: 2160,
   },
-  zoom: {
-    min: 5,
-    max: 400,
-    step: 5,
-    default: 100,
-  },
   mobile: {
     breakpoint: 768,
     hitRadius: 24,
@@ -114,7 +108,7 @@ const zoomState = {
   max: 150,
   step: 5,
   dynamicMin: 15,
-  padding: 60,
+  padding: 75,
   lastPinchDist: 0,
 };
 
@@ -152,14 +146,63 @@ function simplifyRatio(w, h, maxValue = 50) {
   w = Math.round(w);
   h = Math.round(h);
 
-  // فقط نسبت واقعی را با GCD ساده کن
+  // اول با GCD ساده کن
   const gcd = getGCD(w, h);
   let simpleW = w / gcd;
   let simpleH = h / gcd;
 
+  // اگر اعداد کوچیکن، همین خوبه
+  if (simpleW <= maxValue && simpleH <= maxValue) {
+    return { w: simpleW, h: simpleH };
+  }
+
+  // اگر بزرگن، به نزدیک‌ترین نسبت معروف تبدیل کن
+  const ratio = w / h;
+
+  const commonRatios = [
+    { w: 1, h: 1 },
+    { w: 4, h: 3 },
+    { w: 3, h: 4 },
+    { w: 16, h: 9 },
+    { w: 9, h: 16 },
+    { w: 21, h: 9 },
+    { w: 9, h: 21 },
+    { w: 3, h: 2 },
+    { w: 2, h: 3 },
+    { w: 5, h: 4 },
+    { w: 4, h: 5 },
+    { w: 16, h: 10 },
+    { w: 10, h: 16 },
+    { w: 2, h: 1 },
+    { w: 1, h: 2 },
+    { w: 7, h: 5 },
+    { w: 5, h: 7 },
+    { w: 6, h: 5 },
+    { w: 5, h: 6 },
+  ];
+
+  // پیدا کردن نزدیک‌ترین نسبت
+  let closest = { w: simpleW, h: simpleH };
+  let minDiff = Infinity;
+
+  for (const cr of commonRatios) {
+    const diff = Math.abs(ratio - cr.w / cr.h);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = cr;
+    }
+  }
+
+  // اگر نزدیکه (کمتر از 2% اختلاف)، از نسبت معروف استفاده کن
+  if (minDiff < 0.02) {
+    return { w: closest.w, h: closest.h };
+  }
+
+  // در غیر این صورت، مقیاس کن به اعداد کوچکتر
+  const scale = maxValue / Math.max(simpleW, simpleH);
   return {
-    w: simpleW || 1,
-    h: simpleH || 1,
+    w: Math.round(simpleW * scale) || 1,
+    h: Math.round(simpleH * scale) || 1,
   };
 }
 // ========== COLOR FUNCTIONS ==========
@@ -419,15 +462,15 @@ function setCustomAspectRatio(w, h, applyToCanvas = true) {
     return;
   }
 
-  const simple = simplifyRatio(w, h);
-  dimensionState.aspectW = simple.w;
-  dimensionState.aspectH = simple.h;
+  // نسبت دقیقا با همان اعدادی که کاربر وارد کرده ذخیره شود
+  dimensionState.aspectW = w;
+  dimensionState.aspectH = h;
   dimensionState.aspectRatio = w / h;
   dimensionState.aspectLocked = true;
 
   // چک کن آیا با یک preset مطابقت داره
   for (const [name, preset] of Object.entries(aspectPresets)) {
-    if (preset.w === simple.w && preset.h === simple.h) {
+    if (preset.w === w && preset.h === h) {
       dimensionState.activeAspectPreset = name;
       break;
     }
@@ -707,16 +750,19 @@ function updateAspectInputsUI() {
 
   if (!inputW || !inputH) return;
 
-  // همیشه محاسبه و نمایش بده
-  const simple = simplifyRatio(state.canvasWidth, state.canvasHeight);
-  inputW.value = simple.w;
-  inputH.value = simple.h;
-
-  // ذخیره در state اگر lock فعاله
-  if (dimensionState.aspectLocked) {
-    dimensionState.aspectW = simple.w;
-    dimensionState.aspectH = simple.h;
-    dimensionState.aspectRatio = state.canvasWidth / state.canvasHeight;
+  // اگر کاربر نسبت دلخواه وارد کرده، همان مقادیر را نمایش بده
+  if (
+    dimensionState.aspectLocked &&
+    dimensionState.aspectW &&
+    dimensionState.aspectH
+  ) {
+    inputW.value = dimensionState.aspectW;
+    inputH.value = dimensionState.aspectH;
+  } else {
+    // در غیر این صورت، نسبت ساده‌شده‌ی بوم را نشان بده
+    const simple = simplifyRatio(state.canvasWidth, state.canvasHeight);
+    inputW.value = simple.w;
+    inputH.value = simple.h;
   }
 }
 
@@ -2261,8 +2307,7 @@ function renderInspector() {
           s.name
         }" onchange="getStop('${s.id}').name=this.value;refresh()">
       </div>
-      <div class="form-row pos-continer">
-      <div class="pos-iput">
+      <div class="form-row">
         <label>X</label>
         <input type="number" class="num-input" min="0" max="100" value="${Math.round(
           s.x * 100
@@ -2271,7 +2316,7 @@ function renderInspector() {
             s.id
           }').x = +this.value / 100; draw(); updateCSS()">
       </div>
-      <div class="pos-iput">
+      <div class="form-row">
         <label>Y</label>
         <input type="number" class="num-input" min="0" max="100" value="${Math.round(
           s.y * 100
@@ -2285,7 +2330,6 @@ function renderInspector() {
             ? '<span style="font-size:9px;color:#666;"><img class="pos-lock" src="./icon/lock.svg" alt="lock position"></span>'
             : ""
         }
-      </div>
       </div>
     </div>
   `;
@@ -2315,7 +2359,7 @@ function renderInspector() {
         </div>
         <div class="form-row">
           <label>Feather</label>
-          <input type="number" class="num-input" min="1" max="100" value="${Math.round(
+          <input type="number" class="num-input" min="0" max="100" value="${Math.round(
             s.feather
           )}" 
             oninput="getStop('${s.id}').feather=+this.value;draw();updateCSS()">
@@ -2335,7 +2379,7 @@ function renderInspector() {
     h += `
       <div class="form-group">
         <div class="form-group-title">Angle</div>
-        <div class="form-row Angle" style="align-items: center; gap: 15px;">
+        <div class="form-row" style="align-items: center; gap: 15px;">
           <div class="angle-picker" onmousedown="startAngleDrag(event, '${s.id}')" ontouchstart="startAngleDrag(event, '${s.id}')">
             <div class="angle-dial">
               <div class="angle-handle" id="angleHandle_${s.id}" style="transform: rotate(${s.angle}deg)">
@@ -2355,7 +2399,7 @@ function renderInspector() {
     h += `
       <div class="form-group">
         <div class="form-group-title">Angle</div>
-        <div class="form-row Angle" style="align-items: center; gap: 15px;">
+        <div class="form-row" style="align-items: center; gap: 15px;">
           <div class="angle-picker" onmousedown="startConicAngleDrag(event, '${s.id}')" ontouchstart="startConicAngleDrag(event, '${s.id}')">
             <div class="angle-dial">
               <div class="angle-handle" id="conicAngleHandle_${s.id}" style="transform: rotate(${s.startAngle}deg)">
@@ -2378,7 +2422,7 @@ function renderInspector() {
           <span>Color Stops</span>
           <button class="sm" onclick="addColorStop(getStop('${
             s.id
-          }'))">Color</button>
+          }'))">Add Color</button>
         </div>
         ${s.stops
           .map(
@@ -3102,22 +3146,43 @@ document.addEventListener("mousemove", (e) => {
   if (!resizingW && !resizingH) return;
 
   if (resizingW) {
-    let newH = clamp(
-      startH + (e.clientY - startY),
-      CONFIG.canvas.minHeight,
-      CONFIG.canvas.maxHeight
-    );
+    let newH = startH + (e.clientY - startY);
+    let newW = state.canvasWidth;
+
+    if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+      // محاسبه عرض بر اساس ارتفاع
+      newW = Math.round(newH * dimensionState.aspectRatio);
+      
+      // اگر عرض از محدوده خارج شد، عرض رو محدود کن و ارتفاع رو دوباره حساب کن
+      if (newW < CONFIG.canvas.minWidth) {
+        newW = CONFIG.canvas.minWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+      } else if (newW > CONFIG.canvas.maxWidth) {
+        newW = CONFIG.canvas.maxWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+      }
+      
+      // حالا ارتفاع رو هم چک کن
+      if (newH < CONFIG.canvas.minHeight) {
+        newH = CONFIG.canvas.minHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+      } else if (newH > CONFIG.canvas.maxHeight) {
+        newH = CONFIG.canvas.maxHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+      }
+    } else {
+      // بدون قفل نسبت، فقط ارتفاع رو محدود کن
+      newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+    }
+
     if (newH !== lastH) {
       lastH = newH;
       state.canvasHeight = newH;
-
-      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-        let newW = Math.round(newH * dimensionState.aspectRatio);
-        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-        state.canvasWidth = newW;
-        if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
-      }
-
+      state.canvasWidth = newW;
+      
+      if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
       if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
       clearResolutionPreset();
       refresh();
@@ -3125,23 +3190,44 @@ document.addEventListener("mousemove", (e) => {
   }
 
   if (resizingH) {
-    let newW = clamp(
-      startW + (e.clientX - startX),
-      CONFIG.canvas.minWidth,
-      CONFIG.canvas.maxWidth
-    );
+    let newW = startW + (e.clientX - startX);
+    let newH = state.canvasHeight;
+
+    if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+      // محاسبه ارتفاع بر اساس عرض
+      newH = Math.round(newW / dimensionState.aspectRatio);
+      
+      // اگر ارتفاع از محدوده خارج شد، ارتفاع رو محدود کن و عرض رو دوباره حساب کن
+      if (newH < CONFIG.canvas.minHeight) {
+        newH = CONFIG.canvas.minHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+      } else if (newH > CONFIG.canvas.maxHeight) {
+        newH = CONFIG.canvas.maxHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+      }
+      
+      // حالا عرض رو هم چک کن
+      if (newW < CONFIG.canvas.minWidth) {
+        newW = CONFIG.canvas.minWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+      } else if (newW > CONFIG.canvas.maxWidth) {
+        newW = CONFIG.canvas.maxWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+      }
+    } else {
+      // بدون قفل نسبت، فقط عرض رو محدود کن
+      newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+    }
+
     if (newW !== lastW) {
       lastW = newW;
       state.canvasWidth = newW;
-
-      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-        let newH = Math.round(newW / dimensionState.aspectRatio);
-        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-        state.canvasHeight = newH;
-        if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
-      }
-
+      state.canvasHeight = newH;
+      
       if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
+      if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
       clearResolutionPreset();
       refresh();
     }
@@ -3158,22 +3244,39 @@ document.addEventListener(
     const clientY = e.touches[0].clientY;
 
     if (resizingW) {
-      let newH = clamp(
-        startH + (clientY - startY),
-        CONFIG.canvas.minHeight,
-        CONFIG.canvas.maxHeight
-      );
+      let newH = startH + (clientY - startY);
+      let newW = state.canvasWidth;
+
+      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+        newW = Math.round(newH * dimensionState.aspectRatio);
+        
+        if (newW < CONFIG.canvas.minWidth) {
+          newW = CONFIG.canvas.minWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+        } else if (newW > CONFIG.canvas.maxWidth) {
+          newW = CONFIG.canvas.maxWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+        }
+        
+        if (newH < CONFIG.canvas.minHeight) {
+          newH = CONFIG.canvas.minHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+          newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+        } else if (newH > CONFIG.canvas.maxHeight) {
+          newH = CONFIG.canvas.maxHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+          newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+        }
+      } else {
+        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+      }
+
       if (newH !== lastH) {
         lastH = newH;
         state.canvasHeight = newH;
-
-        if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-          let newW = Math.round(newH * dimensionState.aspectRatio);
-          newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-          state.canvasWidth = newW;
-          if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
-        }
-
+        state.canvasWidth = newW;
+        
+        if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
         if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
         clearResolutionPreset();
         refresh();
@@ -3181,23 +3284,40 @@ document.addEventListener(
     }
 
     if (resizingH) {
-      let newW = clamp(
-        startW + (clientX - startX),
-        CONFIG.canvas.minWidth,
-        CONFIG.canvas.maxWidth
-      );
+      let newW = startW + (clientX - startX);
+      let newH = state.canvasHeight;
+
+      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+        newH = Math.round(newW / dimensionState.aspectRatio);
+        
+        if (newH < CONFIG.canvas.minHeight) {
+          newH = CONFIG.canvas.minHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+        } else if (newH > CONFIG.canvas.maxHeight) {
+          newH = CONFIG.canvas.maxHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+        }
+        
+        if (newW < CONFIG.canvas.minWidth) {
+          newW = CONFIG.canvas.minWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+          newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+        } else if (newW > CONFIG.canvas.maxWidth) {
+          newW = CONFIG.canvas.maxWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+          newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+        }
+      } else {
+        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+      }
+
       if (newW !== lastW) {
         lastW = newW;
         state.canvasWidth = newW;
-
-        if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-          let newH = Math.round(newW / dimensionState.aspectRatio);
-          newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-          state.canvasHeight = newH;
-          if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
-        }
-
+        state.canvasHeight = newH;
+        
         if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
+        if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
         clearResolutionPreset();
         refresh();
       }
@@ -3232,7 +3352,8 @@ function initDimensionEvents() {
   const aspectH = document.getElementById("aspectH");
 
   if (aspectW && aspectH) {
-    const handleAspectInput = () => {
+    // فقط وقتی هر دو مقدار وارد شدند و کاربر ادیت را تمام کرد اعمال شود
+    const applyAspectInputs = () => {
       const w = aspectW.value;
       const h = aspectH.value;
 
@@ -3243,8 +3364,19 @@ function initDimensionEvents() {
       }
     };
 
-    aspectW.addEventListener("input", handleAspectInput);
-    aspectH.addEventListener("input", handleAspectInput);
+    // روی input لحظه‌ای اعمال نکن؛ فقط بعد از اتمام ویرایش
+    aspectW.addEventListener("blur", applyAspectInputs);
+    aspectH.addEventListener("blur", applyAspectInputs);
+
+    // اما اگر کاربر در حال اسکراب کردن (drag) روی input است، همزمان اعمال شود
+    const handleAspectInputScrub = () => {
+      if (window.__isNumberScrubbing) {
+        applyAspectInputs();
+      }
+    };
+
+    aspectW.addEventListener("input", handleAspectInputScrub);
+    aspectH.addEventListener("input", handleAspectInputScrub);
 
     aspectW.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -3257,7 +3389,7 @@ function initDimensionEvents() {
     aspectH.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        handleAspectInput();
+        applyAspectInputs();
         aspectH.blur();
       }
       if (e.key === "Escape") aspectH.blur();
@@ -3296,6 +3428,13 @@ function initDimensionEvents() {
       handleWidthChange(e.target.value, true);
     });
 
+    // هنگام اسکراب روی width به صورت زنده اعمال شود
+    canvasWidth.addEventListener("input", (e) => {
+      if (window.__isNumberScrubbing) {
+        handleWidthChange(e.target.value, true);
+      }
+    });
+
     canvasWidth.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.target.blur(); // یا مستقیم handleWidthChange
@@ -3306,6 +3445,13 @@ function initDimensionEvents() {
     // برای height
     canvasHeight.addEventListener("blur", (e) => {
       handleHeightChange(e.target.value, true);
+    });
+
+    // هنگام اسکراب روی height به صورت زنده اعمال شود
+    canvasHeight.addEventListener("input", (e) => {
+      if (window.__isNumberScrubbing) {
+        handleHeightChange(e.target.value, true);
+      }
     });
 
     canvasHeight.addEventListener("keydown", (e) => {
@@ -3462,6 +3608,9 @@ if (document.readyState === "loading") {
 
   const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
+  // فلگ سراسری برای تشخیص اسکرابینگ روی inputهای عددی
+  window.__isNumberScrubbing = false;
+
   document.addEventListener("pointerdown", (e) => {
     const input = e.target.closest('input[type="number"]');
     if (!input) return;
@@ -3488,6 +3637,7 @@ if (document.readyState === "loading") {
     startX = e.clientX;
     startValue = parseFloat(input.value) || 0;
 
+    window.__isNumberScrubbing = true;
     document.body.style.cursor = "ew-resize";
   });
 
@@ -3521,6 +3671,7 @@ if (document.readyState === "loading") {
     } catch {}
     activeInput = null;
     document.body.style.cursor = "";
+    window.__isNumberScrubbing = false;
   };
 
   document.addEventListener("pointerup", end);
