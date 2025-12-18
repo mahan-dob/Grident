@@ -1294,42 +1294,46 @@ function drawConicHandle(s, cx, cy, sel) {
   const radius = Math.min(W, H) * 0.25;
   const startAngleRad = ((s.startAngle - 90) * Math.PI) / 180;
 
+  // ۱. دایره راهنما (خط‌چین)
   if (sel) {
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.3)";
-    ctx.setLineDash([6 * scale, 4 * scale]);
-    ctx.lineWidth = 2 * scale;
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.setLineDash([5 * scale, 5 * scale]);
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
 
-  const ix = cx + Math.cos(startAngleRad) * radius;
-  const iy = cy + Math.sin(startAngleRad) * radius;
+  // ۲. خط شعاعی (نشانگر شروع زاویه)
+  const rotateX = cx + Math.cos(startAngleRad) * radius;
+  const rotateY = cy + Math.sin(startAngleRad) * radius;
 
   ctx.save();
-  if (sel) {
-    ctx.shadowColor = "rgba(255,255,255,0.3)";
-    ctx.shadowBlur = 6 * scale;
-  }
-  ctx.strokeStyle = sel ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)";
-  ctx.lineWidth = lineWidth * 0.6;
-  ctx.lineCap = "round";
-  ctx.setLineDash([4 * scale, 4 * scale]);
+  ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
+  ctx.lineWidth = lineWidth;
   ctx.beginPath();
   ctx.moveTo(cx, cy);
-  ctx.lineTo(ix, iy);
+  ctx.lineTo(rotateX, rotateY);
   ctx.stroke();
-  ctx.setLineDash([]);
+  
+  // ۳. رسم یک هندل کوچک در انتهای خط برای چرخش (اختیاری)
+  if (sel) {
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(rotateX, rotateY, 4 * scale, 0, Math.PI * 2);
+      ctx.fill();
+  }
   ctx.restore();
 
-  s.stops.forEach((cs, i) => {
+  // ۴. رسم Color Stops
+  s.stops.forEach((cs) => {
+    // زاویه هر استاپ نسبت به startAngle محاسبه می‌شود
     const stopAngle = startAngleRad + (cs.pos / 100) * Math.PI * 2;
     const px = cx + Math.cos(stopAngle) * radius;
     const py = cy + Math.sin(stopAngle) * radius;
 
-    drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale);
+    drawColorStop(px, py, cs, sel, handleSize * 0.8, lineWidth, scale);
 
     if (sel) {
       const labelR = radius + handleSize + 20 * scale;
@@ -1339,16 +1343,10 @@ function drawConicHandle(s, cx, cy, sel) {
     }
   });
 
-  drawCenterHandle(
-    cx,
-    cy,
-    sel,
-    handleSize,
-    lineWidth,
-    scale,
-    s.stops[0]?.color
-  );
+  // ۵. دسته مرکزی برای جابجایی کل گرادینت
+  drawCenterHandle(cx, cy, sel, handleSize, lineWidth, scale, s.stops[0]?.color);
 }
+
 
 function drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale) {
   if (sel) {
@@ -2583,7 +2581,7 @@ function renderInspector() {
         </div>
         <div class="form-row">
           <label>Size</label>
-          <input type="number" class="num-input" min="10" max="600" value="${Math.round(s.size)}" 
+          <input type="number" class="num-input" min="10" value="${Math.round(s.size)}" 
             oninput="getStop('${s.id}').size=+this.value;liveUpdate('${s.id}')">
         </div>
         <div class="form-row">
@@ -2958,10 +2956,18 @@ function copyCSS() {
   const btn = document.getElementById("copyBtn");
   navigator.clipboard.writeText(currentCSS).then(() => {
     btn.classList.add("copied");
-    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Copied!</span>`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="#4ade80" class="copy-svg">
+
+<g id="SVGRepo_bgCarrier" stroke-width="0"/>
+
+<g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"/>
+
+<g id="SVGRepo_iconCarrier"> <path fill-rule="evenodd" clip-rule="evenodd" d="M21 8C21 6.34315 19.6569 5 18 5H10C8.34315 5 7 6.34315 7 8V20C7 21.6569 8.34315 23 10 23H18C19.6569 23 21 21.6569 21 20V8ZM19 8C19 7.44772 18.5523 7 18 7H10C9.44772 7 9 7.44772 9 8V20C9 20.5523 9.44772 21 10 21H18C18.5523 21 19 20.5523 19 20V8Z" fill="#4ade80"/> <path d="M6 3H16C16.5523 3 17 2.55228 17 2C17 1.44772 16.5523 1 16 1H6C4.34315 1 3 2.34315 3 4V18C3 18.5523 3.44772 19 4 19C4.55228 19 5 18.5523 5 18V4C5 3.44772 5.44772 3 6 3Z" fill="#4ade80"/> </g>
+
+</svg></polyline></svg><span>Copied</span>`;
     setTimeout(() => {
       btn.classList.remove("copied");
-      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>Copy</span>`;
+      btn.innerHTML = `<img src="./icon/copy.svg" alt="copy"><span>Copy</span>`;
     }, 2000);
   });
 }

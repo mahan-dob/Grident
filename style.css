@@ -133,6 +133,12 @@ body {
   display: none;
 }
 
+option{
+  color: var(--text-primary);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px !important;
+}
 /* ========================================
    input
 ======================================== */
@@ -1522,19 +1528,16 @@ button.sm {
   cursor: pointer;
   font-size: 11px;
   background: none;
-}
-
-.copy-btn:hover {
-  background: var(--accent);
+  width: 7rem;
 }
 
 .copy-btn.copied {
-  background: #1a4d2e;
+  background: rgba(26, 77, 46, 0.6);
   border-color: #2d7a4d;
   color: #4ade80;
 }
 
-.copy-btn img {
+.copy-btn img , .copy-svg{
   width: 18px;
   height: 18px;
 }
