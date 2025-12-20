@@ -120,7 +120,7 @@ const dimensionState = {
 const zoomState = {
   current: 100,
   min: 5,
-  max: 150,
+  max: 350,
   step: 5,
   dynamicMin: 15,
   padding: 75,
@@ -139,9 +139,9 @@ function isMobile() {
 }
 
 function getHitRadius() {
-  const base = isMobile() ? 30 : 18;
   const scale = Math.max(W, H) / 800;
-  return clamp(base * scale, base, base * 5);
+  const radius = 25 * scale;
+  return clamp(radius, 20, 60);
 }
 
 function getGCD(a, b) {
@@ -825,6 +825,149 @@ function updateSizeDisplay() {
   }
 }
 
+// ========== PAN STATE ==========
+const panState = {
+  active: false,
+  startX: 0,
+  startY: 0,
+  scrollLeft: 0,
+  scrollTop: 0,
+  mode: false // true = pan mode فعال
+};
+
+// ========== PAN FUNCTIONS ==========
+// ========== PAN FUNCTIONS ==========
+function initPan() {
+  const wrap = document.querySelector('.canvas-wrap');
+  const canvas = document.getElementById('canvas');
+  if (!wrap || !canvas) return;
+
+  // ✅ دکمه Pan
+  const panBtn = document.getElementById('panBtn');
+  if (panBtn) {
+    panBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePanMode();
+    });
+    
+    panBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePanMode();
+    }, { passive: false });
+  }
+
+  // ========== MOUSE - فقط روی Canvas ==========
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 1 || (e.button === 0 && panState.mode)) {
+      e.preventDefault();
+      e.stopPropagation();
+      startPan(e.clientX, e.clientY, wrap);
+    }
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (panState.active) {
+      e.preventDefault();
+      doPan(e.clientX, e.clientY, wrap);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    endPan(wrap);
+  });
+
+  // Space + drag (desktop)
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.target.closest('input, textarea')) {
+      e.preventDefault();
+      panState.mode = true;
+      updatePanUI();
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') {
+      panState.mode = false;
+      updatePanUI();
+    }
+  });
+
+  // ========== TOUCH - فقط روی Canvas ==========
+  canvas.addEventListener('touchstart', (e) => {
+    if (panState.mode && e.touches.length === 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      startPan(e.touches[0].clientX, e.touches[0].clientY, wrap);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (panState.active && e.touches.length === 1) {
+      e.preventDefault();
+      doPan(e.touches[0].clientX, e.touches[0].clientY, wrap);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => {
+    endPan(wrap);
+  });
+
+  canvas.addEventListener('touchcancel', () => {
+    endPan(wrap);
+  });
+}
+
+function startPan(x, y, wrap) {
+  panState.active = true;
+  panState.startX = x;
+  panState.startY = y;
+  panState.scrollLeft = wrap.scrollLeft;
+  panState.scrollTop = wrap.scrollTop;
+  wrap.classList.add('panning');
+}
+
+function doPan(x, y, wrap) {
+  if (!panState.active) return;
+  
+  const dx = x - panState.startX;
+  const dy = y - panState.startY;
+  
+  wrap.scrollLeft = panState.scrollLeft - dx;
+  wrap.scrollTop = panState.scrollTop - dy;
+}
+
+function endPan(wrap) {
+  panState.active = false;
+  wrap.classList.remove('panning');
+}
+
+function togglePanMode() {
+  panState.mode = !panState.mode;
+  updatePanUI();
+}
+
+function updatePanUI() {
+  const wrap = document.querySelector('.canvas-wrap');
+  const canvas = document.getElementById('canvas');
+  const btn = document.getElementById('panBtn');
+  
+  if (wrap) {
+    wrap.style.cursor = panState.mode ? 'grab' : '';
+  }
+  
+  if (canvas) {
+    canvas.style.cursor = panState.mode ? 'grab' : 'crosshair';
+  }
+  
+  if (btn) {
+    btn.classList.toggle('active', panState.mode);
+  }
+}
+
+// Global
+window.togglePanMode = togglePanMode;
 // ========== CANVAS RESIZE ==========
 function resize() {
   W = state.canvasWidth;
@@ -867,7 +1010,16 @@ function resize() {
 }
 
 // ========== checkAndFixZoom ==========
+let lastCanvasW = 0;
+let lastCanvasH = 0;
 function checkAndFixZoom() {
+  if (state.canvasWidth === lastCanvasW && state.canvasHeight === lastCanvasH) {
+    return;
+  }
+  
+  lastCanvasW = state.canvasWidth;
+  lastCanvasH = state.canvasHeight;
+
   const wrap = document.querySelector(".canvas-wrap");
   if (!wrap) return;
 
@@ -1515,6 +1667,10 @@ function getEventPos(e) {
 function onPointerDown(e) {
   e.preventDefault();
 
+  if (panState.mode || panState.isPinch) {
+    return;
+  }
+
   const pos = getEventPos(e);
   const mx = pos.x;
   const my = pos.y;
@@ -1541,6 +1697,7 @@ function onPointerDown(e) {
       const x2 = cx + dx,
         y2 = cy + dy;
 
+      // بررسی Color Stops
       for (let i = 0; i < s.stops.length; i++) {
         const px = lerp(x1, x2, s.stops[i].pos / 100);
         const py = lerp(y1, y2, s.stops[i].pos / 100);
@@ -1552,6 +1709,7 @@ function onPointerDown(e) {
         }
       }
 
+      // بررسی مرکز
       if (Math.hypot(cx - mx, cy - my) < hitRadius) {
         drag = { t: "move", s };
         state.selected = s.id;
@@ -1559,9 +1717,9 @@ function onPointerDown(e) {
         return;
       }
 
+      // بررسی خط برای چرخش
       const lineLen = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-      const t =
-        ((mx - x1) * (x2 - x1) + (my - y1) * (y2 - y1)) / (lineLen * lineLen);
+      const t = ((mx - x1) * (x2 - x1) + (my - y1) * (y2 - y1)) / (lineLen * lineLen);
       if (t >= 0 && t <= 1) {
         const projX = x1 + t * (x2 - x1);
         const projY = y1 + t * (y2 - y1);
@@ -1576,6 +1734,7 @@ function onPointerDown(e) {
       const radius = Math.min(W, H) * 0.25;
       const startAngleRad = ((s.startAngle - 90) * Math.PI) / 180;
 
+      // ✅ ۱. بررسی Color Stops روی دایره
       for (let i = 0; i < s.stops.length; i++) {
         const stopAngle = startAngleRad + (s.stops[i].pos / 100) * Math.PI * 2;
         const px = cx + Math.cos(stopAngle) * radius;
@@ -1588,16 +1747,33 @@ function onPointerDown(e) {
         }
       }
 
-      const indicatorLen = radius + 20;
-      const ix = cx + Math.cos(startAngleRad) * indicatorLen;
-      const iy = cy + Math.sin(startAngleRad) * indicatorLen;
-      if (Math.hypot(ix - mx, iy - my) < hitRadius) {
+      // ✅ ۲. بررسی نقطه انتهای خط شعاعی (هندل چرخش)
+      const rotateX = cx + Math.cos(startAngleRad) * radius;
+      const rotateY = cy + Math.sin(startAngleRad) * radius;
+      if (Math.hypot(rotateX - mx, rotateY - my) < hitRadius) {
         drag = { t: "conic-angle", s };
         state.selected = s.id;
         refresh();
         return;
       }
 
+      // ✅ ۳. بررسی کل خط شعاعی (برای چرخش)
+      const lineDx = rotateX - cx;
+      const lineDy = rotateY - cy;
+      const lineLen2 = lineDx * lineDx + lineDy * lineDy;
+      const t = ((mx - cx) * lineDx + (my - cy) * lineDy) / lineLen2;
+      if (t >= 0.3 && t <= 1) { // از 30% به بعد تا با مرکز تداخل نکند
+        const projX = cx + t * lineDx;
+        const projY = cy + t * lineDy;
+        if (Math.hypot(projX - mx, projY - my) < hitRadius) {
+          drag = { t: "conic-angle", s };
+          state.selected = s.id;
+          refresh();
+          return;
+        }
+      }
+
+      // ✅ ۴. بررسی مرکز (برای جابجایی)
       if (Math.hypot(cx - mx, cy - my) < hitRadius) {
         drag = { t: "move", s };
         state.selected = s.id;
@@ -1670,6 +1846,68 @@ function onPointerUp() {
     updateCSS();
   }
   drag = null;
+}
+
+// ========== رسم هندل کونیک با دسته چرخش بهتر ==========
+function drawConicHandle(s, cx, cy, sel) {
+  const handleSize = getHandleSize(sel);
+  const lineWidth = getLineWidth(sel);
+  const fontSize = getFontSize();
+  const scale = Math.max(W, H) / 800;
+
+  const radius = Math.min(W, H) * 0.25;
+  const startAngleRad = ((s.startAngle - 90) * Math.PI) / 180;
+
+  // ۱. دایره راهنما (خط‌چین)
+  if (sel) {
+    ctx.save();
+    ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
+    ctx.setLineDash([5 * scale, 5 * scale]);
+    ctx.lineWidth = 2 * scale;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ۲. خط شعاعی (نشانگر شروع زاویه)
+  const rotateX = cx + Math.cos(startAngleRad) * radius;
+  const rotateY = cy + Math.sin(startAngleRad) * radius;
+
+  ctx.save();
+  ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(rotateX, rotateY);
+  ctx.stroke();
+  ctx.restore();
+
+  // ✅ ۳. هندل چرخش در انتهای خط شعاعی
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.4)";
+  ctx.shadowBlur = 6 * scale;
+  ctx.shadowOffsetY = 2 * scale;
+
+
+  // ۴. رسم Color Stops
+  s.stops.forEach((cs) => {
+    const stopAngle = startAngleRad + (cs.pos / 100) * Math.PI * 2;
+    const px = cx + Math.cos(stopAngle) * radius;
+    const py = cy + Math.sin(stopAngle) * radius;
+
+    drawColorStop(px, py, cs, sel, handleSize * 0.8, lineWidth, scale);
+
+    if (sel) {
+      const labelR = radius + handleSize + 20 * scale;
+      const lx = cx + Math.cos(stopAngle) * labelR;
+      const ly = cy + Math.sin(stopAngle) * labelR;
+      drawStopLabel(lx, ly, cs.pos + "%", fontSize, scale);
+    }
+  });
+
+  drawCenterHandle(cx, cy, sel, handleSize, lineWidth, scale, s.stops[0]?.color);
 }
 
 // Canvas events
@@ -2934,23 +3172,32 @@ function updateAllStopItems() {
 // ========== LAYER DRAG AND DROP ==========
 const layerDrag = {
   active: false,
+  pending: false,        // ← در انتظار شروع
   stopId: null,
   element: null,
   placeholder: null,
   clone: null,
+  startX: 0,
   startY: 0,
   offsetY: 0,
-  listRect: null
+  listRect: null,
+  delayTimer: null       // ← تایمر تأخیر
+};
+
+// ⚙️ تنظیمات
+const DRAG_CONFIG = {
+  delay: 150,            // میلی‌ثانیه تأخیر
+  threshold: 5           // پیکسل حداقل حرکت
 };
 
 function initLayerDragDrop() {
   const list = document.getElementById("list");
   if (!list) return;
   
-  list.addEventListener("pointerdown", onLayerDragStart);
+  list.addEventListener("pointerdown", onLayerPointerDown);
 }
 
-function onLayerDragStart(e) {
+function onLayerPointerDown(e) {
   const stopItem = e.target.closest(".stop-item");
   if (!stopItem) return;
   
@@ -2967,53 +3214,48 @@ function onLayerDragStart(e) {
   e.preventDefault();
   e.stopPropagation();
   
-  const list = document.getElementById("list");
   const rect = stopItem.getBoundingClientRect();
+  const list = document.getElementById("list");
   
-  layerDrag.active = true;
+  // ذخیره اطلاعات اولیه
+  layerDrag.pending = true;
   layerDrag.stopId = stopItem.dataset.id;
   layerDrag.element = stopItem;
+  layerDrag.startX = e.clientX;
   layerDrag.startY = e.clientY;
   layerDrag.offsetY = e.clientY - rect.top;
   layerDrag.listRect = list.getBoundingClientRect();
+  layerDrag.initialRect = rect;
   
-  // ایجاد کلون برای نمایش
-  layerDrag.clone = stopItem.cloneNode(true);
-  layerDrag.clone.classList.add("drag-clone");
-  layerDrag.clone.style.cssText = `
-    position: fixed;
-    left: ${rect.left}px;
-    top: ${rect.top}px;
-    width: ${rect.width}px;
-    height: ${rect.height}px;
-    z-index: 10000;
-    pointer-events: none;
-    opacity: 0.95;
-    box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-    transform: scale(1.03);
-    border-radius: 8px;
-    transition: transform 0.1s ease;
-  `;
-  document.body.appendChild(layerDrag.clone);
+  // شروع تایمر تأخیر
+  layerDrag.delayTimer = setTimeout(() => {
+    if (layerDrag.pending) {
+      startActualDrag(e);
+    }
+  }, DRAG_CONFIG.delay);
   
-  // ایجاد placeholder
-  layerDrag.placeholder = document.createElement("div");
-  layerDrag.placeholder.className = "drag-placeholder";
-  layerDrag.placeholder.style.height = rect.height + "px";
-  
-  // جایگزینی
-  stopItem.classList.add("drag-original");
-  stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
-  
-  document.addEventListener("pointermove", onLayerDragMove);
-  document.addEventListener("pointerup", onLayerDragEnd);
-  document.addEventListener("pointercancel", onLayerDragEnd);
-  
-  document.body.style.userSelect = "none";
-  document.body.style.cursor = "grabbing";
+  document.addEventListener("pointermove", onLayerPointerMove);
+  document.addEventListener("pointerup", onLayerPointerUp);
+  document.addEventListener("pointercancel", onLayerPointerUp);
 }
 
-function onLayerDragMove(e) {
+function onLayerPointerMove(e) {
+  // اگر هنوز drag شروع نشده
+  if (layerDrag.pending && !layerDrag.active) {
+    const dx = Math.abs(e.clientX - layerDrag.startX);
+    const dy = Math.abs(e.clientY - layerDrag.startY);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // اگر خیلی زود حرکت کرد، لغو کن (مثلاً کلیک ساده بوده)
+    // یا اگر بیشتر از threshold حرکت کرد، زودتر شروع کن
+    if (distance > DRAG_CONFIG.threshold) {
+      clearTimeout(layerDrag.delayTimer);
+      startActualDrag(e);
+    }
+    return;
+  }
+  
+  // حرکت واقعی drag
   if (!layerDrag.active || !layerDrag.clone) return;
   
   e.preventDefault();
@@ -3060,8 +3302,64 @@ function onLayerDragMove(e) {
   }
 }
 
-function onLayerDragEnd(e) {
-  if (!layerDrag.active) return;
+function startActualDrag(e) {
+  if (layerDrag.active || !layerDrag.element) return;
+  
+  const stopItem = layerDrag.element;
+  const rect = layerDrag.initialRect;
+  const list = document.getElementById("list");
+  
+  layerDrag.pending = false;
+  layerDrag.active = true;
+  
+  // ایجاد کلون برای نمایش
+  layerDrag.clone = stopItem.cloneNode(true);
+  layerDrag.clone.classList.add("drag-clone");
+  layerDrag.clone.style.cssText = `
+    position: fixed;
+    left: ${rect.left}px;
+    top: ${rect.top}px;
+    width: ${rect.width}px;
+    height: ${rect.height}px;
+    z-index: 10000;
+    pointer-events: none;
+    opacity: 0.95;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+    transform: scale(1.03);
+    border-radius: 8px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  `;
+  document.body.appendChild(layerDrag.clone);
+  
+  // ایجاد placeholder
+  layerDrag.placeholder = document.createElement("div");
+  layerDrag.placeholder.className = "drag-placeholder";
+  layerDrag.placeholder.style.height = rect.height + "px";
+  
+  // جایگزینی
+  stopItem.classList.add("drag-original");
+  stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
+  
+  document.body.style.userSelect = "none";
+  document.body.style.cursor = "grabbing";
+  
+  // 🎯 فیدبک هپتیک برای موبایل
+  if (navigator.vibrate) {
+    navigator.vibrate(50);
+  }
+}
+
+function onLayerPointerUp(e) {
+  // اگر هنوز pending بود، یعنی کلیک ساده بوده
+  if (layerDrag.pending && !layerDrag.active) {
+    cleanupLayerDrag();
+    return;
+  }
+  
+  if (!layerDrag.active) {
+    cleanupLayerDrag();
+    return;
+  }
   
   // محاسبه ترتیب جدید
   const list = document.getElementById("list");
@@ -3096,6 +3394,12 @@ function onLayerDragEnd(e) {
 }
 
 function cleanupLayerDrag() {
+  // پاک کردن تایمر
+  if (layerDrag.delayTimer) {
+    clearTimeout(layerDrag.delayTimer);
+    layerDrag.delayTimer = null;
+  }
+  
   if (layerDrag.clone && layerDrag.clone.parentNode) {
     layerDrag.clone.parentNode.removeChild(layerDrag.clone);
   }
@@ -3109,14 +3413,16 @@ function cleanupLayerDrag() {
   }
   
   layerDrag.active = false;
+  layerDrag.pending = false;
   layerDrag.stopId = null;
   layerDrag.element = null;
   layerDrag.placeholder = null;
   layerDrag.clone = null;
+  layerDrag.initialRect = null;
   
-  document.removeEventListener("pointermove", onLayerDragMove);
-  document.removeEventListener("pointerup", onLayerDragEnd);
-  document.removeEventListener("pointercancel", onLayerDragEnd);
+  document.removeEventListener("pointermove", onLayerPointerMove);
+  document.removeEventListener("pointerup", onLayerPointerUp);
+  document.removeEventListener("pointercancel", onLayerPointerUp);
   
   document.body.style.userSelect = "";
   document.body.style.cursor = "";
@@ -4392,88 +4698,101 @@ function showZoomIndicator(zoom) {
 }
 
 function setupWheelZoom() {
-  // const wrap = document.querySelector(".canvas-wrap");
-  // if (!wrap) return;
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
 
-  // wrap.addEventListener(
-  //   "wheel",
-  //   (e) => {
-  //     if (e.ctrlKey || e.metaKey) {
-  //       e.preventDefault();
+  wrap.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
 
-  //       const rect = canvas.getBoundingClientRect();
-  //       const center = {
-  //         x: (e.clientX - rect.left) / (zoomState.current / 100),
-  //         y: (e.clientY - rect.top) / (zoomState.current / 100),
-  //       };
+        const rect = canvas.getBoundingClientRect();
+        const center = {
+          x: (e.clientX - rect.left) / (zoomState.current / 100),
+          y: (e.clientY - rect.top) / (zoomState.current / 100),
+        };
 
-  //       const delta = e.deltaY > 0 ? -10 : 10;
-  //       setZoom(zoomState.current + delta, center);
-  //     }
-  //   },
-  //   { passive: false }
-  // );
+        const delta = e.deltaY > 0 ? -10 : 10;
+        setZoom(zoomState.current + delta, center);
+      }
+    },
+    { passive: false }
+  );
 }
 
 function setupTouchZoom() {
-  // const wrap = document.querySelector(".canvas-wrap");
-  // if (!wrap) return;
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
 
-  // let initialPinchDist = 0;
-  // let initialZoom = 100;
+  let initialPinchDist = 0;
+  let initialZoom = 100;
 
-  // function getPinchDist(touches) {
-  //   const dx = touches[0].clientX - touches[1].clientX;
-  //   const dy = touches[0].clientY - touches[1].clientY;
-  //   return Math.hypot(dx, dy);
-  // }
+  function getPinchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
 
-  // function getPinchCenter(touches) {
-  //   return {
-  //     x: (touches[0].clientX + touches[1].clientX) / 2,
-  //     y: (touches[0].clientY + touches[1].clientY) / 2,
-  //   };
-  // }
+  function getPinchCenter(touches) {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }
 
-  // wrap.addEventListener(
-  //   "touchstart",
-  //   (e) => {
-  //     if (e.touches.length === 2) {
-  //       e.preventDefault();
-  //       initialPinchDist = getPinchDist(e.touches);
-  //       initialZoom = zoomState.current;
-  //     }
-  //   },
-  //   { passive: false }
-  // );
+  wrap.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        initialPinchDist = getPinchDist(e.touches);
+        initialZoom = zoomState.current;
+      }
+    },
+    { passive: false }
+  );
 
-  // wrap.addEventListener(
-  //   "touchmove",
-  //   (e) => {
-  //     if (e.touches.length === 2) {
-  //       e.preventDefault();
+  wrap.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
 
-  //       const currentDist = getPinchDist(e.touches);
-  //       const scale = currentDist / initialPinchDist;
-  //       const newZoom = Math.round(initialZoom * scale);
+        const currentDist = getPinchDist(e.touches);
+        const scale = currentDist / initialPinchDist;
+        const newZoom = Math.round(initialZoom * scale);
 
-  //       const center = getPinchCenter(e.touches);
-  //       const rect = canvas.getBoundingClientRect();
-  //       const canvasCenter = {
-  //         x: (center.x - rect.left) / (zoomState.current / 100),
-  //         y: (center.y - rect.top) / (zoomState.current / 100),
-  //       };
+        const center = getPinchCenter(e.touches);
+        const rect = canvas.getBoundingClientRect();
+        const canvasCenter = {
+          x: (center.x - rect.left) / (zoomState.current / 100),
+          y: (center.y - rect.top) / (zoomState.current / 100),
+        };
 
-  //       setZoom(newZoom, canvasCenter);
-  //     }
-  //   },
-  //   { passive: false }
-  // );
+        setZoom(newZoom, canvasCenter);
+      }
+    },
+    { passive: false }
+  );
 
-  // wrap.addEventListener("touchend", () => {
-  //   initialPinchDist = 0;
-  // });
+  wrap.addEventListener("touchend", () => {
+    initialPinchDist = 0;
+  });
 }
+
+const toolbar = document.querySelector('.tool-bar');
+const zoomControls = document.querySelector('.zoom-controls');
+const canvasWrap = document.querySelector('.canvas-wrap');
+
+canvasWrap.addEventListener('scroll', () => {
+  const x = canvasWrap.scrollLeft;
+  const y = canvasWrap.scrollTop;
+  toolbar.style.transform = `translate(${x}px, ${y}px)`;
+  zoomControls.style.transform = `translate(${x}px, ${y}px)`;
+});
+
+
 
 function setupKeyboardZoom() {
   document.addEventListener("keydown", (e) => {
@@ -5268,6 +5587,7 @@ async function init() {
   initNoiseEvents();
   initFilterEvents();
   initZoom();
+  initPan();
 
   resize();
   updateZoomUI();
@@ -5318,7 +5638,7 @@ if (document.readyState === "loading") {
 
 (() => {
   let activeInput = null;
-  let accumulatedDelta = 0;
+  let startX = 0;
   let startValue = 0;
 
   let lastTapTime = 0;
@@ -5347,60 +5667,33 @@ if (document.readyState === "loading") {
     }
 
     lastTapTime = now;
+
     if (input === document.activeElement) return;
 
     e.preventDefault();
+    input.setPointerCapture(e.pointerId);
 
     activeInput = input;
-    accumulatedDelta = 0;
+    startX = e.clientX;
     startValue = parseFloat(input.value) || 0;
+
     window.__isNumberScrubbing = true;
-
-    if (e.pointerType === "mouse") {
-      // 🎯 مثل فیگما: Pointer Lock
-      input.requestPointerLock();
-    } else {
-      input.setPointerCapture(e.pointerId);
-      input._startX = e.clientX;
-    }
+    document.body.style.cursor = "ew-resize";
   });
 
-  // برای Pointer Lock
-  document.addEventListener("mousemove", (e) => {
-    if (!activeInput || !document.pointerLockElement) return;
-
-    const step = getStep(activeInput);
-    let delta = (e.movementX / 8) * step;
-
-    if (e.shiftKey) delta *= 5;
-    if (e.altKey) delta *= 0.2;
-
-    accumulatedDelta += delta;
-
-    let value = startValue + accumulatedDelta;
-    const min = activeInput.min === "" ? -Infinity : +activeInput.min;
-    const max = activeInput.max === "" ? Infinity : +activeInput.max;
-
-    value = clamp(value, min, max);
-    value = Math.round(value / step) * step;
-
-    activeInput.value = value;
-    activeInput.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-
-  // برای تاچ
   document.addEventListener("pointermove", (e) => {
-    if (!activeInput || document.pointerLockElement) return;
+    if (!activeInput) return;
     if (activeInput === document.activeElement) return;
 
     const step = getStep(activeInput);
-    const dx = e.clientX - (activeInput._startX || 0);
+    const dx = e.clientX - startX;
     let delta = (dx / 8) * step;
 
     if (e.shiftKey) delta *= 5;
     if (e.altKey) delta *= 0.2;
 
     let value = startValue + delta;
+
     const min = activeInput.min === "" ? -Infinity : +activeInput.min;
     const max = activeInput.max === "" ? Infinity : +activeInput.max;
 
@@ -5413,21 +5706,18 @@ if (document.readyState === "loading") {
 
   const end = (e) => {
     if (!activeInput) return;
-    
-    if (document.pointerLockElement) {
-      document.exitPointerLock();
-    }
-    
-    try { activeInput.releasePointerCapture(e.pointerId); } catch {}
-    
-    delete activeInput._startX;
+    try {
+      activeInput.releasePointerCapture(e.pointerId);
+    } catch {}
     activeInput = null;
+    document.body.style.cursor = "";
     window.__isNumberScrubbing = false;
   };
 
   document.addEventListener("pointerup", end);
   document.addEventListener("pointercancel", end);
 
+  // دسکتاپ هنوز dblclick داره
   document.addEventListener("dblclick", (e) => {
     const input = e.target.closest('input[type="number"]');
     if (!input) return;

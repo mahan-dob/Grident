@@ -84,6 +84,16 @@
 
 
   <div class="canvas-wrap">
+<div class="tool-bar">
+      <button class="preview-btn" onclick="openFullscreenPreview()" title="Fullscreen Preview (P)">
+      <img src="./icon/full-screen.svg" alt="fullscreen">
+      <span>Fullscreen</span>
+    </button>
+    <button id="panBtn" class="pan-btn" title="Pan Mode (Space)">
+<img src="./icon/pan.svg" alt="pan tool">
+    </button>
+</div>
+
     <div class="canvas-container">
       <div class="canvas-wrapper">
         <canvas id="canvas"></canvas>
@@ -96,15 +106,12 @@
         <div class="resize-h">
           <button id="toggleHandles" class="Handle-btn" title="Toggle handle visibility (H)"><img
               src="./icon/eye.svg" alt="show handel"></button>
-
+            </button>
           <div id="resizeHeightHandle" class="resize-height"></div>
         </div>
       </div>
     </div>
-    <button class="preview-btn" onclick="openFullscreenPreview()" title="Fullscreen Preview (P)">
-      <img src="./icon/full-screen.svg" alt="fullscreen">
-      <span>Preview</span>
-    </button>
+
     <!-- Zoom Controls -->
     <div class="zoom-controls">
       <button id="zoomOut" title="Zoom Out (Ctrl -)"><img src="./icon/minus.svg" alt="Zoom Out"></button>

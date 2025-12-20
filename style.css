@@ -656,13 +656,11 @@ header h1 {
    CANVAS AREA
 ======================================== */
 .canvas-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   position: relative;
-  overflow: hidden;
+  display: grid;
+  place-items: center;
   height: 100%;
+  overflow: hidden;
   background-color: var(--sec-bg);
   background-image: linear-gradient(45deg, var(--bg) 25%, transparent 25%),
     linear-gradient(-45deg, var(--bg) 25%, transparent 25%),
@@ -674,30 +672,36 @@ header h1 {
 }
 
 .canvas-container {
-  flex: 1;
+  overflow: visible !important;
   position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: max-content;
+  height: max-content;
   padding: 0;
-  overflow: visible;
 }
 
 .canvas-wrapper {
+  overflow: visible !important;
   position: relative;
+  display: inline-block;
+  transform-origin: top left;
 }
 
 #canvas {
-  grid-row: 3/4;
-  grid-column: 1/2;
+  display: block;
   border-radius: 1rem;
-  direction: rtl;
-  inset: 0;
   cursor: crosshair;
   border: 1px dashed var(--white-color);
-  margin: 0 50px 40px 0;
+  margin: 10px 50px 40px 10px;
+
 }
 
+.canvas-wrap.panning * {
+  pointer-events: none;
+}
+
+.canvas-wrap.panning #canvas {
+  pointer-events: auto;
+}
 /* ========================================
    RESIZE HANDLES
 ======================================== */
@@ -796,12 +800,46 @@ header h1 {
   border-color: rgba(255, 100, 100, 0.3);
 }
 
-
-/* ========== FULLSCREEN PREVIEW ========== */
-.preview-btn{
+.tool-bar{
   position: absolute;
-  top: .5rem;
+  bottom: 1.5rem;
   left: .5rem;
+  display: flex;
+  gap: 10px;
+  z-index: 1000;
+  height: min-content;
+  z-index: 11111;
+}
+/* ========================================
+   pan tool
+======================================== */
+.pan-btn{
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--TransParent-bg);
+  backdrop-filter: blur(4px);
+  padding: 6px;
+  border-radius: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  z-index: 1000;
+}
+
+.pan-btn img{
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+.pan-btn.active {
+  background: rgba(80, 40, 40, 0.3);
+  border-color: rgba(255, 100, 100, 0.3);
+}
+/* ========== FULLSCREEN PREVIEW ========== */
+.preview-btn {
+
+
   display: flex;
   align-items: center;
   gap: 10px;
@@ -813,6 +851,7 @@ header h1 {
   border: 1px solid var(--border);
   z-index: 1000;
 }
+
 /* ========== FULLSCREEN PREVIEW ========== */
 .fullscreen-overlay {
   position: fixed;
@@ -902,8 +941,8 @@ header h1 {
    ZOOM CONTROLS
 ======================================== */
 .zoom-controls {
-  position: sticky;
-  bottom: 1rem;
+  position: absolute; 
+  bottom: 1.5rem;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1232,6 +1271,8 @@ display: none;
 .drag-clone {
   background: var(--surface);
   border: 1px solid var(--accent);
+  animation: dragStart 0.15s ease-out;
+  transition: all 100ms ease;
 }
 
 .drag-clone .drag-handle {
@@ -1240,6 +1281,17 @@ display: none;
   color: var(--accent);
 }
 
+
+@keyframes dragStart {
+  from {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(1.03);
+    opacity: 0.95;
+  }
+}
 /* ========== LIST STYLES ========== */
 #list {
   display: flex;
@@ -1803,6 +1855,15 @@ display: none;
     border-radius: 0;
   }
 
+  .tool-bar{
+    left: .5rem;
+    top: 1rem;
+  }
+
+  .zoom-controls{
+    bottom: 1rem;
+  }
+
   .panel {
     width: 100%;
   }
@@ -1876,5 +1937,8 @@ display: none;
     grid-column: 1/2;
     grid-row: 6/7;
     width: 100%;
+  }
+
+  .zoom-controls{
   }
 }
