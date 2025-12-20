@@ -22,7 +22,6 @@
         <option value="dep-dark">DepDark</option>
         <option value="midnight">MidNight</option>
       </select>
-      <span class="arrow">▾</span>
     </div>
     
     
@@ -122,9 +121,8 @@
   </div>
   <div class="noise-controls">
     <div class="form-row">
-      <label>Opacity</label>
+      <label>Strength</label>
       <input type="number" id="noiseOpacity" class="num-input" min="0" max="100" value="0">
-      <span class="unit">%</span>
     </div>
     <div class="form-row">
       <label>Frequency</label>
@@ -146,11 +144,11 @@
 <div class="section">
   <div class="section-header">
     <div class="section-title">Filters</div>
+    <button id="filtersResetBtn" class="control-btn" title="Reset filters">
+      <img src="./icon/reset.svg" alt="reset">
     <button id="filtersToggleBtn" class="control-btn" title="Toggle filters">
       <img src="./icon/eye.svg" alt="toggle">
     </button>
-    <button id="filtersResetBtn" class="control-btn" title="Reset filters">
-      <img src="./icon/reset.svg" alt="reset">
     </button>
   </div>
   
@@ -184,7 +182,7 @@
       <label>Hue</label>
       <input type="range" id="filterHue" class="filter-slider hue-slider" min="0" max="360" value="0">
       <input type="number" id="filterHueNum" class="num-input" min="0" max="360" value="0">
-      <span class="unit">°</span>
+      <span class="unit" style="margin-right: 5px;">°</span>
     </div>
     
     <!-- Blur -->
@@ -261,7 +259,7 @@
       </select>
     </div>
     <button id="copyBtn" class="copy-btn" onclick="copyCSS()">
-      <img src="./icon/copy.svg" alt="copy">
+      <img class="copy-svg" src="./icon/copy.svg" alt="copy">
       <span>Copy All</span>
     </button>
   </div>
@@ -270,8 +268,8 @@
   <div class="output-block">
     <div class="output-header">
       <span>Gradient</span>
-      <button class="copy-sm-btn" onclick="copyGradientCSS()">
-        <img src="./icon/copy.svg" alt="copy">Copy
+      <button class="copy-btn" onclick="copyGradientCSS()">
+        <img class="copy-svg" src="./icon/copy.svg" alt="copy">Copy
       </button>
     </div>
     <iframe id="cssGradient" class="css-output"></iframe>
@@ -280,8 +278,8 @@
   <div class="output-block" id="noiseOutputBlock" style="display:none;">
     <div class="output-header">
       <span>Fillter Noise</span>
-      <button class="copy-sm-btn" onclick="copyNoiseCSS()">
-        <img src="./icon/copy.svg" alt="copy">Copy
+      <button class="copy-btn" onclick="copyNoiseCSS()">
+        <img class="copy-svg" src="./icon/copy.svg" alt="copy">Copy
       </button>
     </div>
     <iframe id="cssNoise" class="css-output css-output-sm"></iframe>
@@ -290,8 +288,8 @@
   <div class="output-block" id="svgOutputBlock" style="display:none;">
     <div class="output-header">
       <span>Noise SVG</span>
-      <button class="copy-sm-btn" onclick="copySVGFilter()">
-        <img src="./icon/copy.svg" alt="copy">Copy
+      <button class="copy-btn" onclick="copySVGFilter()">
+        <img class="copy-svg" src="./icon/copy.svg" alt="copy">Copy
       </button>
     </div>
     <iframe id="cssSVG" class="css-output css-output-sm"></iframe>

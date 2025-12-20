@@ -10,7 +10,7 @@
   --white-color: #e1e9e5;
   --border: rgba(255, 255, 255, 0.1);
   --sec-border: rgba(255, 255, 255, 0.4);
-  --accent: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
+  --accent: linear-gradient(35deg, #00d4ff 0%, #00ff88 100%);
   /* --text-muted: #6b7a8a; */
   --handel: #fff;
   --primary: #00d4ff;
@@ -27,7 +27,6 @@
   --text-primary: #111827; 
   --text-muted: #6b7280;
   --border: rgba(0, 0, 0, 0.1); 
-  --text-contrast: #ffffff;
   --handel: #000;
   --svg: invert(1) brightness(0);
   
@@ -41,7 +40,6 @@
   --text-primary: #e4e4e7;   
   --text-muted: #71717a;     
   --border: rgba(255, 255, 255, 0.08); 
-  --text-contrast: #ffffff;
 }
 
 [data-theme="midnight"] {
@@ -129,8 +127,17 @@ body {
   padding: 6px 12px;
 }
 
-.theme-select .arrow {
-  display: none;
+
+/* ========================================
+   select
+======================================== */
+select {
+  background: none;
+  border: 1px solid var(--border);
+  color: inherit;
+  padding: 3px 6px;
+  border-radius: 8px;
+  font-size: 10px;
 }
 
 option{
@@ -139,6 +146,7 @@ option{
   border: 1px solid var(--border);
   border-radius: 8px !important;
 }
+
 /* ========================================
    input
 ======================================== */
@@ -152,15 +160,6 @@ input {
 
 input[type="number"]:hover {
   border-color: var(--sec-border);
-}
-
-select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: inherit;
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 10px;
 }
 
 input[type="number"] {
@@ -184,7 +183,43 @@ input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+/* ========================================
+   range input
+======================================== */
+input[type="range"] {
+  width: 120px;
+  height: 6px;
+  -webkit-appearance: none;
+  background: var(--Zoom-ui-color);
+  border: var(--sec-border);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+}
 
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: var(--btn-transition);
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* ========================================
+   label
+======================================== */
+label{
+  font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-left: 10px;
+}
 /* ========================================
    BUTTONS
 ======================================== */
@@ -810,31 +845,6 @@ header h1 {
   font-weight: 500;
 }
 
-.zoom-slider {
-  width: 120px;
-  height: 6px;
-  -webkit-appearance: none;
-  background: var(--Zoom-ui-color);
-  border: var(--sec-border);
-  border-radius: 3px;
-  cursor: pointer;
-  padding: 0;
-}
-
-.zoom-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  background: var(--accent);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: var(--btn-transition);
-}
-
-.zoom-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-}
-
 .zoom-value {
   color: var(--text-primary);
   font-size: 12px;
@@ -895,7 +905,7 @@ header h1 {
 
 .section-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: end;
   align-items: center;
   margin-bottom: 1rem;
   gap: 12px;
@@ -903,8 +913,8 @@ header h1 {
 }
 
 .section-title {
-  display: flex;
-  justify-content: space-between;
+  flex-grow: 1;
+justify-self: start !important;
   align-items: center;
   font-size: 1.1rem;
   font-weight: 600;
@@ -912,7 +922,53 @@ header h1 {
   text-transform: uppercase;
   width: max-content;
 }
+/* ========================================
+   noise
+======================================== */
+.noise-controls .form-row{
+  margin-block: .8rem;
+  justify-content: space-between;
+}
+/* ========================================
+   fillter
+======================================== */
+.filter-row{
+display: grid;
+grid-template-columns: 100px 120px 50px;
+align-items: center;
+justify-content: space-between;
+padding-block: .3rem;
+margin-block: .5rem;
+}
 
+.filter-row.active{
+  border-radius: 8px;
+}
+
+.filter-slider{
+justify-self: center;
+grid-column: 2/3;
+}
+
+.filter-row .num-input{
+  justify-self: end;
+  grid-column: 3/4;
+  grid-row: 1/2;
+  width: 50px;
+  margin-right: 10px;
+}
+
+.filter-row .unit{
+  justify-self: end;
+  grid-column: 3/4;
+  grid-row: 1/2;
+  font-size: 10px;
+    color: var(--text-muted);
+    width: 14px;
+    margin-bottom: 2px;
+    right: 0;
+    margin-right: 10px;
+}
 /* ========================================
    gradient
 ======================================== */
@@ -1476,6 +1532,19 @@ button.sm {
 /* ========================================
    CSS OUTPUT
 ======================================== */
+.output-header{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-block: .5rem .8rem;
+}
+
+.output-header span{
+  color: var(--text-muted);
+  font-size: 13px;
+
+}
+
 .css-output {
   background: var(--bg);
   border: none;
@@ -1494,18 +1563,6 @@ button.sm {
   width: 100%;
 }
 
-.css-output .property {
-  color: #9cdcfe;
-}
-
-.css-output .value {
-  color: #ce9178;
-}
-
-.css-output .function {
-  color: #dcdcaa;
-}
-
 #cssFormat {
   background: none;
   border-radius: 8px;
@@ -1522,15 +1579,21 @@ button.sm {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: var(--text-primary);
   padding: 5px 10px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 11px;
   background: none;
-  width: 7rem;
+  width: max-content;
 }
 
+.copy-btn:active{
+  background: var(--accent);
+  color: var(--text-contrast);
+}
+.copy-btn:active .copy-svg{
+  filter: invert(1) brightness(0);
+}
 .copy-btn.copied {
   background: rgba(26, 77, 46, 0.6);
   border-color: #2d7a4d;

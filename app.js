@@ -1935,7 +1935,6 @@ function updateFilterUI() {
       numInput.value = filterState[name];
     }
     
-    // هایلایت فیلترهای فعال
     if (row) {
       const isDefault = filterState[name] === filterDefaults[name];
       row.classList.toggle('active', !isDefault);
