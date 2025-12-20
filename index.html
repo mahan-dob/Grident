@@ -113,6 +113,113 @@
   </div>
 
   <aside class="panel">
+<div class="section">
+  <div class="section-header">
+    <div class="section-title">Noise / Grain</div>
+    <button id="noiseToggleBtn" class="control-btn" title="Toggle noise">
+      <img src="./icon/eye.svg" alt="toggle">
+    </button>
+  </div>
+  <div class="noise-controls">
+    <div class="form-row">
+      <label>Opacity</label>
+      <input type="number" id="noiseOpacity" class="num-input" min="0" max="100" value="0">
+      <span class="unit">%</span>
+    </div>
+    <div class="form-row">
+      <label>Frequency</label>
+      <input type="number" id="noiseFrequency" class="num-input" min="0.01" max="1" step="0.01" value="0.65">
+    </div>
+    <div class="form-row">
+      <label>Blend</label>
+      <select id="noiseBlend" class="noise-blend-select">
+        <option value="overlay" selected>Overlay</option>
+        <option value="soft-light">Soft Light</option>
+        <option value="hard-light">Hard Light</option>
+        <option value="multiply">Multiply</option>
+        <option value="screen">Screen</option>
+      </select>
+    </div>
+  </div>
+</div>
+<!-- Filters Section -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-title">Filters</div>
+    <button id="filtersToggleBtn" class="control-btn" title="Toggle filters">
+      <img src="./icon/eye.svg" alt="toggle">
+    </button>
+    <button id="filtersResetBtn" class="control-btn" title="Reset filters">
+      <img src="./icon/reset.svg" alt="reset">
+    </button>
+  </div>
+  
+  <div class="filter-controls">
+    <!-- Brightness -->
+    <div class="filter-row">
+      <label>Brightness</label>
+      <input type="range" id="filterBrightness" class="filter-slider" min="0" max="200" value="100">
+      <input type="number" id="filterBrightnessNum" class="num-input" min="0" max="200" value="100">
+      <span class="unit">%</span>
+    </div>
+    
+    <!-- Contrast -->
+    <div class="filter-row">
+      <label>Contrast</label>
+      <input type="range" id="filterContrast" class="filter-slider" min="0" max="200" value="100">
+      <input type="number" id="filterContrastNum" class="num-input" min="0" max="200" value="100">
+      <span class="unit">%</span>
+    </div>
+    
+    <!-- Saturation -->
+    <div class="filter-row">
+      <label>Saturate</label>
+      <input type="range" id="filterSaturate" class="filter-slider" min="0" max="200" value="100">
+      <input type="number" id="filterSaturateNum" class="num-input" min="0" max="200" value="100">
+      <span class="unit">%</span>
+    </div>
+    
+    <!-- Hue Rotate -->
+    <div class="filter-row">
+      <label>Hue</label>
+      <input type="range" id="filterHue" class="filter-slider hue-slider" min="0" max="360" value="0">
+      <input type="number" id="filterHueNum" class="num-input" min="0" max="360" value="0">
+      <span class="unit">°</span>
+    </div>
+    
+    <!-- Blur -->
+    <div class="filter-row">
+      <label>Blur</label>
+      <input type="range" id="filterBlur" class="filter-slider" min="0" max="20" step="0.5" value="0">
+      <input type="number" id="filterBlurNum" class="num-input" min="0" max="20" step="0.5" value="0">
+      <span class="unit">px</span>
+    </div>
+    
+    <!-- Grayscale -->
+    <div class="filter-row">
+      <label>Grayscale</label>
+      <input type="range" id="filterGrayscale" class="filter-slider" min="0" max="100" value="0">
+      <input type="number" id="filterGrayscaleNum" class="num-input" min="0" max="100" value="0">
+      <span class="unit">%</span>
+    </div>
+    
+    <!-- Sepia -->
+    <div class="filter-row">
+      <label>Sepia</label>
+      <input type="range" id="filterSepia" class="filter-slider" min="0" max="100" value="0">
+      <input type="number" id="filterSepiaNum" class="num-input" min="0" max="100" value="0">
+      <span class="unit">%</span>
+    </div>
+    
+    <!-- Invert -->
+    <div class="filter-row">
+      <label>Invert</label>
+      <input type="range" id="filterInvert" class="filter-slider" min="0" max="100" value="0">
+      <input type="number" id="filterInvertNum" class="num-input" min="0" max="100" value="0">
+      <span class="unit">%</span>
+    </div>
+  </div>
+</div>
         <div class="section">
       <div class="section-title" style="margin-bottom: 1rem;">BackGraond</div>
     <div class="color-swatch" id="bgBtn">
@@ -134,32 +241,62 @@
       <div class="section-title" style="margin-bottom: 1rem;">Properties</div>
       <div id="inspector"></div>
     </div>
-    <div class="section">
-      <div class="section-header">
-        <div class="section-title">
-          Output</div>
-        <div class="export-btns">
-          <select id="exportSelect">
-            <option value="">Export As...</option>
-            <option value="png">PNG</option>
-            <option value="jpg">JPG</option>
-            <option value="svg">SVG</option>
-          </select>
-        </div>
-        <div class="Format">
-          <select id="cssFormat">
-            <option value="hex">HEX</option>
-            <option value="rgba" selected>RGBA</option>
-            <option value="hsla">HSLA</option>
-          </select>
-        </div>
-        <button id="copyBtn" class="copy-btn" onclick="copyCSS()">
-          <img src="./icon/copy.svg" alt="copy">
-          </svg>
-          <span>Copy</span>
-      </div>
-      <iframe id="css" class="css-output"></iframe>
+<!-- Output Section با سه iframe جداگانه -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-title">Output</div>
+    <div class="export-btns">
+      <select id="exportSelect">
+        <option value="">Export As...</option>
+        <option value="png">PNG</option>
+        <option value="jpg">JPG</option>
+        <option value="svg">SVG</option>
+      </select>
     </div>
+    <div class="Format">
+      <select id="cssFormat">
+        <option value="hex">HEX</option>
+        <option value="rgba" selected>RGBA</option>
+        <option value="hsla">HSLA</option>
+      </select>
+    </div>
+    <button id="copyBtn" class="copy-btn" onclick="copyCSS()">
+      <img src="./icon/copy.svg" alt="copy">
+      <span>Copy All</span>
+    </button>
+  </div>
+  
+  <!-- Gradient CSS -->
+  <div class="output-block">
+    <div class="output-header">
+      <span>Gradient</span>
+      <button class="copy-sm-btn" onclick="copyGradientCSS()">
+        <img src="./icon/copy.svg" alt="copy">Copy
+      </button>
+    </div>
+    <iframe id="cssGradient" class="css-output"></iframe>
+  </div>
+
+  <div class="output-block" id="noiseOutputBlock" style="display:none;">
+    <div class="output-header">
+      <span>Fillter Noise</span>
+      <button class="copy-sm-btn" onclick="copyNoiseCSS()">
+        <img src="./icon/copy.svg" alt="copy">Copy
+      </button>
+    </div>
+    <iframe id="cssNoise" class="css-output css-output-sm"></iframe>
+  </div>
+  
+  <div class="output-block" id="svgOutputBlock" style="display:none;">
+    <div class="output-header">
+      <span>Noise SVG</span>
+      <button class="copy-sm-btn" onclick="copySVGFilter()">
+        <img src="./icon/copy.svg" alt="copy">Copy
+      </button>
+    </div>
+    <iframe id="cssSVG" class="css-output css-output-sm"></iframe>
+  </div>
+</div>
   </aside>
   </div>
 
