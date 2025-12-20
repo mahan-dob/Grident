@@ -778,12 +778,7 @@ header h1 {
 }
 
 .active {
-  background: rgba(80, 40, 40, 0.9);
-  border-color: rgba(255, 100, 100, 0.3);
-}
-
-.active:hover {
-  background: rgba(80, 40, 40, 0.9);
+  background: rgba(80, 40, 40, 0.5);
   border-color: rgba(255, 100, 100, 0.3);
 }
 
@@ -797,8 +792,110 @@ header h1 {
 }
 
 #toggleHandles.handles-hidden {
-  background: rgba(80, 40, 40, 0.9);
+  background: rgba(80, 40, 40, 0.5);
   border-color: rgba(255, 100, 100, 0.3);
+}
+
+
+/* ========== FULLSCREEN PREVIEW ========== */
+.preview-btn{
+  position: absolute;
+  top: .5rem;
+  left: .5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--TransParent-bg);
+  backdrop-filter: blur(4px);
+  padding: 8px 10px;
+  border-radius: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  z-index: 1000;
+}
+/* ========== FULLSCREEN PREVIEW ========== */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100dvw;
+  height: 100dvh;
+  background: #000;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  cursor: pointer;
+}
+
+.fullscreen-overlay.show {
+  opacity: 1;
+}
+
+#fullscreenCanvas {
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.fullscreen-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.fullscreen-btn {
+  width: 40px;
+  height: 40px;
+  background: var(--TransParent-bg);
+  backdrop-filter: blur(4px);
+  padding: 8px 10px;
+  border-radius: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: #fff;
+  opacity: 0.6;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.fullscreen-btn:active {
+  transform: scale(0.95);
+}
+
+.fullscreen-info {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--TransParent-bg);
+  backdrop-filter: blur(4px);
+  padding: 8px 10px;
+  border-radius: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.fullscreen-overlay:hover .fullscreen-info,
+.fullscreen-overlay:hover .fullscreen-btn {
+  opacity: 1;
 }
 
 /* ========================================
@@ -1090,6 +1187,75 @@ button.sm {
   color: var(--text-contrast);
 }
 
+/* ========== DRAG HANDLE ========== */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  min-width: 20px;
+  height: 100%;
+  cursor: grab;
+  color: var(--text-dim);
+  opacity: 0.4;
+  transition: opacity 0.2s, color 0.2s;
+  margin-right: 8px;
+}
+
+.drag-handle:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.stop-item:hover .drag-handle {
+  opacity: 0.7;
+}
+
+/* ========== DRAG STATES ========== */
+.stop-item.drag-original {
+display: none;
+}
+
+.drag-placeholder {
+  background: var(--accent);
+  opacity: 0.15;
+  border-radius: 8px;
+  border: 2px dashed var(--accent);
+  margin: 4px 0;
+  transition: height 0.15s ease;
+}
+
+.drag-clone {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+}
+
+.drag-clone .drag-handle {
+  cursor: grabbing;
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* ========== LIST STYLES ========== */
+#list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stop-item {
+  touch-action: none; /* مهم برای موبایل */
+}
+
+
+
+.stop-item:not(.drag-original):not(.drag-clone) {
+
+}
 /* ========================================
    ANGLE PICKER
 ======================================== */
