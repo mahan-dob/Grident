@@ -5,8 +5,9 @@
   --Zoom-ui-color:#e1e9e533;
   --text-primary: #e8eef4;
   --text-contrast: #000000;
-  --hover: rgba(255, 255, 255, 0.1);
+  --text-titel: #888;
   --text-muted: #666;
+  --hover: rgba(255, 255, 255, 0.1);
   --white-color: #e1e9e5;
   --border: rgba(255, 255, 255, 0.1);
   --sec-border: rgba(255, 255, 255, 0.4);
@@ -16,6 +17,7 @@
   --primary: #00d4ff;
   --secondary: #00ff88;
   --btn-transition: all 0.25s ease;
+  --shadow: rgba(0, 0, 0, 0.4);
 }
 
 [data-theme="light"] {
@@ -710,6 +712,8 @@ header h1 {
   align-items: center;
   justify-content: center;
   justify-self: anchor-center;
+
+  transform: translateX(-15%);
   background: var(--TransParent-bg);
   backdrop-filter: blur(2px);
   margin-top: -29px;
@@ -791,8 +795,17 @@ header h1 {
 ======================================== */
 
 #toggleHandles {
-  right: 140px;
-  top: -5px;
+  touch-action: none;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  background: var(--TransParent-bg);
+  backdrop-filter: blur(4px);
+  padding: 6px;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  z-index: 1000;
 }
 
 #toggleHandles.handles-hidden {
@@ -814,15 +827,15 @@ header h1 {
    pan tool
 ======================================== */
 .pan-btn{
+  width: 40px;
+  height: 40px;
   touch-action: none;
   display: flex;
   align-items: center;
-  gap: 10px;
   background: var(--TransParent-bg);
   backdrop-filter: blur(4px);
   padding: 6px;
-  border-radius: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 20px var(--shadow);
   border: 1px solid var(--border);
   z-index: 1000;
 }
@@ -838,8 +851,7 @@ header h1 {
 }
 /* ========== FULLSCREEN PREVIEW ========== */
 .preview-btn {
-
-
+    height:40px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -847,7 +859,7 @@ header h1 {
   backdrop-filter: blur(4px);
   padding: 8px 10px;
   border-radius: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
   border: 1px solid var(--border);
   z-index: 1000;
 }
@@ -1054,7 +1066,7 @@ justify-self: start !important;
   align-items: center;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-titel);
   text-transform: uppercase;
   width: max-content;
 }
@@ -1300,7 +1312,7 @@ display: none;
 }
 
 .stop-item {
-  touch-action: none; /* مهم برای موبایل */
+  touch-action: none;
 }
 
 
