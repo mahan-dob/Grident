@@ -143,15 +143,22 @@
     <div class="form-row">
       <label>Blend</label>
       <select id="noiseBlend" class="noise-blend-select">
-        <option value="overlay" selected>Overlay</option>
-        <option value="soft-light">Soft Light</option>
-        <option value="hard-light">Hard Light</option>
+        <option value="normal" selected>Normal</option>
         <option value="multiply">Multiply</option>
         <option value="screen">Screen</option>
+        <option value="overlay">Overlay</option>
         <option value="darken">Darken</option>
         <option value="lighten">Lighten</option>
-        <option value="luminosity">luminosity</option>
-        <option value="color-dodge">color-dodge</option>
+        <option value="color-dodge">Color Dodge</option>
+        <option value="color-burn">Color Burn</option>
+        <option value="hard-light">Hard Light</option>
+        <option value="soft-light">Soft Light</option>
+        <option value="difference">Difference</option>
+        <option value="exclusion">Exclusion</option>
+        <option value="hue">Hue</option>
+        <option value="saturation">Saturation</option>
+        <option value="color">Color</option>
+        <option value="luminosity">Luminosity</option>
       </select>
     </div>
   </div>
@@ -162,9 +169,9 @@
     <div class="section-title">Filters</div>
     <button id="filtersResetBtn" class="control-btn" title="Reset filters">
       <img src="./icon/reset.svg" alt="reset">
+    </button>
     <button id="filtersToggleBtn" class="control-btn" title="Toggle filters">
       <img src="./icon/eye.svg" alt="toggle">
-    </button>
     </button>
   </div>
   
@@ -234,11 +241,47 @@
     </div>
   </div>
 </div>
-        <div class="section">
-      <div class="section-title" style="margin-bottom: 1rem;">BackGraond</div>
-    <div class="color-swatch" id="bgBtn">
-      <div class="color-swatch-inner" id="bgPreview"></div>
-    </div></div>
+<div class="section">
+  <div class="section-header">
+    <div class="section-title">Background</div>
+    <button id="bgToggleBtn" class="control-btn" title="Toggle background">
+      <img src="./icon/eye.svg" alt="toggle">
+    </button>
+  </div>
+  
+  <div class="bg-controls">
+    <!-- Color -->
+    <div class="form-row">
+      <label>Color</label>
+      <div class="color-swatch" id="bgBtn">
+        <div class="color-swatch-inner" id="bgPreview"></div>
+      </div>
+    </div>
+    
+    <!-- Blend Mode -->
+    <div class="form-row">
+      <label>Blend</label>
+      <select id="bgBlendMode" class="blend-select">
+        <option value="normal" selected>Normal</option>
+        <option value="multiply">Multiply</option>
+        <option value="screen">Screen</option>
+        <option value="overlay">Overlay</option>
+        <option value="darken">Darken</option>
+        <option value="lighten">Lighten</option>
+        <option value="color-dodge">Color Dodge</option>
+        <option value="color-burn">Color Burn</option>
+        <option value="hard-light">Hard Light</option>
+        <option value="soft-light">Soft Light</option>
+        <option value="difference">Difference</option>
+        <option value="exclusion">Exclusion</option>
+        <option value="hue">Hue</option>
+        <option value="saturation">Saturation</option>
+        <option value="color">Color</option>
+        <option value="luminosity">Luminosity</option>
+      </select>
+    </div>
+  </div>
+</div>
     <div class="section">
       <div class="section-header">
         <div class="section-title">Layers</div>

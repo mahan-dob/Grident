@@ -154,10 +154,11 @@ option{
 ======================================== */
 input {
   background: none;
-  border: 1px solid var(--white-color);
-  border-radius: 99px;
-  padding: 3px 7px;
-  color: white;
+  border: 1px solid var(--border);
+  color: inherit;
+  padding: 4px 5px;
+  border-radius: 8px;
+  font-size: 10px;
 }
 
 input[type="number"]:hover {
@@ -1117,6 +1118,20 @@ grid-column: 2/3;
     right: 0;
     margin-right: 10px;
 }
+
+/* استایل label */
+.filter-row label {
+  cursor: pointer;
+  user-select: none;
+}
+/* ========================================
+  backgraod
+======================================== */
+.bg-controls{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 /* ========================================
    gradient
 ======================================== */
@@ -1173,7 +1188,6 @@ grid-column: 2/3;
   align-items: center;
   justify-content: start;
   gap: 5px;
-  margin: auto;
 }
 
 .form-row label {
@@ -1183,12 +1197,7 @@ grid-column: 2/3;
 }
 
 .num-input {
-  background: none;
-  border: 1px solid var(--border);
-  color: inherit;
-  padding: 4px 5px;
-  border-radius: 8px;
-  font-size: 10px;
+
 }
 
 .color-stop-fields {

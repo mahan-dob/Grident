@@ -53,11 +53,14 @@ let W = 800,
   H = 600,
   counter = 0;
 
+// ========== STATE ==========
 const state = {
   stops: [],
   selected: null,
   bgColor: "#0a0e14",
   bgAlpha: 100,
+  bgBlendMode: 'normal',  // ✅ اضافه شد
+  bgEnabled: true,         // ✅ اضافه شد
   cssFormat: "rgba",
   canvasWidth: 800,
   canvasHeight: 600,
@@ -1062,6 +1065,7 @@ function getStop(id) {
   return state.stops.find((s) => s.id === id);
 }
 
+// ========== در تابع addStop ==========
 function addStop(type) {
   counter++;
   const typeNames = { radial: "Radial", linear: "Linear", conic: "Conic" };
@@ -1078,6 +1082,7 @@ function addStop(type) {
     opacity: 100,
     angle: Math.floor(Math.random() * 180),
     startAngle: 0,
+    blendMode: 'screen',  // ✅ اضافه شد - پیش‌فرض screen
     stops: [
       { pos: 0, color: randColor(), opacity: 100 },
       { pos: 100, color: randColor(), opacity: 100 },
@@ -1219,13 +1224,69 @@ function getFontSize() {
   return clamp(size, 10, 36);
 }
 
+// ========== BACKGROUND CONTROLS ==========
+
+function toggleBackground() {
+  state.bgEnabled = !state.bgEnabled;
+  updateBgUI();
+  draw();
+  updateCSS();
+}
+
+function setBgBlendMode(mode) {
+  state.bgBlendMode = mode;
+  draw();
+  updateCSS();
+}
+
+function updateBgUI() {
+  const toggleBtn = document.getElementById('bgToggleBtn');
+  const bgControls = document.querySelector('.bg-controls');
+  
+  if (toggleBtn) {
+    const img = toggleBtn.querySelector('img');
+    if (img) {
+      img.src = state.bgEnabled ? './icon/eye.svg' : './icon/eye-close.svg';
+    }
+    toggleBtn.classList.toggle('disabled', !state.bgEnabled);
+  }
+  
+  if (bgControls) {
+    bgControls.classList.toggle('disabled', !state.bgEnabled);
+  }
+  
+  const blendSelect = document.getElementById('bgBlendMode');
+  if (blendSelect) {
+    blendSelect.value = state.bgBlendMode;
+  }
+}
+
+function initBackgroundEvents() {
+  // Toggle button
+  document.getElementById('bgToggleBtn')?.addEventListener('click', toggleBackground);
+  
+  // Blend mode select
+  document.getElementById('bgBlendMode')?.addEventListener('change', (e) => {
+    setBgBlendMode(e.target.value);
+  });
+}
+
+// Add to globals
+window.toggleBackground = toggleBackground;
+window.setBgBlendMode = setBgBlendMode;
+
 // ========== DRAW FUNCTION ==========
 function draw() {
   ctx.clearRect(0, 0, W, H);
   
-  // پس‌زمینه
-  ctx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-  ctx.fillRect(0, 0, W, H);
+  const visibleStops = state.stops.filter((s) => s.visible);
+  const dpr = canvas.width / W;
+  
+  // ========== 1. پس‌زمینه ==========
+  if (state.bgEnabled) {
+    ctx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    ctx.fillRect(0, 0, W, H);
+  }
 
   // خط راهنما
   if (state.lockVertical) {
@@ -1240,29 +1301,173 @@ function draw() {
     ctx.setLineDash([]);
   }
 
-  // ========== اعمال فیلتر با ctx.filter ==========
+  // ========== 2. فیلترها ==========
   const filterString = getFilterString();
   if (filterString) {
     ctx.filter = filterString;
   }
 
-  // گرادینت‌ها
-  ctx.globalCompositeOperation = "screen";
-  state.stops.filter((s) => s.visible).forEach(drawGrad);
-  ctx.globalCompositeOperation = "source-over";
+  // ========== 3. گرادینت‌ها ==========
+  if (visibleStops.length > 0) {
+    
+    // ✅ اگر bgBlendMode غیر از normal است، از روش دو لایه‌ای استفاده کن
+    if (state.bgBlendMode !== 'normal' && state.bgEnabled) {
+      
+      // ایجاد canvas موقت برای همه گرادینت‌ها
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      
+      // رسم هر گرادینت با blend mode خودش روی canvas موقت
+      visibleStops.forEach(s => {
+        tempCtx.globalCompositeOperation = s.blendMode || 'screen';
+        drawGradToContext(s, tempCtx, W, H);
+      });
+      
+      // ترکیب canvas موقت با canvas اصلی با bgBlendMode
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = state.bgBlendMode;
+      ctx.drawImage(tempCanvas, 0, 0);
+      ctx.restore();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      
+    } else {
+      // ✅ روش عادی - فقط blend mode هر گرادینت
+      visibleStops.forEach(s => {
+        ctx.globalCompositeOperation = s.blendMode || 'screen';
+        drawGrad(s);
+      });
+    }
+    
+    ctx.globalCompositeOperation = 'source-over';
+  }
 
   // ریست فیلتر
   ctx.filter = 'none';
 
-  // نویز
+  // ========== 4. نویز ==========
   drawNoise();
 
-  // هندل‌ها
+  // ========== 5. هندل‌ها ==========
   if (state.showHandles) {
-    state.stops.filter((s) => s.visible).forEach(drawHandle);
+    visibleStops.forEach(drawHandle);
   }
 }
 
+// ========== تابع کمکی برای رسم گرادینت روی context دلخواه ==========
+function drawGradToContext(s, targetCtx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const outer = s.size;
+    const solidEnd = 1 - s.feather / 100;
+    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    targetCtx.fillStyle = grad;
+    targetCtx.beginPath();
+    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
+    targetCtx.fill();
+  } 
+  else if (s.type === "linear") {
+    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
+    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
+  }
+}
+
+// ========== تابع کمکی برای رسم گرادینت روی context دلخواه ==========
+function drawGradToContext(s, targetCtx) {
+  const cx = s.x * W;
+  const cy = s.y * H;
+
+  if (s.type === "radial") {
+    const outer = s.size;
+    const solidEnd = 1 - s.feather / 100;
+    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    targetCtx.fillStyle = grad;
+    targetCtx.beginPath();
+    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
+    targetCtx.fill();
+  } 
+  else if (s.type === "linear") {
+    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
+    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, W, H);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, W, H);
+  }
+}
 function drawGrad(s) {
   const cx = s.x * W;
   const cy = s.y * H;
@@ -2207,13 +2412,45 @@ function initFilterEvents() {
     const slider = document.getElementById(`filter${capitalize(name)}`);
     const numInput = document.getElementById(`filter${capitalize(name)}Num`);
     
-    if (slider) {
-      slider.addEventListener('input', (e) => setFilter(name, e.target.value));
-    }
+    if (!slider) return;
     
+    const row = slider.closest('.filter-row');
+    
+    // Slider event
+    slider.addEventListener('input', (e) => setFilter(name, e.target.value));
+    
+    // Number input events
     if (numInput) {
       numInput.addEventListener('input', (e) => setFilter(name, e.target.value));
       numInput.addEventListener('change', (e) => setFilter(name, e.target.value));
+    }
+    
+    // ✅ Double-click و Double-tap برای ریست
+    if (row) {
+      // Desktop - dblclick
+      row.addEventListener('dblclick', function(e) {
+        if (e.target.tagName === 'INPUT') return;
+        resetSingleFilter(name, row);
+      });
+      
+      // ✅ Mobile - double tap
+      let lastTap = 0;
+      row.addEventListener('touchend', function(e) {
+        // اگه روی input بود، کاری نکن
+        if (e.target.tagName === 'INPUT') return;
+        
+        const now = Date.now();
+        const DOUBLE_TAP_DELAY = 300; // میلی‌ثانیه
+        
+        if (now - lastTap < DOUBLE_TAP_DELAY) {
+          // Double tap detected!
+          e.preventDefault();
+          resetSingleFilter(name, row);
+          lastTap = 0; // ریست کن تا سه‌تایی نشه
+        } else {
+          lastTap = now;
+        }
+      });
     }
   });
   
@@ -2221,7 +2458,24 @@ function initFilterEvents() {
   document.getElementById('filtersToggleBtn')?.addEventListener('click', toggleFilters);
   document.getElementById('filtersResetBtn')?.addEventListener('click', resetFilters);
 }
-// ========== MANUAL FILTER APPLICATION ==========
+
+// ✅ تابع جداگانه برای ریست یک فیلتر
+function resetSingleFilter(name, row) {
+  // ریست به مقدار پیش‌فرض
+  filterState[name] = filterDefaults[name];
+  
+  // آپدیت UI
+  updateFilterUI();
+  draw();
+  updateCSS();
+  
+  // انیمیشن فلش سبز
+  if (row) {
+    setTimeout(() => {
+      row.style.backgroundColor = '';
+    }, 300);
+  }
+}
 
 // ========== MANUAL FILTER APPLICATION ==========
 
@@ -3467,7 +3721,7 @@ function renderList() {
           : s.type === "conic"
           ? s.startAngle + "°"
           : s.angle + "°"
-      }</div>
+      } · <span class="blend-tag">${s.blendMode || 'screen'}</span></div>
         </div>
         <div class="stop-actions">
           <button class="control-btn" onclick="event.stopPropagation();toggleVis('${s.id}')">
@@ -3583,13 +3837,42 @@ function renderInspector() {
     return;
   }
 
+  // ========== Blend Mode Options ==========
+  const blendModes = [
+    { value: 'normal', label: 'Normal' },
+    { value: 'screen', label: 'Screen' },
+    { value: 'multiply', label: 'Multiply' },
+    { value: 'overlay', label: 'Overlay' },
+    { value: 'darken', label: 'Darken' },
+    { value: 'lighten', label: 'Lighten' },
+    { value: 'color-dodge', label: 'Color Dodge' },
+    { value: 'color-burn', label: 'Color Burn' },
+    { value: 'hard-light', label: 'Hard Light' },
+    { value: 'soft-light', label: 'Soft Light' },
+    { value: 'difference', label: 'Difference' },
+    { value: 'exclusion', label: 'Exclusion' },
+    { value: 'hue', label: 'Hue' },
+    { value: 'saturation', label: 'Saturation' },
+    { value: 'color', label: 'Color' },
+    { value: 'luminosity', label: 'Luminosity' },
+  ];
+
+  const blendOptions = blendModes.map(m => 
+    `<option value="${m.value}" ${s.blendMode === m.value ? 'selected' : ''}>${m.label}</option>`
+  ).join('');
+
   let h = `
     <div class="form-group">
       <div class="form-group-title">General</div>
       <div class="form-row">
         <label>Name</label>
-        <input class="num-input" style="width:100%;text-align:left" value="${s.name}" 
+        <input class="" style="width:100%;text-align:left" value="${s.name}" 
           onchange="getStop('${s.id}').name=this.value;liveUpdate('${s.id}')">
+          <div class="form-row">
+            <label>Blend</label>
+            <select class="blend-select" onchange="setStopBlendMode('${s.id}', this.value)">
+              ${blendOptions}
+            </select>
       </div>
       <div class="form-row">
         <label>X</label>
@@ -3603,9 +3886,12 @@ function renderInspector() {
           ${state.lockVertical ? "disabled" : ""}>
         ${state.lockVertical ? '<span style="font-size:9px;color:#666;"><img class="pos-lock" src="./icon/lock.svg" alt="lock position"></span>' : ""}
       </div>
+      </div>
     </div>
   `;
 
+  // ... rest of renderInspector (radial, linear, conic sections)
+  
   if (s.type === "radial") {
     h += `
       <div class="form-group" data-stop-id="${s.id}">
@@ -3710,6 +3996,18 @@ function renderInspector() {
 
   el.innerHTML = h;
 }
+
+// ========== تابع تنظیم Blend Mode ==========
+function setStopBlendMode(stopId, mode) {
+  const s = getStop(stopId);
+  if (s) {
+    s.blendMode = mode;
+    liveUpdate(stopId);
+  }
+}
+
+// Add to globals
+window.setStopBlendMode = setStopBlendMode;
 
 // ========== به‌روزرسانی onPointerMove برای canvas drag ==========
 function onPointerMove(e) {
@@ -3895,12 +4193,24 @@ function updateCSS() {
   const vis = state.stops.filter((s) => s.visible);
   const bgColorFmt = formatColor(state.bgColor, state.bgAlpha, fmt);
 
-  // ========== 1. Gradient CSS ==========
   let gradientLines = [];
   
   if (!vis.length) {
-    gradientLines.push(`background: ${bgColorFmt};`);
+    // ========== فقط پس‌زمینه ==========
+    if (state.bgEnabled) {
+      gradientLines.push(`background: ${bgColorFmt};`);
+    } else {
+      gradientLines.push(`background: transparent;`);
+    }
   } else {
+    // ========== پس‌زمینه + گرادینت‌ها ==========
+    gradientLines.push(`position: relative;`);
+    
+    if (state.bgEnabled) {
+      gradientLines.push(`background-color: ${bgColorFmt};`);
+    }
+    
+    // Gradients
     const grads = vis.map((s) => {
       if (s.type === "radial") {
         const x = (s.x * 100).toFixed(0);
@@ -3932,23 +4242,33 @@ function updateCSS() {
       }
     });
 
-    gradientLines.push(`position: relative;`);
-    gradientLines.push(`background-color: ${bgColorFmt};`);
     gradientLines.push(`background-image:`);
     gradientLines.push(`  ${grads.join(",\n  ")};`);
-    gradientLines.push(`background-blend-mode: screen;`);
+    
+    // ========== Blend Modes ==========
+    // هر گرادینت blend mode خودش رو داره
+    // آخرین مقدار مشخص می‌کنه آخرین لایه چطور با background-color ترکیب بشه
+    const individualBlends = vis.map(s => s.blendMode || 'screen');
+    
+    // ✅ اگر bgBlendMode تنظیم شده، به آخر اضافه کن
+    if (state.bgEnabled && state.bgBlendMode !== 'normal') {
+      // روش 1: استفاده از mix-blend-mode برای کل element
+      gradientLines.push(`background-blend-mode: ${individualBlends.join(', ')};`);
+      gradientLines.push(`mix-blend-mode: ${state.bgBlendMode};`);
+    } else {
+      gradientLines.push(`background-blend-mode: ${individualBlends.join(', ')};`);
+    }
   }
 
-  // ✅ اضافه کردن فیلتر به گرادینت CSS
+  // فیلتر
   const hasFilters = hasActiveFilters();
   if (hasFilters) {
-    const filterString = getFilterString();
-    gradientLines.push(`filter: ${filterString};`);
+    gradientLines.push(`filter: ${getFilterString()};`);
   }
 
   currentGradientCSS = gradientLines.join('\n');
 
-  // ========== 2. Filter CSS (جداگانه برای کپی) ==========
+  // ========== 2. Filter CSS ==========
   if (hasFilters) {
     currentFilterCSS = `filter: ${getFilterString()};`;
   } else {
@@ -3985,14 +4305,12 @@ function updateCSS() {
     currentSVGFilter = "";
   }
 
-  // نمایش/مخفی کردن بلوک‌ها
   const noiseBlock = document.getElementById('noiseOutputBlock');
   const svgBlock = document.getElementById('svgOutputBlock');
   
   if (noiseBlock) noiseBlock.style.display = hasNoise ? 'block' : 'none';
   if (svgBlock) svgBlock.style.display = hasNoise ? 'block' : 'none';
 
-  // ========== Render ==========
   renderIframe('cssGradient', currentGradientCSS);
   if (hasNoise) {
     renderIframe('cssNoise', currentNoiseCSS);
@@ -4143,72 +4461,52 @@ async function exportAsImage(format = "png", quality = 0.92) {
   exportCanvas.width = width;
   exportCanvas.height = height;
 
+  const visibleStops = state.stops.filter((s) => s.visible);
+
   // ========== 1. پس‌زمینه ==========
-  exportCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-  exportCtx.fillRect(0, 0, width, height);
+  if (state.bgEnabled) {
+    exportCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    exportCtx.fillRect(0, 0, width, height);
+  }
 
   // ========== 2. گرادینت‌ها ==========
-  exportCtx.globalCompositeOperation = "screen";
-
-  state.stops
-    .filter((s) => s.visible)
-    .forEach((s) => {
-      const cx = s.x * width;
-      const cy = s.y * height;
-
-      if (s.type === "radial") {
-        const solidEnd = 1 - s.feather / 100;
-        const grad = exportCtx.createRadialGradient(cx, cy, 0, cx, cy, s.size);
-        const col = rgba(s.color, s.opacity / 100);
-
-        grad.addColorStop(0, col);
-        if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
-        grad.addColorStop(1, rgba(s.color, 0));
-
-        exportCtx.fillStyle = grad;
-        exportCtx.beginPath();
-        exportCtx.arc(cx, cy, s.size, 0, Math.PI * 2);
-        exportCtx.fill();
-      } else if (s.type === "linear") {
-        const a = ((s.angle - 90) * Math.PI) / 180;
-        const d = Math.hypot(width, height);
-        const mx = width / 2, my = height / 2;
-        const dx = (Math.cos(a) * d) / 2;
-        const dy = (Math.sin(a) * d) / 2;
-
-        const grad = exportCtx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-        [...s.stops]
-          .sort((a, b) => a.pos - b.pos)
-          .forEach((cs) => {
-            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-          });
-
-        exportCtx.fillStyle = grad;
-        exportCtx.fillRect(0, 0, width, height);
-      } else if (s.type === "conic") {
-        const start = ((s.startAngle - 90) * Math.PI) / 180;
-        const grad = exportCtx.createConicGradient(start, cx, cy);
-        [...s.stops]
-          .sort((a, b) => a.pos - b.pos)
-          .forEach((cs) => {
-            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-          });
-
-        exportCtx.fillStyle = grad;
-        exportCtx.fillRect(0, 0, width, height);
-      }
-    });
-
-  exportCtx.globalCompositeOperation = "source-over";
+  if (visibleStops.length > 0) {
+    
+    // ✅ اگر bgBlendMode غیر از normal است
+    if (state.bgBlendMode !== 'normal' && state.bgEnabled) {
+      
+      // Canvas موقت برای گرادینت‌ها
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext('2d');
+      
+      // رسم هر گرادینت با blend mode خودش
+      visibleStops.forEach((s) => {
+        tempCtx.globalCompositeOperation = s.blendMode || 'screen';
+        drawGradForExport(s, tempCtx, width, height);
+      });
+      
+      // ترکیب با bgBlendMode
+      exportCtx.globalCompositeOperation = state.bgBlendMode;
+      exportCtx.drawImage(tempCanvas, 0, 0);
+      exportCtx.globalCompositeOperation = 'source-over';
+      
+    } else {
+      // رسم عادی با blend mode هر گرادینت
+      visibleStops.forEach((s) => {
+        exportCtx.globalCompositeOperation = s.blendMode || 'screen';
+        drawGradForExport(s, exportCtx, width, height);
+      });
+      exportCtx.globalCompositeOperation = 'source-over';
+    }
+  }
 
   // ========== 3. فیلترها ==========
   if (hasActiveFilters()) {
-    // اول blur
     if (filterState.blur > 0) {
       applyBlur(exportCtx, width, height, filterState.blur);
     }
-    
-    // بقیه فیلترها
     if (hasNonBlurFilters()) {
       const imageData = exportCtx.getImageData(0, 0, width, height);
       applyFiltersToImageData(imageData);
@@ -4234,10 +4532,7 @@ async function exportAsImage(format = "png", quality = 0.92) {
 
   exportCanvas.toBlob(
     (blob) => {
-      if (!blob) {
-        console.error("Export failed");
-        return;
-      }
+      if (!blob) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -4250,6 +4545,142 @@ async function exportAsImage(format = "png", quality = 0.92) {
     mime,
     quality
   );
+}
+
+function drawGradForExport(s, ctx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const solidEnd = 1 - s.feather / 100;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s.size);
+    const col = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, col);
+    if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === "linear") {
+    const a = ((s.angle - 90) * Math.PI) / 180;
+    const d = Math.hypot(width, height);
+    const mx = width / 2, my = height / 2;
+    const dx = (Math.cos(a) * d) / 2;
+    const dy = (Math.sin(a) * d) / 2;
+
+    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const start = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(start, cx, cy);
+    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
+function drawGradForExport(s, ctx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const solidEnd = 1 - s.feather / 100;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s.size);
+    const col = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, col);
+    if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === "linear") {
+    const a = ((s.angle - 90) * Math.PI) / 180;
+    const d = Math.hypot(width, height);
+    const mx = width / 2, my = height / 2;
+    const dx = (Math.cos(a) * d) / 2;
+    const dy = (Math.sin(a) * d) / 2;
+
+    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const start = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(start, cx, cy);
+    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
+// ========== تابع کمکی برای Export ==========
+function drawGradForExport(s, ctx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const solidEnd = 1 - s.feather / 100;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s.size);
+    const col = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, col);
+    if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === "linear") {
+    const a = ((s.angle - 90) * Math.PI) / 180;
+    const d = Math.hypot(width, height);
+    const mx = width / 2, my = height / 2;
+    const dx = (Math.cos(a) * d) / 2;
+    const dy = (Math.sin(a) * d) / 2;
+
+    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const start = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(start, cx, cy);
+    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
 }
 
 function hasNonBlurFilters() {
@@ -4272,10 +4703,8 @@ function exportAsSVG() {
   let defs = "";
   let content = "";
 
-  // فیلتر SVG برای CSS filters
-  const filterString = getFilterString();
-  if (filterString) {
-    // تبدیل CSS filter به SVG filter
+  // فیلتر CSS
+  if (hasActiveFilters()) {
     defs += generateSVGFilterFromCSS();
   }
 
@@ -4289,15 +4718,19 @@ function exportAsSVG() {
     </filter>`;
   }
 
-  const bg = hexToRgb(state.bgColor);
-  content += `  <rect width="100%" height="100%" fill="rgba(${bg.r},${bg.g},${bg.b},${state.bgAlpha / 100})"/>\n`;
+  // پس‌زمینه
+  if (state.bgEnabled) {
+    const bg = hexToRgb(state.bgColor);
+    content += `  <rect width="100%" height="100%" fill="rgba(${bg.r},${bg.g},${bg.b},${state.bgAlpha / 100})"/>\n`;
+  }
 
-  // اعمال فیلتر روی گروه گرادینت‌ها
+  // فیلتر روی گرادینت‌ها
   const filterAttr = hasActiveFilters() ? ' filter="url(#cssFilter)"' : '';
-  content += `  <g style="mix-blend-mode:screen"${filterAttr}>\n`;
 
+  // ✅ هر گرادینت در یک group جدا با blend mode خودش
   visibleStops.forEach((s, i) => {
     const id = `g${i}`;
+    const blendMode = s.blendMode || 'screen';
 
     if (s.type === "radial") {
       const rgb = hexToRgb(s.color);
@@ -4310,7 +4743,7 @@ function exportAsSVG() {
       <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
     </radialGradient>`;
 
-      content += `    <circle cx="${s.x * width}" cy="${s.y * height}" r="${s.size}" fill="url(#${id})"/>\n`;
+      content += `  <circle cx="${s.x * width}" cy="${s.y * height}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode:${blendMode}"${filterAttr}/>\n`;
     }
 
     else if (s.type === "linear") {
@@ -4332,7 +4765,7 @@ function exportAsSVG() {
       defs += `
     </linearGradient>`;
 
-      content += `    <rect width="100%" height="100%" fill="url(#${id})"/>\n`;
+      content += `  <rect width="100%" height="100%" fill="url(#${id})" style="mix-blend-mode:${blendMode}"${filterAttr}/>\n`;
     }
 
     else if (s.type === "conic") {
@@ -4347,13 +4780,11 @@ function exportAsSVG() {
         })
         .join(", ");
 
-      content += `    <foreignObject width="100%" height="100%">
-      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stops});"></div>
-    </foreignObject>\n`;
+      content += `  <foreignObject width="100%" height="100%"${filterAttr}>
+    <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stops});mix-blend-mode:${blendMode}"></div>
+  </foreignObject>\n`;
     }
   });
-
-  content += `  </g>\n`;
 
   // نویز
   if (noiseState.enabled && noiseState.opacity > 0) {
@@ -5246,7 +5677,6 @@ async function renderFullscreenCanvas() {
   const originalWidth = state.canvasWidth;
   const originalHeight = state.canvasHeight;
   
-  // اگه چرخش 90 یا 270 باشه، عرض و ارتفاع عوض میشن
   const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
   const sourceWidth = isRotated ? originalHeight : originalWidth;
   const sourceHeight = isRotated ? originalWidth : originalHeight;
@@ -5275,7 +5705,6 @@ async function renderFullscreenCanvas() {
   
   ctx.scale(dpr, dpr);
   
-  // ========== اعمال چرخش ==========
   ctx.save();
   
   if (fullscreenRotation === 90) {
@@ -5289,68 +5718,139 @@ async function renderFullscreenCanvas() {
     ctx.rotate(-Math.PI / 2);
   }
   
-  // سایز رسم (بعد از چرخش)
   const W = isRotated ? displayHeight : displayWidth;
   const H = isRotated ? displayWidth : displayHeight;
   const sizeScale = Math.max(W / originalWidth, H / originalHeight);
   
+  const visibleStops = state.stops.filter(s => s.visible);
+  
   // 1. پس‌زمینه
-  ctx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-  ctx.fillRect(0, 0, W, H);
+  if (state.bgEnabled) {
+    ctx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    ctx.fillRect(0, 0, W, H);
+  }
   
   // 2. گرادینت‌ها
-  ctx.globalCompositeOperation = 'screen';
-  
-  state.stops.filter(s => s.visible).forEach(s => {
-    const cx = s.x * W;
-    const cy = s.y * H;
+  if (visibleStops.length > 0) {
     
-    if (s.type === 'radial') {
-      const scaledSize = s.size * sizeScale;
-      const solidEnd = 1 - s.feather / 100;
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
-      const col = rgba(s.color, s.opacity / 100);
+    // ✅ اگر bgBlendMode غیر از normal است
+    if (state.bgBlendMode !== 'normal' && state.bgEnabled) {
       
-      grad.addColorStop(0, col);
-      if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
-      grad.addColorStop(1, rgba(s.color, 0));
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = W * dpr;
+      tempCanvas.height = H * dpr;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.scale(dpr, dpr);
       
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
-      ctx.fill();
-    } 
-    else if (s.type === 'linear') {
-      const a = ((s.angle - 90) * Math.PI) / 180;
-      const d = Math.hypot(W, H);
-      const mx = W / 2, my = H / 2;
-      const dx = (Math.cos(a) * d) / 2;
-      const dy = (Math.sin(a) * d) / 2;
-      
-      const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-      [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-        grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+      visibleStops.forEach(s => {
+        tempCtx.globalCompositeOperation = s.blendMode || 'screen';
+        
+        const cx = s.x * W;
+        const cy = s.y * H;
+        
+        if (s.type === 'radial') {
+          const scaledSize = s.size * sizeScale;
+          const solidEnd = 1 - s.feather / 100;
+          const grad = tempCtx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+          const col = rgba(s.color, s.opacity / 100);
+          
+          grad.addColorStop(0, col);
+          if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
+          grad.addColorStop(1, rgba(s.color, 0));
+          
+          tempCtx.fillStyle = grad;
+          tempCtx.beginPath();
+          tempCtx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+          tempCtx.fill();
+        } 
+        else if (s.type === 'linear') {
+          const a = ((s.angle - 90) * Math.PI) / 180;
+          const d = Math.hypot(W, H);
+          const mx = W / 2, my = H / 2;
+          const dx = (Math.cos(a) * d) / 2;
+          const dy = (Math.sin(a) * d) / 2;
+          
+          const grad = tempCtx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+          });
+          
+          tempCtx.fillStyle = grad;
+          tempCtx.fillRect(0, 0, W, H);
+        } 
+        else if (s.type === 'conic') {
+          const start = ((s.startAngle - 90) * Math.PI) / 180;
+          const grad = tempCtx.createConicGradient(start, cx, cy);
+          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+          });
+          
+          tempCtx.fillStyle = grad;
+          tempCtx.fillRect(0, 0, W, H);
+        }
       });
       
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-    } 
-    else if (s.type === 'conic') {
-      const start = ((s.startAngle - 90) * Math.PI) / 180;
-      const grad = ctx.createConicGradient(start, cx, cy);
-      [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-        grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+      ctx.globalCompositeOperation = state.bgBlendMode;
+      ctx.drawImage(tempCanvas, 0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over';
+      
+    } else {
+      // روش عادی
+      visibleStops.forEach(s => {
+        ctx.globalCompositeOperation = s.blendMode || 'screen';
+        
+        const cx = s.x * W;
+        const cy = s.y * H;
+        
+        if (s.type === 'radial') {
+          const scaledSize = s.size * sizeScale;
+          const solidEnd = 1 - s.feather / 100;
+          const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+          const col = rgba(s.color, s.opacity / 100);
+          
+          grad.addColorStop(0, col);
+          if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
+          grad.addColorStop(1, rgba(s.color, 0));
+          
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+          ctx.fill();
+        } 
+        else if (s.type === 'linear') {
+          const a = ((s.angle - 90) * Math.PI) / 180;
+          const d = Math.hypot(W, H);
+          const mx = W / 2, my = H / 2;
+          const dx = (Math.cos(a) * d) / 2;
+          const dy = (Math.sin(a) * d) / 2;
+          
+          const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+          });
+          
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, W, H);
+        } 
+        else if (s.type === 'conic') {
+          const start = ((s.startAngle - 90) * Math.PI) / 180;
+          const grad = ctx.createConicGradient(start, cx, cy);
+          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
+          });
+          
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, W, H);
+        }
       });
       
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over';
     }
-  });
+  }
   
-  ctx.globalCompositeOperation = 'source-over';
   ctx.restore();
   
-  // 3. فیلترها (بعد از restore)
+  // 3. فیلترها
   if (hasActiveFilters()) {
     if (filterState.blur > 0) {
       applyBlur(ctx, displayWidth, displayHeight, filterState.blur * sizeScale);
@@ -5586,6 +6086,7 @@ async function init() {
   initDimensionEvents();
   initNoiseEvents();
   initFilterEvents();
+  initBackgroundEvents();
   initZoom();
   initPan();
 
@@ -5594,6 +6095,7 @@ async function init() {
   updateAllDimensionUI();
   updateNoiseUI();
   updateFilterUI();
+  updateBgUI();
   initLayerDragDrop();
 
   // Default gradients
