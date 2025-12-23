@@ -1500,14 +1500,54 @@ function drawLinearGradient(s) {
   const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
   const grad = ctx.createLinearGradient(x1, y1, x2, y2);
 
-  [...s.stops]
-    .sort((a, b) => a.pos - b.pos)
-    .forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
+  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
+  const finalStops = [];
+  
+  for (let i = 0; i < sortedStops.length; i++) {
+    const cs = sortedStops[i];
+    
+    if (cs.opacity === 0) {
+      const prev = sortedStops[i - 1];
+      const next = sortedStops[i + 1];
+      
+      // شفاف با رنگ قبلی
+      if (prev) {
+        finalStops.push({
+          pos: cs.pos,
+          color: prev.color,
+          opacity: 0
+        });
+      }
+      
+      // شفاف با رنگ بعدی
+      if (next && (!prev || next.color !== prev.color)) {
+        finalStops.push({
+          pos: cs.pos + 0.001,
+          color: next.color,
+          opacity: 0
+        });
+      }
+      
+      // اگه اولین یا آخرین stop بود
+      if (!prev && next) {
+        finalStops.push({ pos: cs.pos, color: next.color, opacity: 0 });
+      }
+      if (!next && prev) {
+        finalStops.push({ pos: cs.pos, color: prev.color, opacity: 0 });
+      }
+    } else {
+      finalStops.push(cs);
+    }
+  }
+
+  finalStops.sort((a, b) => a.pos - b.pos);
+
+  finalStops.forEach((cs) => {
+    grad.addColorStop(
+      clamp(cs.pos / 100, 0, 1),
+      rgba(cs.color, cs.opacity / 100)
+    );
+  });
 
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
@@ -1517,18 +1557,50 @@ function drawConicGradient(s, cx, cy) {
   const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
   const grad = ctx.createConicGradient(startAngle, cx, cy);
 
-  [...s.stops]
-    .sort((a, b) => a.pos - b.pos)
-    .forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
+  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
+  const finalStops = [];
+  const len = sortedStops.length;
+
+  for (let i = 0; i < len; i++) {
+    const cs = sortedStops[i];
+    const prev = sortedStops[(i - 1 + len) % len];
+    const next = sortedStops[(i + 1) % len];
+
+    if (cs.opacity === 0) {
+      // ✅ مرز تیز: دو stop شفاف دقیقاً در یک pos
+      if (prev) {
+        finalStops.push({
+          pos: cs.pos,
+          color: prev.color,
+          opacity: 0
+        });
+      }
+
+      if (next && (!prev || next.color !== prev.color)) {
+        finalStops.push({
+          pos: cs.pos,
+          color: next.color,
+          opacity: 0
+        });
+      }
+    } else {
+      finalStops.push(cs);
+    }
+  }
+
+  finalStops.sort((a, b) => a.pos - b.pos);
+
+  finalStops.forEach(cs => {
+    grad.addColorStop(
+      clamp(cs.pos / 100, 0, 1),
+      rgba(cs.color, cs.opacity / 100)
+    );
+  });
 
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 }
+
 
 function drawHandle(s) {
   const sel = state.selected === s.id;
@@ -3866,7 +3938,7 @@ function renderInspector() {
       <div class="form-group-title">General</div>
       <div class="form-row">
         <label>Name</label>
-        <input class="" style="width:100%;text-align:left" value="${s.name}" 
+        <input style="width:100%;text-align:left" value="${s.name}" 
           onchange="getStop('${s.id}').name=this.value;liveUpdate('${s.id}')">
           <div class="form-row">
             <label>Blend</label>

@@ -50,7 +50,8 @@
   --TransParent-bg: #1e212766;         
   --hover: #334155;        
   --text-primary: #d9e7f5;   
-  --text-muted: #94a3b8;     
+  --text-muted: #94a3b8; 
+  --text-titel: #bec8d6;    
   --border: rgba(148, 163, 184, 0.15); 
   --text-contrast: #ffffff;
 }
@@ -1181,6 +1182,7 @@ grid-column: 2/3;
   text-transform: uppercase;
   display: flex;
   justify-content: space-between;
+  align-items: center;
 }
 
 .form-row {
