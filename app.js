@@ -1275,85 +1275,215 @@ function initBackgroundEvents() {
 window.toggleBackground = toggleBackground;
 window.setBgBlendMode = setBgBlendMode;
 
+// ========== BLEND MODE HELPER ==========
+function getCanvasBlendMode(cssBlendMode) {
+  // CSS 'normal' = Canvas 'source-over'
+  if (!cssBlendMode || cssBlendMode === 'normal') {
+    return 'source-over';
+  }
+  return cssBlendMode;
+}
 // ========== DRAW FUNCTION ==========
+// ========== DRAW FUNCTION - WITH BG BLEND MODE ==========
 function draw() {
   ctx.clearRect(0, 0, W, H);
   
   const visibleStops = state.stops.filter((s) => s.visible);
   const dpr = canvas.width / W;
   
+  const needsFilter = hasActiveFilters();
+  let targetCtx = ctx;
+  let tempCanvas = null;
+  
+  if (needsFilter) {
+    tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    targetCtx = tempCanvas.getContext('2d');
+    targetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  
   // ========== 1. پس‌زمینه ==========
   if (state.bgEnabled) {
-    ctx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-    ctx.fillRect(0, 0, W, H);
+    targetCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    targetCtx.fillRect(0, 0, W, H);
   }
 
-  // خط راهنما
+  // ========== 2. خط قفل عمودی ==========
   if (state.lockVertical) {
     const scale = Math.max(W, H) / 800;
-    ctx.strokeStyle = "rgba(255,255,255,0.5)";
-    ctx.lineWidth = 2 * scale;
-    ctx.setLineDash([10 * scale, 5 * scale]);
-    ctx.beginPath();
-    ctx.moveTo(0, H / 2);
-    ctx.lineTo(W, H / 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    targetCtx.strokeStyle = "rgba(255,255,255,0.5)";
+    targetCtx.lineWidth = 2 * scale;
+    targetCtx.setLineDash([10 * scale, 5 * scale]);
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, H / 2);
+    targetCtx.lineTo(W, H / 2);
+    targetCtx.stroke();
+    targetCtx.setLineDash([]);
   }
 
-  // ========== 2. فیلترها ==========
-  const filterString = getFilterString();
-  if (filterString) {
-    ctx.filter = filterString;
-  }
-
-  // ========== 3. گرادینت‌ها ==========
+  // ========== 3. گرادینت‌ها با Background Blend Mode ==========
   if (visibleStops.length > 0) {
+    const reversedStops = [...visibleStops].reverse();
     
-    // ✅ اگر bgBlendMode غیر از normal است، از روش دو لایه‌ای استفاده کن
-    if (state.bgBlendMode !== 'normal' && state.bgEnabled) {
+    // ✅ چک کردن آیا bgBlendMode فعاله
+    const needsBgBlend = state.bgEnabled && 
+                         state.bgBlendMode && 
+                         state.bgBlendMode !== 'normal';
+    
+    if (needsBgBlend) {
+      // ✅ Canvas موقت برای گرادینت‌ها
+      const gradCanvas = document.createElement('canvas');
+      gradCanvas.width = canvas.width;
+      gradCanvas.height = canvas.height;
+      const gradCtx = gradCanvas.getContext('2d');
+      gradCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       
-      // ایجاد canvas موقت برای همه گرادینت‌ها
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      const tempCtx = tempCanvas.getContext('2d');
-      tempCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      
-      // رسم هر گرادینت با blend mode خودش روی canvas موقت
-      visibleStops.forEach(s => {
-        tempCtx.globalCompositeOperation = s.blendMode || 'screen';
-        drawGradToContext(s, tempCtx, W, H);
+      // رسم گرادینت‌ها روی canvas موقت
+      reversedStops.forEach(s => {
+        gradCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+        drawGradToCtx(s, gradCtx, W, H);
       });
+      gradCtx.globalCompositeOperation = 'source-over';
       
-      // ترکیب canvas موقت با canvas اصلی با bgBlendMode
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalCompositeOperation = state.bgBlendMode;
-      ctx.drawImage(tempCanvas, 0, 0);
-      ctx.restore();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // ✅ ترکیب با bgBlendMode روی پس‌زمینه
+      targetCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
+      targetCtx.drawImage(gradCanvas, 0, 0);
+      targetCtx.globalCompositeOperation = 'source-over';
       
     } else {
-      // ✅ روش عادی - فقط blend mode هر گرادینت
-      visibleStops.forEach(s => {
-        ctx.globalCompositeOperation = s.blendMode || 'screen';
-        drawGrad(s);
+      // بدون bg blend - مستقیم رسم کن
+      reversedStops.forEach(s => {
+        targetCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+        drawGradToCtx(s, targetCtx, W, H);
       });
+      targetCtx.globalCompositeOperation = 'source-over';
     }
-    
-    ctx.globalCompositeOperation = 'source-over';
   }
 
-  // ریست فیلتر
-  ctx.filter = 'none';
+  // ========== 4. فیلترها ==========
+  if (needsFilter && tempCanvas) {
+    if (filterState.blur > 0) {
+      const blurCanvas = document.createElement('canvas');
+      blurCanvas.width = canvas.width;
+      blurCanvas.height = canvas.height;
+      const blurCtx = blurCanvas.getContext('2d');
+      blurCtx.filter = `blur(${filterState.blur}px)`;
+      blurCtx.drawImage(tempCanvas, 0, 0);
+      tempCanvas = blurCanvas;
+      targetCtx = blurCanvas.getContext('2d');
+    }
+    
+    if (hasNonBlurFilters()) {
+      const imageData = targetCtx.getImageData(0, 0, canvas.width, canvas.height);
+      applyFiltersToImageData(imageData);
+      targetCtx.putImageData(imageData, 0, 0);
+    }
+    
+    ctx.drawImage(tempCanvas, 0, 0);
+  }
 
-  // ========== 4. نویز ==========
+  // ========== 5. نویز ==========
   drawNoise();
 
-  // ========== 5. هندل‌ها ==========
+  // ========== 6. هندل‌ها ==========
   if (state.showHandles) {
     visibleStops.forEach(drawHandle);
+  }
+}
+
+function fixTransparentStops(stops) {
+  const sorted = [...stops].sort((a, b) => a.pos - b.pos);
+  const result = [];
+  
+  for (let i = 0; i < sorted.length; i++) {
+    const cs = sorted[i];
+    const prev = sorted[i - 1];
+    const next = sorted[i + 1];
+    
+    if (cs.opacity === 0) {
+      // ✅ برای Hard Edge: دو stop شفاف در همان position
+      
+      if (prev) {
+        result.push({
+          pos: cs.pos,
+          color: prev.color,
+          opacity: 0
+        });
+      }
+      
+      if (next) {
+        result.push({
+          pos: cs.pos,  // ✅ همان position - بدون فاصله!
+          color: next.color,
+          opacity: 0
+        });
+      }
+      
+      // اگر تنها stop شفاف است
+      if (!prev && !next) {
+        result.push(cs);
+      }
+      
+    } else {
+      result.push(cs);
+    }
+  }
+  
+  return result;
+}
+
+// ========== تابع drawGradToCtx اصلاح‌شده ==========
+function drawGradToCtx(s, targetCtx, width = W, height = H) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const outer = s.size;
+    const solidEnd = 1 - s.feather / 100;
+    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    targetCtx.fillStyle = grad;
+    targetCtx.beginPath();
+    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
+    targetCtx.fill();
+  } 
+  else if (s.type === "linear") {
+    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
+    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
   }
 }
 
@@ -4534,6 +4664,7 @@ async function exportAsImage(format = "png", quality = 0.92) {
   exportCanvas.height = height;
 
   const visibleStops = state.stops.filter((s) => s.visible);
+  const reversedStops = [...visibleStops].reverse();
 
   // ========== 1. پس‌زمینه ==========
   if (state.bgEnabled) {
@@ -4541,33 +4672,33 @@ async function exportAsImage(format = "png", quality = 0.92) {
     exportCtx.fillRect(0, 0, width, height);
   }
 
-  // ========== 2. گرادینت‌ها ==========
-  if (visibleStops.length > 0) {
+  // ========== 2. گرادینت‌ها با bgBlendMode ==========
+  if (reversedStops.length > 0) {
+    const needsBgBlend = state.bgEnabled && 
+                         state.bgBlendMode && 
+                         state.bgBlendMode !== 'normal';
     
-    // ✅ اگر bgBlendMode غیر از normal است
-    if (state.bgBlendMode !== 'normal' && state.bgEnabled) {
+    if (needsBgBlend) {
+      // Canvas موقت
+      const gradCanvas = document.createElement('canvas');
+      gradCanvas.width = width;
+      gradCanvas.height = height;
+      const gradCtx = gradCanvas.getContext('2d');
       
-      // Canvas موقت برای گرادینت‌ها
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = width;
-      tempCanvas.height = height;
-      const tempCtx = tempCanvas.getContext('2d');
-      
-      // رسم هر گرادینت با blend mode خودش
-      visibleStops.forEach((s) => {
-        tempCtx.globalCompositeOperation = s.blendMode || 'screen';
-        drawGradForExport(s, tempCtx, width, height);
+      reversedStops.forEach((s) => {
+        gradCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+        drawGradForExport(s, gradCtx, width, height);
       });
+      gradCtx.globalCompositeOperation = 'source-over';
       
-      // ترکیب با bgBlendMode
-      exportCtx.globalCompositeOperation = state.bgBlendMode;
-      exportCtx.drawImage(tempCanvas, 0, 0);
+      // ✅ ترکیب با bgBlendMode
+      exportCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
+      exportCtx.drawImage(gradCanvas, 0, 0);
       exportCtx.globalCompositeOperation = 'source-over';
       
     } else {
-      // رسم عادی با blend mode هر گرادینت
-      visibleStops.forEach((s) => {
-        exportCtx.globalCompositeOperation = s.blendMode || 'screen';
+      reversedStops.forEach((s) => {
+        exportCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
         drawGradForExport(s, exportCtx, width, height);
       });
       exportCtx.globalCompositeOperation = 'source-over';
@@ -4577,8 +4708,17 @@ async function exportAsImage(format = "png", quality = 0.92) {
   // ========== 3. فیلترها ==========
   if (hasActiveFilters()) {
     if (filterState.blur > 0) {
-      applyBlur(exportCtx, width, height, filterState.blur);
+      const blurCanvas = document.createElement('canvas');
+      blurCanvas.width = width;
+      blurCanvas.height = height;
+      const blurCtx = blurCanvas.getContext('2d');
+      blurCtx.filter = `blur(${filterState.blur}px)`;
+      blurCtx.drawImage(exportCanvas, 0, 0);
+      
+      exportCtx.clearRect(0, 0, width, height);
+      exportCtx.drawImage(blurCanvas, 0, 0);
     }
+    
     if (hasNonBlurFilters()) {
       const imageData = exportCtx.getImageData(0, 0, width, height);
       applyFiltersToImageData(imageData);
@@ -4619,50 +4759,9 @@ async function exportAsImage(format = "png", quality = 0.92) {
   );
 }
 
-function drawGradForExport(s, ctx, width, height) {
-  const cx = s.x * width;
-  const cy = s.y * height;
+// ========== EXPORT - FIXED VERSION ==========
 
-  if (s.type === "radial") {
-    const solidEnd = 1 - s.feather / 100;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s.size);
-    const col = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, col);
-    if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
-    ctx.fill();
-  } 
-  else if (s.type === "linear") {
-    const a = ((s.angle - 90) * Math.PI) / 180;
-    const d = Math.hypot(width, height);
-    const mx = width / 2, my = height / 2;
-    const dx = (Math.cos(a) * d) / 2;
-    const dy = (Math.sin(a) * d) / 2;
-
-    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
-      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-    });
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-  } 
-  else if (s.type === "conic") {
-    const start = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = ctx.createConicGradient(start, cx, cy);
-    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
-      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-    });
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-  }
-}
+// Remove all duplicate definitions and replace with this single version:
 
 function drawGradForExport(s, ctx, width, height) {
   const cx = s.x * width;
@@ -4690,7 +4789,10 @@ function drawGradForExport(s, ctx, width, height) {
     const dy = (Math.sin(a) * d) / 2;
 
     const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+    
+    // ✅ اصلاح شده
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
       grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
     });
 
@@ -4700,7 +4802,10 @@ function drawGradForExport(s, ctx, width, height) {
   else if (s.type === "conic") {
     const start = ((s.startAngle - 90) * Math.PI) / 180;
     const grad = ctx.createConicGradient(start, cx, cy);
-    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+    
+    // ✅ اصلاح شده
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
       grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
     });
 
@@ -4709,52 +4814,269 @@ function drawGradForExport(s, ctx, width, height) {
   }
 }
 
-// ========== تابع کمکی برای Export ==========
-function drawGradForExport(s, ctx, width, height) {
-  const cx = s.x * width;
-  const cy = s.y * height;
+function exportAsSVG() {
+  const width = state.canvasWidth;
+  const height = state.canvasHeight;
+  const visibleStops = state.stops.filter((s) => s.visible);
 
-  if (s.type === "radial") {
-    const solidEnd = 1 - s.feather / 100;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s.size);
-    const col = rgba(s.color, s.opacity / 100);
+  let defs = "";
+  let content = "";
 
-    grad.addColorStop(0, col);
-    if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
-    ctx.fill();
-  } 
-  else if (s.type === "linear") {
-    const a = ((s.angle - 90) * Math.PI) / 180;
-    const d = Math.hypot(width, height);
-    const mx = width / 2, my = height / 2;
-    const dx = (Math.cos(a) * d) / 2;
-    const dy = (Math.sin(a) * d) / 2;
-
-    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
-      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-    });
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-  } 
-  else if (s.type === "conic") {
-    const start = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = ctx.createConicGradient(start, cx, cy);
-    [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
-      grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-    });
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+  // ========== 1. CSS Filters ==========
+  if (hasActiveFilters()) {
+    defs += generateSVGFilterFromCSS();
   }
+
+  // ========== 2. Noise Filter ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    defs += `
+    <filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise"/>
+    </filter>`;
+  }
+
+  // ========== 3. Background ==========
+  if (state.bgEnabled) {
+    const bg = hexToRgb(state.bgColor);
+    const bgOpacity = (state.bgAlpha / 100).toFixed(3);
+    content += `  <rect id="background" width="100%" height="100%" fill="rgb(${bg.r},${bg.g},${bg.b})" fill-opacity="${bgOpacity}"/>\n`;
+  }
+
+  // ========== 4. Gradients Container ==========
+  // Filter attribute for all gradients
+  const filterAttr = hasActiveFilters() ? ' filter="url(#cssFilter)"' : '';
+  
+  // If bgBlendMode is set, wrap gradients in a group with that blend
+  const hasBgBlend = state.bgEnabled && state.bgBlendMode && state.bgBlendMode !== 'normal';
+  
+  if (hasBgBlend) {
+    content += `  <g style="mix-blend-mode: ${state.bgBlendMode}"${filterAttr}>\n`;
+  }
+
+  // ========== 5. Each Gradient ==========
+  visibleStops.forEach((s, i) => {
+    const id = `gradient${i}`;
+    const blendMode = s.blendMode || 'screen';
+    const indent = hasBgBlend ? '    ' : '  ';
+    const itemFilterAttr = hasBgBlend ? '' : filterAttr;
+
+    if (s.type === "radial") {
+      const rgb = hexToRgb(s.color);
+      const solidEnd = 1 - s.feather / 100;
+      const opacity = (s.opacity / 100).toFixed(3);
+
+      defs += `
+    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" 
+                    cx="${(s.x * width).toFixed(2)}" cy="${(s.y * height).toFixed(2)}" r="${s.size}">
+      <stop offset="0%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
+      
+      if (solidEnd > 0 && solidEnd < 1) {
+        defs += `
+      <stop offset="${(solidEnd * 100).toFixed(1)}%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
+      }
+      
+      defs += `
+      <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
+    </radialGradient>`;
+
+      content += `${indent}<circle cx="${(s.x * width).toFixed(2)}" cy="${(s.y * height).toFixed(2)}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode: ${blendMode}"${itemFilterAttr}/>\n`;
+    }
+
+    else if (s.type === "linear") {
+      const angleRad = ((s.angle - 90) * Math.PI) / 180;
+      const x1 = (50 - Math.cos(angleRad) * 50).toFixed(2);
+      const y1 = (50 - Math.sin(angleRad) * 50).toFixed(2);
+      const x2 = (50 + Math.cos(angleRad) * 50).toFixed(2);
+      const y2 = (50 + Math.sin(angleRad) * 50).toFixed(2);
+
+      defs += `
+    <linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">`;
+      
+      [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+        const c = hexToRgb(cs.color);
+        const opacity = (cs.opacity / 100).toFixed(3);
+        defs += `
+      <stop offset="${cs.pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${opacity}"/>`;
+      });
+      
+      defs += `
+    </linearGradient>`;
+
+      content += `${indent}<rect width="100%" height="100%" fill="url(#${id})" style="mix-blend-mode: ${blendMode}"${itemFilterAttr}/>\n`;
+    }
+
+    else if (s.type === "conic") {
+      // Conic gradients need foreignObject as SVG doesn't support them natively
+      const x = (s.x * 100).toFixed(2);
+      const y = (s.y * 100).toFixed(2);
+
+      const stops = [...s.stops]
+        .sort((a, b) => a.pos - b.pos)
+        .map((cs) => {
+          const c = hexToRgb(cs.color);
+          const opacity = (cs.opacity / 100).toFixed(3);
+          return `rgba(${c.r},${c.g},${c.b},${opacity}) ${cs.pos}%`;
+        })
+        .join(", ");
+
+      content += `${indent}<foreignObject width="100%" height="100%"${itemFilterAttr}>
+${indent}  <div xmlns="http://www.w3.org/1999/xhtml" style="
+${indent}    width: 100%;
+${indent}    height: 100%;
+${indent}    background: conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stops});
+${indent}    mix-blend-mode: ${blendMode};
+${indent}  "></div>
+${indent}</foreignObject>\n`;
+    }
+  });
+
+  // Close gradient group if using bgBlendMode
+  if (hasBgBlend) {
+    content += `  </g>\n`;
+  }
+
+  // ========== 6. Noise Overlay ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    const noiseOpacity = (noiseState.opacity / 100).toFixed(3);
+    content += `  <rect id="noise" width="100%" height="100%" fill="white" filter="url(#noiseFilter)" opacity="${noiseOpacity}" style="mix-blend-mode: ${noiseState.blend}"/>\n`;
+  }
+
+  // ========== 7. Assemble SVG ==========
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" 
+     xmlns:xhtml="http://www.w3.org/1999/xhtml"
+     width="${width}" 
+     height="${height}" 
+     viewBox="0 0 ${width} ${height}">
+  
+  <defs>${defs}
+  </defs>
+
+${content}
+</svg>`;
+
+  // ========== 8. Download ==========
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const filename = `gradient-${width}x${height}.svg`;
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  
+  // Cleanup
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ========== HELPER: Generate SVG Filter from CSS ==========
+function generateSVGFilterFromCSS() {
+  if (!hasActiveFilters()) return '';
+  
+  let filterContent = '';
+  let lastResult = 'SourceGraphic';
+  let resultIndex = 0;
+  
+  // 1. Brightness & Contrast
+  if (filterState.brightness !== 100 || filterState.contrast !== 100) {
+    const brightness = filterState.brightness / 100;
+    const contrast = filterState.contrast / 100;
+    const slope = contrast * brightness;
+    const intercept = (-(0.5 * contrast) + 0.5) * brightness;
+    
+    filterContent += `
+      <feComponentTransfer in="${lastResult}" result="bc${resultIndex}">
+        <feFuncR type="linear" slope="${slope.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
+        <feFuncG type="linear" slope="${slope.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
+        <feFuncB type="linear" slope="${slope.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
+      </feComponentTransfer>`;
+    lastResult = `bc${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 2. Saturate
+  if (filterState.saturate !== 100) {
+    filterContent += `
+      <feColorMatrix type="saturate" values="${(filterState.saturate / 100).toFixed(3)}" in="${lastResult}" result="sat${resultIndex}"/>`;
+    lastResult = `sat${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 3. Hue-rotate
+  if (filterState.hue !== 0) {
+    filterContent += `
+      <feColorMatrix type="hueRotate" values="${filterState.hue}" in="${lastResult}" result="hue${resultIndex}"/>`;
+    lastResult = `hue${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 4. Grayscale
+  if (filterState.grayscale > 0) {
+    const g = 1 - filterState.grayscale / 100;
+    // Standard grayscale matrix
+    const matrix = [
+      0.2126 + 0.7874 * g, 0.7152 - 0.7152 * g, 0.0722 - 0.0722 * g, 0, 0,
+      0.2126 - 0.2126 * g, 0.7152 + 0.2848 * g, 0.0722 - 0.0722 * g, 0, 0,
+      0.2126 - 0.2126 * g, 0.7152 - 0.7152 * g, 0.0722 + 0.9278 * g, 0, 0,
+      0, 0, 0, 1, 0
+    ].map(v => v.toFixed(4)).join(' ');
+    
+    filterContent += `
+      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="gray${resultIndex}"/>`;
+    lastResult = `gray${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 5. Sepia
+  if (filterState.sepia > 0) {
+    const s = 1 - filterState.sepia / 100;
+    const matrix = [
+      0.393 + 0.607 * s, 0.769 - 0.769 * s, 0.189 - 0.189 * s, 0, 0,
+      0.349 - 0.349 * s, 0.686 + 0.314 * s, 0.168 - 0.168 * s, 0, 0,
+      0.272 - 0.272 * s, 0.534 - 0.534 * s, 0.131 + 0.869 * s, 0, 0,
+      0, 0, 0, 1, 0
+    ].map(v => v.toFixed(4)).join(' ');
+    
+    filterContent += `
+      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="sepia${resultIndex}"/>`;
+    lastResult = `sepia${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 6. Invert
+  if (filterState.invert > 0) {
+    const i = filterState.invert / 100;
+    filterContent += `
+      <feComponentTransfer in="${lastResult}" result="inv${resultIndex}">
+        <feFuncR type="table" tableValues="${i.toFixed(3)} ${(1-i).toFixed(3)}"/>
+        <feFuncG type="table" tableValues="${i.toFixed(3)} ${(1-i).toFixed(3)}"/>
+        <feFuncB type="table" tableValues="${i.toFixed(3)} ${(1-i).toFixed(3)}"/>
+      </feComponentTransfer>`;
+    lastResult = `inv${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 7. Blur (last because it's expensive)
+  if (filterState.blur > 0) {
+    filterContent += `
+      <feGaussianBlur stdDeviation="${filterState.blur}" in="${lastResult}" result="blur${resultIndex}"/>`;
+    lastResult = `blur${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // Extend filter region for blur
+  const blurPadding = filterState.blur > 0 ? Math.ceil(filterState.blur * 3) : 0;
+  const pad = blurPadding > 0 ? `${blurPadding / 100 * 100 + 10}%` : '0%';
+  
+  return `
+    <filter id="cssFilter" x="-${pad}" y="-${pad}" width="${100 + parseFloat(pad) * 2}%" height="${100 + parseFloat(pad) * 2}%">${filterContent}
+    </filter>`;
+}
+
+// Make sure hasNonBlurFilters exists
 function hasNonBlurFilters() {
   return filterState.enabled && (
     filterState.brightness !== 100 ||
@@ -4765,318 +5087,6 @@ function hasNonBlurFilters() {
     filterState.sepia > 0 ||
     filterState.invert > 0
   );
-}
-
-function exportAsSVG() {
-  const width = state.canvasWidth;
-  const height = state.canvasHeight;
-  const visibleStops = state.stops.filter((s) => s.visible);
-
-  let defs = "";
-  let content = "";
-
-  // فیلتر CSS
-  if (hasActiveFilters()) {
-    defs += generateSVGFilterFromCSS();
-  }
-
-  // نویز
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    defs += `
-    <filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch" result="noise"/>
-      <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise"/>
-      <feBlend in="SourceGraphic" in2="bwNoise" mode="${noiseState.blend}"/>
-    </filter>`;
-  }
-
-  // پس‌زمینه
-  if (state.bgEnabled) {
-    const bg = hexToRgb(state.bgColor);
-    content += `  <rect width="100%" height="100%" fill="rgba(${bg.r},${bg.g},${bg.b},${state.bgAlpha / 100})"/>\n`;
-  }
-
-  // فیلتر روی گرادینت‌ها
-  const filterAttr = hasActiveFilters() ? ' filter="url(#cssFilter)"' : '';
-
-  // ✅ هر گرادینت در یک group جدا با blend mode خودش
-  visibleStops.forEach((s, i) => {
-    const id = `g${i}`;
-    const blendMode = s.blendMode || 'screen';
-
-    if (s.type === "radial") {
-      const rgb = hexToRgb(s.color);
-      const solidEnd = 1 - s.feather / 100;
-
-      defs += `
-    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${s.x * width}" cy="${s.y * height}" r="${s.size}">
-      <stop offset="0%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${s.opacity / 100}"/>
-      ${solidEnd > 0 && solidEnd < 1 ? `<stop offset="${(solidEnd * 100).toFixed(0)}%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${s.opacity / 100}"/>` : ""}
-      <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
-    </radialGradient>`;
-
-      content += `  <circle cx="${s.x * width}" cy="${s.y * height}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode:${blendMode}"${filterAttr}/>\n`;
-    }
-
-    else if (s.type === "linear") {
-      const a = ((s.angle - 90) * Math.PI) / 180;
-      const x1 = 50 - Math.cos(a) * 50;
-      const y1 = 50 - Math.sin(a) * 50;
-      const x2 = 50 + Math.cos(a) * 50;
-      const y2 = 50 + Math.sin(a) * 50;
-
-      defs += `
-    <linearGradient id="${id}" x1="${x1.toFixed(1)}%" y1="${y1.toFixed(1)}%" x2="${x2.toFixed(1)}%" y2="${y2.toFixed(1)}%">`;
-      [...s.stops]
-        .sort((a, b) => a.pos - b.pos)
-        .forEach((cs) => {
-          const c = hexToRgb(cs.color);
-          defs += `
-      <stop offset="${cs.pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${cs.opacity / 100}"/>`;
-        });
-      defs += `
-    </linearGradient>`;
-
-      content += `  <rect width="100%" height="100%" fill="url(#${id})" style="mix-blend-mode:${blendMode}"${filterAttr}/>\n`;
-    }
-
-    else if (s.type === "conic") {
-      const x = (s.x * 100).toFixed(2);
-      const y = (s.y * 100).toFixed(2);
-
-      const stops = [...s.stops]
-        .sort((a, b) => a.pos - b.pos)
-        .map((cs) => {
-          const c = hexToRgb(cs.color);
-          return `rgba(${c.r},${c.g},${c.b},${cs.opacity / 100}) ${cs.pos}%`;
-        })
-        .join(", ");
-
-      content += `  <foreignObject width="100%" height="100%"${filterAttr}>
-    <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stops});mix-blend-mode:${blendMode}"></div>
-  </foreignObject>\n`;
-    }
-  });
-
-  // نویز
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    content += `  <rect width="100%" height="100%" fill="white" filter="url(#noiseFilter)" opacity="${(noiseState.opacity / 100).toFixed(2)}" style="mix-blend-mode:${noiseState.blend}"/>\n`;
-  }
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>${defs}
-  </defs>
-${content}</svg>`;
-
-  const blob = new Blob([svg], { type: "image/svg+xml" });
-  const url = URL.createObjectURL(blob);
-  const filename = `gradient-${width}x${height}.svg`;
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// تبدیل CSS filters به SVG filter
-function generateSVGFilterFromCSS() {
-  if (!hasActiveFilters()) return '';
-  
-  let filterContent = '';
-  let lastResult = 'SourceGraphic';
-  let resultIndex = 0;
-  
-  // Brightness & Contrast با feComponentTransfer
-  if (filterState.brightness !== 100 || filterState.contrast !== 100) {
-    const brightness = filterState.brightness / 100;
-    const contrast = filterState.contrast / 100;
-    const intercept = (1 - contrast) / 2 + (brightness - 1);
-    
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="bc${resultIndex}">
-        <feFuncR type="linear" slope="${contrast * brightness}" intercept="${intercept}"/>
-        <feFuncG type="linear" slope="${contrast * brightness}" intercept="${intercept}"/>
-        <feFuncB type="linear" slope="${contrast * brightness}" intercept="${intercept}"/>
-      </feComponentTransfer>`;
-    lastResult = `bc${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // Saturate با feColorMatrix
-  if (filterState.saturate !== 100) {
-    filterContent += `
-      <feColorMatrix type="saturate" values="${filterState.saturate / 100}" in="${lastResult}" result="sat${resultIndex}"/>`;
-    lastResult = `sat${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // Hue-rotate با feColorMatrix
-  if (filterState.hue !== 0) {
-    filterContent += `
-      <feColorMatrix type="hueRotate" values="${filterState.hue}" in="${lastResult}" result="hue${resultIndex}"/>`;
-    lastResult = `hue${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // Grayscale
-  if (filterState.grayscale > 0) {
-    const g = filterState.grayscale / 100;
-    const matrix = `
-      ${0.2126 + 0.7874 * (1 - g)} ${0.7152 - 0.7152 * (1 - g)} ${0.0722 - 0.0722 * (1 - g)} 0 0
-      ${0.2126 - 0.2126 * (1 - g)} ${0.7152 + 0.2848 * (1 - g)} ${0.0722 - 0.0722 * (1 - g)} 0 0
-      ${0.2126 - 0.2126 * (1 - g)} ${0.7152 - 0.7152 * (1 - g)} ${0.0722 + 0.9278 * (1 - g)} 0 0
-      0 0 0 1 0`;
-    filterContent += `
-      <feColorMatrix type="matrix" values="${matrix.trim()}" in="${lastResult}" result="gray${resultIndex}"/>`;
-    lastResult = `gray${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // Sepia
-  if (filterState.sepia > 0) {
-    const s = filterState.sepia / 100;
-    const matrix = `
-      ${0.393 + 0.607 * (1 - s)} ${0.769 - 0.769 * (1 - s)} ${0.189 - 0.189 * (1 - s)} 0 0
-      ${0.349 - 0.349 * (1 - s)} ${0.686 + 0.314 * (1 - s)} ${0.168 - 0.168 * (1 - s)} 0 0
-      ${0.272 - 0.272 * (1 - s)} ${0.534 - 0.534 * (1 - s)} ${0.131 + 0.869 * (1 - s)} 0 0
-      0 0 0 1 0`;
-    filterContent += `
-      <feColorMatrix type="matrix" values="${matrix.trim()}" in="${lastResult}" result="sepia${resultIndex}"/>`;
-    lastResult = `sepia${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // Invert
-  if (filterState.invert > 0) {
-    const i = filterState.invert / 100;
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="inv${resultIndex}">
-        <feFuncR type="table" tableValues="${i} ${1-i}"/>
-        <feFuncG type="table" tableValues="${i} ${1-i}"/>
-        <feFuncB type="table" tableValues="${i} ${1-i}"/>
-      </feComponentTransfer>`;
-    lastResult = `inv${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // Blur
-  if (filterState.blur > 0) {
-    filterContent += `
-      <feGaussianBlur stdDeviation="${filterState.blur}" in="${lastResult}" result="blur${resultIndex}"/>`;
-    lastResult = `blur${resultIndex}`;
-    resultIndex++;
-  }
-  
-  return `
-    <filter id="cssFilter" x="-10%" y="-10%" width="120%" height="120%">${filterContent}
-    </filter>`;
-}
-
-function exportAsSVG() {
-  const width = state.canvasWidth;
-  const height = state.canvasHeight;
-
-  const visibleStops = state.stops.filter((s) => s.visible);
-
-  let defs = "";
-  let content = "";
-
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    defs += `
-    <filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch" result="noise"/>
-      <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise"/>
-      <feBlend in="SourceGraphic" in2="bwNoise" mode="${noiseState.blend}"/>
-    </filter>`;
-  }
-
-  const bg = hexToRgb(state.bgColor);
-  content += `  <rect width="100%" height="100%" fill="rgba(${bg.r},${bg.g},${bg.b},${state.bgAlpha / 100})"/>\n`;
-
-  content += `  <g style="mix-blend-mode:screen">\n`;
-
-  visibleStops.forEach((s, i) => {
-    const id = `g${i}`;
-
-    if (s.type === "radial") {
-      const rgb = hexToRgb(s.color);
-      const solidEnd = 1 - s.feather / 100;
-
-      defs += `
-    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${s.x * width}" cy="${s.y * height}" r="${s.size}">
-      <stop offset="0%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${s.opacity / 100}"/>
-      ${solidEnd > 0 && solidEnd < 1 ? `<stop offset="${(solidEnd * 100).toFixed(0)}%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${s.opacity / 100}"/>` : ""}
-      <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
-    </radialGradient>`;
-
-      content += `    <circle cx="${s.x * width}" cy="${s.y * height}" r="${s.size}" fill="url(#${id})"/>\n`;
-    }
-
-    else if (s.type === "linear") {
-      const a = ((s.angle - 90) * Math.PI) / 180;
-      const x1 = 50 - Math.cos(a) * 50;
-      const y1 = 50 - Math.sin(a) * 50;
-      const x2 = 50 + Math.cos(a) * 50;
-      const y2 = 50 + Math.sin(a) * 50;
-
-      defs += `
-    <linearGradient id="${id}" x1="${x1.toFixed(1)}%" y1="${y1.toFixed(1)}%" x2="${x2.toFixed(1)}%" y2="${y2.toFixed(1)}%">`;
-      [...s.stops]
-        .sort((a, b) => a.pos - b.pos)
-        .forEach((cs) => {
-          const c = hexToRgb(cs.color);
-          defs += `
-      <stop offset="${cs.pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${cs.opacity / 100}"/>`;
-        });
-      defs += `
-    </linearGradient>`;
-
-      content += `    <rect width="100%" height="100%" fill="url(#${id})"/>\n`;
-    }
-
-    else if (s.type === "conic") {
-      const x = (s.x * 100).toFixed(2);
-      const y = (s.y * 100).toFixed(2);
-
-      const stops = [...s.stops]
-        .sort((a, b) => a.pos - b.pos)
-        .map((cs) => {
-          const c = hexToRgb(cs.color);
-          return `rgba(${c.r},${c.g},${c.b},${cs.opacity / 100}) ${cs.pos}%`;
-        })
-        .join(", ");
-
-      content += `    <foreignObject width="100%" height="100%">
-      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stops});"></div>
-    </foreignObject>\n`;
-    }
-  });
-
-  content += `  </g>\n`;
-
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    content += `  <rect width="100%" height="100%" fill="white" filter="url(#noiseFilter)" opacity="${(noiseState.opacity / 100).toFixed(2)}" style="mix-blend-mode:${noiseState.blend}"/>\n`;
-  }
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>${defs}
-  </defs>
-${content}</svg>`;
-
-  const blob = new Blob([svg], { type: "image/svg+xml" });
-  const url = URL.createObjectURL(blob);
-  const filename = `gradient-${width}x${height}.svg`;
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 // ========== ZOOM SYSTEM ==========
@@ -5654,32 +5664,91 @@ document.addEventListener("touchend", () => {
   resizingH = false;
   document.body.classList.remove("no-touch-scroll");
 });
-
-// ========== FULLSCREEN PREVIEW ==========
+// ========== FULLSCREEN PREVIEW - COMPLETE FIXED ==========
 let fullscreenOverlay = null;
 let fullscreenCanvas = null;
-let fullscreenRotation = 0; // 0, 90, 180, 270
+let fullscreenCtx = null;
+let fullscreenRotation = 0;
 
-function openFullscreenPreview() {
-  fullscreenRotation = 0;
+// ========== Zoom & Pan State ==========
+const fullscreenZoom = {
+  scale: 1,
+  minScale: 0.5,
+  maxScale: 10,
+  translateX: 0,
+  translateY: 0,
   
+  isPinching: false,
+  isPanning: false,
+  startDist: 0,
+  startScale: 1,
+  startX: 0,
+  startY: 0,
+  startTranslateX: 0,
+  startTranslateY: 0,
+  pinchCenterX: 0,
+  pinchCenterY: 0,
+  lastTap: 0,
+  lastTapX: 0,
+  lastTapY: 0,
+};
+
+// ========== OPEN ==========
+async function openFullscreenPreview() {
+  // ریست
+  fullscreenRotation = 0;
+  Object.assign(fullscreenZoom, {
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    isPinching: false,
+    isPanning: false,
+  });
+  
+  // History برای Back
+  history.pushState({ fullscreen: true }, '', '');
+  
+  // ساخت overlay
   fullscreenOverlay = document.createElement('div');
   fullscreenOverlay.className = 'fullscreen-overlay';
   fullscreenOverlay.innerHTML = `
-    <canvas id="fullscreenCanvas"></canvas>
+    <div class="fullscreen-canvas-container" id="fsContainer">
+      <canvas id="fullscreenCanvas"></canvas>
+    </div>
     <div class="fullscreen-controls">
-      <button class="fullscreen-btn" onclick="rotateFullscreen()" title="Rotate 90°">
+      <button class="fullscreen-btn" id="fsZoomOut" title="Zoom Out">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
-          <path d="M21 3v5h-5"/>
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M8 11h6"/>
         </svg>
       </button>
-      <button class="fullscreen-btn" onclick="closeFullscreenPreview()" title="Close (ESC)">
-<img src="./icon/full-screen-exit.svg" alt="fullscreen exit">
+      <span class="fullscreen-zoom-value" id="fsZoomValue">100%</span>
+      <button class="fullscreen-btn" id="fsZoomIn" title="Zoom In">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
+        </svg>
+      </button>
+      <div class="fullscreen-divider"></div>
+      <button class="fullscreen-btn" id="fsRotate" title="Rotate (R)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+        </svg>
+      </button>
+      <button class="fullscreen-btn" id="fsReset" title="Reset (0)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/>
+        </svg>
+      </button>
+      <button class="fullscreen-btn" id="fsClose" title="Close (ESC)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
       </button>
     </div>
     <div class="fullscreen-info" id="fullscreenInfo">
-      ${Math.round(state.canvasWidth)} x ${Math.round(state.canvasHeight)}
+      ${Math.round(state.canvasWidth)} × ${Math.round(state.canvasHeight)}
+    </div>
+    <div class="fullscreen-hint" id="fullscreenHint">
+      Double-tap to zoom • Pinch to zoom • Drag to pan
     </div>
   `;
   
@@ -5687,267 +5756,807 @@ function openFullscreenPreview() {
   document.body.style.overflow = 'hidden';
   
   fullscreenCanvas = document.getElementById('fullscreenCanvas');
-  renderFullscreenCanvas();
+  fullscreenCtx = fullscreenCanvas.getContext('2d');
   
+  const container = document.getElementById('fsContainer');
+  
+  // ✅ رندر و منتظر بمون
+  await renderFullscreenCanvas();
+  
+  // Event Listeners
   fullscreenOverlay.addEventListener('click', (e) => {
-    if (e.target === fullscreenOverlay || e.target === fullscreenCanvas) {
-      closeFullscreenPreview();
-    }
+    if (e.target === fullscreenOverlay) history.back();
   });
   
-  document.addEventListener('keydown', handleFullscreenKeys);
+  document.getElementById('fsClose').addEventListener('click', () => history.back());
+  document.getElementById('fsRotate').addEventListener('click', rotateFullscreen);
+  document.getElementById('fsReset').addEventListener('click', resetFullscreenView);
+  document.getElementById('fsZoomIn').addEventListener('click', () => zoomFullscreen(1.5, null, null));
+  document.getElementById('fsZoomOut').addEventListener('click', () => zoomFullscreen(0.67, null, null));
   
+  document.addEventListener('keydown', handleFullscreenKeys);
+  window.addEventListener('popstate', handleFullscreenPopState);
+  
+  container.addEventListener('touchstart', handleFSTouchStart, { passive: false });
+  container.addEventListener('touchmove', handleFSTouchMove, { passive: false });
+  container.addEventListener('touchend', handleFSTouchEnd, { passive: false });
+  container.addEventListener('touchcancel', handleFSTouchEnd, { passive: false });
+  
+  container.addEventListener('wheel', handleFSWheel, { passive: false });
+  container.addEventListener('mousedown', handleFSMouseDown);
+  container.addEventListener('dblclick', handleFSDoubleClick);
+  document.addEventListener('mousemove', handleFSMouseMove);
+  document.addEventListener('mouseup', handleFSMouseUp);
+  
+  window.addEventListener('resize', handleFSResize);
+  
+  // انیمیشن
   requestAnimationFrame(() => {
     fullscreenOverlay.classList.add('show');
+    setTimeout(() => {
+      const hint = document.getElementById('fullscreenHint');
+      if (hint) hint.classList.add('hide');
+    }, 3000);
   });
 }
 
+// ========== CLOSE ==========
 function closeFullscreenPreview() {
   if (!fullscreenOverlay) return;
+  
+  document.removeEventListener('keydown', handleFullscreenKeys);
+  window.removeEventListener('popstate', handleFullscreenPopState);
+  window.removeEventListener('resize', handleFSResize);
+  document.removeEventListener('mousemove', handleFSMouseMove);
+  document.removeEventListener('mouseup', handleFSMouseUp);
   
   fullscreenOverlay.classList.remove('show');
   
   setTimeout(() => {
-    if (fullscreenOverlay && fullscreenOverlay.parentNode) {
+    if (fullscreenOverlay?.parentNode) {
       fullscreenOverlay.parentNode.removeChild(fullscreenOverlay);
     }
     fullscreenOverlay = null;
     fullscreenCanvas = null;
+    fullscreenCtx = null;
     fullscreenRotation = 0;
   }, 300);
   
-  document.removeEventListener('keydown', handleFullscreenKeys);
   document.body.style.overflow = '';
 }
 
+function handleFullscreenPopState() {
+  if (fullscreenOverlay) closeFullscreenPreview();
+}
+
 function handleFullscreenKeys(e) {
-  if (e.key === 'Escape') {
-    closeFullscreenPreview();
-  } else if (e.key === 'r' || e.key === 'R') {
-    rotateFullscreen();
+  if (!fullscreenOverlay) return;
+  
+  switch(e.key) {
+    case 'Escape': e.preventDefault(); history.back(); break;
+    case 'r': case 'R': e.preventDefault(); rotateFullscreen(); break;
+    case '+': case '=': e.preventDefault(); zoomFullscreen(1.25, null, null); break;
+    case '-': case '_': e.preventDefault(); zoomFullscreen(0.8, null, null); break;
+    case '0': e.preventDefault(); resetFullscreenView(); break;
   }
 }
 
-function rotateFullscreen() {
-  fullscreenRotation = (fullscreenRotation + 90) % 360;
-  renderFullscreenCanvas();
+// ========== FULLSCREEN PREVIEW - FIXED TO MATCH CANVAS ==========
+
+async function renderFullscreenCanvas() {
+  if (!fullscreenCanvas) return;
   
-  // آپدیت info
+  const originalW = state.canvasWidth;
+  const originalH = state.canvasHeight;
+  
+  // ========== محاسبه ابعاد نمایش ==========
+  const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
+  const sourceW = isRotated ? originalH : originalW;
+  const sourceH = isRotated ? originalW : originalH;
+  
+  const vpW = window.innerWidth;
+  const vpH = window.innerHeight;
+  const scaleX = vpW / sourceW;
+  const scaleY = vpH / sourceH;
+  const fitScale = Math.min(scaleX, scaleY, 1); // حداکثر 100%
+  
+  const dispW = sourceW * fitScale;
+  const dispH = sourceH * fitScale;
+  
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  
+  // ========== تنظیم سایز canvas نمایش ==========
+  fullscreenCanvas.width = dispW * dpr;
+  fullscreenCanvas.height = dispH * dpr;
+  fullscreenCanvas.style.width = dispW + 'px';
+  fullscreenCanvas.style.height = dispH + 'px';
+  
+  // ========== رندر در ابعاد اصلی (بدون چرخش) ==========
+  const workCanvas = document.createElement('canvas');
+  workCanvas.width = originalW;
+  workCanvas.height = originalH;
+  const workCtx = workCanvas.getContext('2d');
+  
+  // ✅ استفاده از همان منطق draw()
+  await renderSceneToContext(workCtx, originalW, originalH);
+  
+  // ========== انتقال به canvas نمایش با چرخش ==========
+  const ctx = fullscreenCanvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, fullscreenCanvas.width, fullscreenCanvas.height);
+  
+  ctx.save();
+  
+  // چرخش و مقیاس
+  if (fullscreenRotation === 0) {
+    ctx.scale(dispW / originalW * dpr, dispH / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  } 
+  else if (fullscreenRotation === 90) {
+    ctx.translate(dispW * dpr, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.scale(dispH / originalW * dpr, dispW / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  } 
+  else if (fullscreenRotation === 180) {
+    ctx.translate(dispW * dpr, dispH * dpr);
+    ctx.rotate(Math.PI);
+    ctx.scale(dispW / originalW * dpr, dispH / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  } 
+  else if (fullscreenRotation === 270) {
+    ctx.translate(0, dispH * dpr);
+    ctx.rotate(-Math.PI / 2);
+    ctx.scale(dispH / originalW * dpr, dispW / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  }
+  
+  ctx.restore();
+}
+
+// ========== تابع اصلی رندر - مشترک بین canvas و fullscreen ==========
+async function renderSceneToContext(targetCtx, width, height) {
+  // ذخیره W و H اصلی
+  const savedW = W;
+  const savedH = H;
+  
+  // تنظیم موقت برای رندر
+  W = width;
+  H = height;
+  
+  targetCtx.clearRect(0, 0, width, height);
+  
+  const visibleStops = state.stops.filter(s => s.visible);
+  const needsFilter = hasActiveFilters();
+  
+  let renderCtx = targetCtx;
+  let tempCanvas = null;
+  
+  // اگر فیلتر داریم، روی canvas موقت رندر کن
+  if (needsFilter) {
+    tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    renderCtx = tempCanvas.getContext('2d');
+  }
+  
+  // ========== 1. پس‌زمینه ==========
+  if (state.bgEnabled) {
+    renderCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    renderCtx.fillRect(0, 0, width, height);
+  }
+  
+  // ========== 2. خط قفل عمودی ==========
+  if (state.lockVertical) {
+    const scale = Math.max(width, height) / 800;
+    renderCtx.strokeStyle = "rgba(255,255,255,0.5)";
+    renderCtx.lineWidth = 2 * scale;
+    renderCtx.setLineDash([10 * scale, 5 * scale]);
+    renderCtx.beginPath();
+    renderCtx.moveTo(0, height / 2);
+    renderCtx.lineTo(width, height / 2);
+    renderCtx.stroke();
+    renderCtx.setLineDash([]);
+  }
+  
+  // ========== 3. گرادینت‌ها (ترتیب معکوس) ==========
+  if (visibleStops.length > 0) {
+    const reversedStops = [...visibleStops].reverse();
+    
+    reversedStops.forEach(s => {
+      renderCtx.globalCompositeOperation = s.blendMode || 'screen';
+      drawGradToCtxGeneric(s, renderCtx, width, height);
+    });
+    
+    renderCtx.globalCompositeOperation = 'source-over';
+  }
+  
+  // ========== 4. فیلترها ==========
+  if (needsFilter && tempCanvas) {
+    // Blur
+    if (filterState.blur > 0) {
+      const blurCanvas = document.createElement('canvas');
+      blurCanvas.width = width;
+      blurCanvas.height = height;
+      const blurCtx = blurCanvas.getContext('2d');
+      blurCtx.filter = `blur(${filterState.blur}px)`;
+      blurCtx.drawImage(tempCanvas, 0, 0);
+      tempCanvas = blurCanvas;
+      renderCtx = blurCanvas.getContext('2d');
+    }
+    
+    // سایر فیلترها
+    if (hasNonBlurFilters()) {
+      const imageData = renderCtx.getImageData(0, 0, width, height);
+      applyFiltersToImageData(imageData);
+      renderCtx.putImageData(imageData, 0, 0);
+    }
+    
+    // کپی به context اصلی
+    targetCtx.drawImage(tempCanvas, 0, 0);
+  }
+  
+  // ========== 5. نویز ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    let noiseCanvas = noiseState.canvas;
+    
+    // اگر سایز متفاوته، نویز جدید بساز
+    if (!noiseCanvas || noiseState.lastW !== width || noiseState.lastH !== height) {
+      noiseCanvas = await generateSVGNoise(width, height, noiseState.frequency);
+    }
+    
+    if (noiseCanvas) {
+      targetCtx.globalCompositeOperation = noiseState.blend;
+      targetCtx.globalAlpha = noiseState.opacity / 100;
+      targetCtx.drawImage(noiseCanvas, 0, 0, width, height);
+      targetCtx.globalAlpha = 1;
+      targetCtx.globalCompositeOperation = 'source-over';
+    }
+  }
+  
+  // برگرداندن W و H
+  W = savedW;
+  H = savedH;
+}
+
+// ========== رسم گرادینت روی هر context با ابعاد دلخواه ==========
+function drawGradToCtxGeneric(s, ctx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    // مقیاس‌بندی سایز بر اساس نسبت ابعاد
+    const sizeScale = Math.max(width, height) / Math.max(W || 800, H || 600);
+    const scaledSize = s.size * sizeScale;
+    
+    const solidEnd = 1 - s.feather / 100;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === "linear") {
+    const angleRad = ((s.angle - 90) * Math.PI) / 180;
+    const diagonal = Math.hypot(width, height);
+    const mx = width / 2;
+    const my = height / 2;
+    const dx = (Math.cos(angleRad) * diagonal) / 2;
+    const dy = (Math.sin(angleRad) * diagonal) / 2;
+    
+    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(startAngle, cx, cy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
+// ========== DRAW GRADIENT FOR FULLSCREEN ==========
+function drawGradientForFullscreen(s, ctx, W, H, sizeScale) {
+  const cx = s.x * W;
+  const cy = s.y * H;
+  
+  if (s.type === 'radial') {
+    const scaledSize = s.size * sizeScale;
+    const solidEnd = 1 - (s.feather || 60) / 100;
+    
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+    const color = rgba(s.color, s.opacity / 100);
+    
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === 'linear') {
+    const angleRad = ((s.angle - 90) * Math.PI) / 180;
+    const diagonal = Math.hypot(W, H);
+    const midX = W / 2;
+    const midY = H / 2;
+    const dx = (Math.cos(angleRad) * diagonal) / 2;
+    const dy = (Math.sin(angleRad) * diagonal) / 2;
+    
+    const grad = ctx.createLinearGradient(midX - dx, midY - dy, midX + dx, midY + dy);
+    
+    const stops = s.stops || [];
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  } 
+  else if (s.type === 'conic') {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(startAngle, cx, cy);
+    
+    const stops = s.stops || [];
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ========== RENDER GRADIENT - FIXED ==========
+function renderGradientFS(s, ctx, W, H, sizeScale) {
+  const cx = s.x * W;
+  const cy = s.y * H;
+  
+  ctx.save();
+  
+  if (s.type === 'radial') {
+    const scaledSize = s.size * sizeScale;
+    const solidEnd = 1 - (s.feather || 60) / 100;
+    
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+    const col = rgbaColor(s.color, s.opacity / 100);
+    
+    grad.addColorStop(0, col);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, col);
+    }
+    grad.addColorStop(1, rgbaColor(s.color, 0));
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === 'linear') {
+    const angle = ((s.angle || 0) - 90) * Math.PI / 180;
+    const diagonal = Math.hypot(W, H);
+    const midX = W / 2;
+    const midY = H / 2;
+    const dx = Math.cos(angle) * diagonal / 2;
+    const dy = Math.sin(angle) * diagonal / 2;
+    
+    const grad = ctx.createLinearGradient(midX - dx, midY - dy, midX + dx, midY + dy);
+    
+    const stops = s.stops || [
+      { pos: 0, color: '#ff0000', opacity: 100 },
+      { pos: 100, color: '#0000ff', opacity: 100 }
+    ];
+    
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgbaColor(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  } 
+  else if (s.type === 'conic') {
+    const startAngle = ((s.startAngle || 0) - 90) * Math.PI / 180;
+    
+    const grad = ctx.createConicGradient(startAngle, cx, cy);
+    
+    const stops = s.stops || [
+      { pos: 0, color: '#ff0000', opacity: 100 },
+      { pos: 100, color: '#0000ff', opacity: 100 }
+    ];
+    
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgbaColor(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+  
+  ctx.restore();
+}
+
+// ========== RGBA HELPER - LOCAL ==========
+function rgbaColor(hex, alpha) {
+  // اگر تابع rgba وجود داره ازش استفاده کن
+  if (typeof rgba === 'function') {
+    return rgba(hex, alpha);
+  }
+  
+  // fallback
+  hex = hex || '#000000';
+  hex = hex.replace('#', '');
+  
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+  
+  const r = parseInt(hex.substring(0, 2), 16) || 0;
+  const g = parseInt(hex.substring(2, 4), 16) || 0;
+  const b = parseInt(hex.substring(4, 6), 16) || 0;
+  
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// ========== ZOOM FUNCTIONS ==========
+function zoomFullscreen(factor, clientX, clientY) {
+  const container = document.getElementById('fsContainer');
+  if (!container || !fullscreenCanvas) return;
+  
+  const containerRect = container.getBoundingClientRect();
+  const canvasRect = fullscreenCanvas.getBoundingClientRect();
+  
+  const oldScale = fullscreenZoom.scale;
+  const newScale = Math.max(
+    fullscreenZoom.minScale,
+    Math.min(fullscreenZoom.maxScale, oldScale * factor)
+  );
+  
+  if (Math.abs(newScale - oldScale) < 0.001) return;
+  
+  // مرکز پیش‌فرض
+  if (clientX === null || clientY === null) {
+    clientX = containerRect.left + containerRect.width / 2;
+    clientY = containerRect.top + containerRect.height / 2;
+  }
+  
+  // مرکز canvas
+  const canvasCenterX = canvasRect.left + canvasRect.width / 2;
+  const canvasCenterY = canvasRect.top + canvasRect.height / 2;
+  
+  const scaleRatio = newScale / oldScale;
+  
+  fullscreenZoom.translateX = clientX - canvasCenterX - (clientX - canvasCenterX - fullscreenZoom.translateX) * scaleRatio;
+  fullscreenZoom.translateY = clientY - canvasCenterY - (clientY - canvasCenterY - fullscreenZoom.translateY) * scaleRatio;
+  fullscreenZoom.scale = newScale;
+  
+  applyFullscreenTransform();
+  updateFullscreenZoomUI();
+  setTimeout(() => constrainFullscreenPan(), 10);
+}
+
+function resetFullscreenView() {
+  fullscreenZoom.scale = 1;
+  fullscreenZoom.translateX = 0;
+  fullscreenZoom.translateY = 0;
+  
+  applyFullscreenTransform(true);
+  updateFullscreenZoomUI();
+  updateFullscreenCursor();
+}
+
+function applyFullscreenTransform(animate = false) {
+  if (!fullscreenCanvas) return;
+  
+  fullscreenCanvas.style.transition = animate ? 'transform 0.3s ease-out' : 'none';
+  fullscreenCanvas.style.transform = `translate(${fullscreenZoom.translateX}px, ${fullscreenZoom.translateY}px) scale(${fullscreenZoom.scale})`;
+  
+  if (animate) {
+    setTimeout(() => {
+      if (fullscreenCanvas) fullscreenCanvas.style.transition = 'none';
+    }, 300);
+  }
+}
+
+function constrainFullscreenPan() {
+  if (!fullscreenCanvas) return;
+  
+  const container = document.getElementById('fsContainer');
+  if (!container) return;
+  
+  const containerRect = container.getBoundingClientRect();
+  const canvasW = parseFloat(fullscreenCanvas.style.width) || 100;
+  const canvasH = parseFloat(fullscreenCanvas.style.height) || 100;
+  
+  const scaledW = canvasW * fullscreenZoom.scale;
+  const scaledH = canvasH * fullscreenZoom.scale;
+  
+  const maxX = Math.max(0, (scaledW - containerRect.width) / 2);
+  const maxY = Math.max(0, (scaledH - containerRect.height) / 2);
+  
+  let changed = false;
+  
+  if (scaledW <= containerRect.width) {
+    if (fullscreenZoom.translateX !== 0) { fullscreenZoom.translateX = 0; changed = true; }
+  } else {
+    const clamped = Math.max(-maxX, Math.min(maxX, fullscreenZoom.translateX));
+    if (clamped !== fullscreenZoom.translateX) { fullscreenZoom.translateX = clamped; changed = true; }
+  }
+  
+  if (scaledH <= containerRect.height) {
+    if (fullscreenZoom.translateY !== 0) { fullscreenZoom.translateY = 0; changed = true; }
+  } else {
+    const clamped = Math.max(-maxY, Math.min(maxY, fullscreenZoom.translateY));
+    if (clamped !== fullscreenZoom.translateY) { fullscreenZoom.translateY = clamped; changed = true; }
+  }
+  
+  if (changed) applyFullscreenTransform(true);
+  updateFullscreenCursor();
+}
+
+function updateFullscreenZoomUI() {
+  const el = document.getElementById('fsZoomValue');
+  if (el) el.textContent = Math.round(fullscreenZoom.scale * 100) + '%';
+  
+  const zoomOut = document.getElementById('fsZoomOut');
+  const zoomIn = document.getElementById('fsZoomIn');
+  if (zoomOut) zoomOut.disabled = fullscreenZoom.scale <= fullscreenZoom.minScale;
+  if (zoomIn) zoomIn.disabled = fullscreenZoom.scale >= fullscreenZoom.maxScale;
+}
+
+function updateFullscreenCursor() {
+  const container = document.getElementById('fsContainer');
+  if (!container) return;
+  
+  if (fullscreenZoom.isPanning) {
+    container.style.cursor = 'grabbing';
+  } else if (fullscreenZoom.scale > 1.01) {
+    container.style.cursor = 'grab';
+  } else {
+    container.style.cursor = 'default';
+  }
+}
+
+// ========== TOUCH ==========
+function handleFSTouchStart(e) {
+  const container = document.getElementById('fsContainer');
+  if (!container) return;
+  
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    fullscreenZoom.isPinching = true;
+    fullscreenZoom.isPanning = false;
+    fullscreenZoom.startDist = getPinchDistance(e.touches);
+    fullscreenZoom.startScale = fullscreenZoom.scale;
+    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+    
+    const center = getPinchCenter(e.touches);
+    fullscreenZoom.pinchCenterX = center.x;
+    fullscreenZoom.pinchCenterY = center.y;
+    
+  } else if (e.touches.length === 1) {
+    const touch = e.touches[0];
+    const now = Date.now();
+    
+    const dx = touch.clientX - fullscreenZoom.lastTapX;
+    const dy = touch.clientY - fullscreenZoom.lastTapY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (now - fullscreenZoom.lastTap < 300 && dist < 50) {
+      e.preventDefault();
+      handleFSDoubleTap(touch.clientX, touch.clientY);
+      fullscreenZoom.lastTap = 0;
+      return;
+    }
+    
+    fullscreenZoom.lastTap = now;
+    fullscreenZoom.lastTapX = touch.clientX;
+    fullscreenZoom.lastTapY = touch.clientY;
+    
+    e.preventDefault();
+    fullscreenZoom.isPanning = true;
+    fullscreenZoom.startX = touch.clientX;
+    fullscreenZoom.startY = touch.clientY;
+    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+    updateFullscreenCursor();
+  }
+}
+
+function handleFSTouchMove(e) {
+  if (fullscreenZoom.isPinching && e.touches.length === 2) {
+    e.preventDefault();
+    
+    const container = document.getElementById('fsContainer');
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    
+    const dist = getPinchDistance(e.touches);
+    const scaleFactor = dist / fullscreenZoom.startDist;
+    const newScale = Math.max(
+      fullscreenZoom.minScale,
+      Math.min(fullscreenZoom.maxScale, fullscreenZoom.startScale * scaleFactor)
+    );
+    
+    const center = getPinchCenter(e.touches);
+    const canvasCenterX = containerRect.left + containerRect.width / 2;
+    const canvasCenterY = containerRect.top + containerRect.height / 2;
+    
+    const panX = center.x - fullscreenZoom.pinchCenterX;
+    const panY = center.y - fullscreenZoom.pinchCenterY;
+    const scaleRatio = newScale / fullscreenZoom.startScale;
+    const pivotX = fullscreenZoom.pinchCenterX - canvasCenterX;
+    const pivotY = fullscreenZoom.pinchCenterY - canvasCenterY;
+    
+    fullscreenZoom.translateX = fullscreenZoom.startTranslateX - pivotX * (scaleRatio - 1) + panX;
+    fullscreenZoom.translateY = fullscreenZoom.startTranslateY - pivotY * (scaleRatio - 1) + panY;
+    fullscreenZoom.scale = newScale;
+    
+    applyFullscreenTransform();
+    updateFullscreenZoomUI();
+    
+  } else if (fullscreenZoom.isPanning && e.touches.length === 1) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    fullscreenZoom.translateX = fullscreenZoom.startTranslateX + (touch.clientX - fullscreenZoom.startX);
+    fullscreenZoom.translateY = fullscreenZoom.startTranslateY + (touch.clientY - fullscreenZoom.startY);
+    applyFullscreenTransform();
+  }
+}
+
+function handleFSTouchEnd(e) {
+  if (e.touches.length === 0) {
+    if (fullscreenZoom.isPinching || fullscreenZoom.isPanning) {
+      fullscreenZoom.isPinching = false;
+      fullscreenZoom.isPanning = false;
+      constrainFullscreenPan();
+    }
+  } else if (e.touches.length === 1 && fullscreenZoom.isPinching) {
+    fullscreenZoom.isPinching = false;
+    fullscreenZoom.isPanning = true;
+    const touch = e.touches[0];
+    fullscreenZoom.startX = touch.clientX;
+    fullscreenZoom.startY = touch.clientY;
+    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+  }
+  updateFullscreenCursor();
+}
+
+function handleFSDoubleTap(clientX, clientY) {
+  if (fullscreenZoom.scale > 1.1) {
+    resetFullscreenView();
+  } else {
+    zoomFullscreen(3, clientX, clientY);
+  }
+}
+
+// ========== MOUSE ==========
+function handleFSWheel(e) {
+  e.preventDefault();
+  zoomFullscreen(e.deltaY > 0 ? 0.85 : 1.18, e.clientX, e.clientY);
+}
+
+function handleFSMouseDown(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  fullscreenZoom.isPanning = true;
+  fullscreenZoom.startX = e.clientX;
+  fullscreenZoom.startY = e.clientY;
+  fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+  fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+  updateFullscreenCursor();
+}
+
+function handleFSMouseMove(e) {
+  if (!fullscreenZoom.isPanning) return;
+  fullscreenZoom.translateX = fullscreenZoom.startTranslateX + (e.clientX - fullscreenZoom.startX);
+  fullscreenZoom.translateY = fullscreenZoom.startTranslateY + (e.clientY - fullscreenZoom.startY);
+  applyFullscreenTransform();
+}
+
+function handleFSMouseUp() {
+  if (!fullscreenZoom.isPanning) return;
+  fullscreenZoom.isPanning = false;
+  constrainFullscreenPan();
+}
+
+function handleFSDoubleClick(e) {
+  e.preventDefault();
+  if (fullscreenZoom.scale > 1.1) {
+    resetFullscreenView();
+  } else {
+    zoomFullscreen(3, e.clientX, e.clientY);
+  }
+}
+
+// ========== RESIZE ==========
+async function handleFSResize() {
+  if (!fullscreenCanvas) return;
+  await renderFullscreenCanvas();
+  resetFullscreenView();
+}
+
+// ========== ROTATE ==========
+async function rotateFullscreen() {
+  fullscreenRotation = (fullscreenRotation + 90) % 360;
+  
+  fullscreenZoom.scale = 1;
+  fullscreenZoom.translateX = 0;
+  fullscreenZoom.translateY = 0;
+  
+  await renderFullscreenCanvas();
+  applyFullscreenTransform();
+  updateFullscreenZoomUI();
+  updateFullscreenCursor();
+  
   const info = document.getElementById('fullscreenInfo');
   if (info) {
     const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
     const w = isRotated ? state.canvasHeight : state.canvasWidth;
     const h = isRotated ? state.canvasWidth : state.canvasHeight;
-    info.textContent = `${Math.floor(w)} × ${Math.floor(h)}`;
+    info.textContent = `${Math.round(w)} × ${Math.round(h)}`;
   }
 }
 
-async function renderFullscreenCanvas() {
-  if (!fullscreenCanvas) return;
-  
-  const ctx = fullscreenCanvas.getContext('2d');
-  const originalWidth = state.canvasWidth;
-  const originalHeight = state.canvasHeight;
-  
-  const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
-  const sourceWidth = isRotated ? originalHeight : originalWidth;
-  const sourceHeight = isRotated ? originalWidth : originalHeight;
-  const aspectRatio = sourceWidth / sourceHeight;
-  
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const viewportRatio = viewportWidth / viewportHeight;
-  
-  let displayWidth, displayHeight;
-  
-  if (aspectRatio > viewportRatio) {
-    displayWidth = viewportWidth;
-    displayHeight = viewportWidth / aspectRatio;
-  } else {
-    displayHeight = viewportHeight;
-    displayWidth = viewportHeight * aspectRatio;
-  }
-  
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  
-  fullscreenCanvas.width = displayWidth * dpr;
-  fullscreenCanvas.height = displayHeight * dpr;
-  fullscreenCanvas.style.width = displayWidth + 'px';
-  fullscreenCanvas.style.height = displayHeight + 'px';
-  
-  ctx.scale(dpr, dpr);
-  
-  ctx.save();
-  
-  if (fullscreenRotation === 90) {
-    ctx.translate(displayWidth, 0);
-    ctx.rotate(Math.PI / 2);
-  } else if (fullscreenRotation === 180) {
-    ctx.translate(displayWidth, displayHeight);
-    ctx.rotate(Math.PI);
-  } else if (fullscreenRotation === 270) {
-    ctx.translate(0, displayHeight);
-    ctx.rotate(-Math.PI / 2);
-  }
-  
-  const W = isRotated ? displayHeight : displayWidth;
-  const H = isRotated ? displayWidth : displayHeight;
-  const sizeScale = Math.max(W / originalWidth, H / originalHeight);
-  
-  const visibleStops = state.stops.filter(s => s.visible);
-  
-  // 1. پس‌زمینه
-  if (state.bgEnabled) {
-    ctx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-    ctx.fillRect(0, 0, W, H);
-  }
-  
-  // 2. گرادینت‌ها
-  if (visibleStops.length > 0) {
-    
-    // ✅ اگر bgBlendMode غیر از normal است
-    if (state.bgBlendMode !== 'normal' && state.bgEnabled) {
-      
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = W * dpr;
-      tempCanvas.height = H * dpr;
-      const tempCtx = tempCanvas.getContext('2d');
-      tempCtx.scale(dpr, dpr);
-      
-      visibleStops.forEach(s => {
-        tempCtx.globalCompositeOperation = s.blendMode || 'screen';
-        
-        const cx = s.x * W;
-        const cy = s.y * H;
-        
-        if (s.type === 'radial') {
-          const scaledSize = s.size * sizeScale;
-          const solidEnd = 1 - s.feather / 100;
-          const grad = tempCtx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
-          const col = rgba(s.color, s.opacity / 100);
-          
-          grad.addColorStop(0, col);
-          if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
-          grad.addColorStop(1, rgba(s.color, 0));
-          
-          tempCtx.fillStyle = grad;
-          tempCtx.beginPath();
-          tempCtx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
-          tempCtx.fill();
-        } 
-        else if (s.type === 'linear') {
-          const a = ((s.angle - 90) * Math.PI) / 180;
-          const d = Math.hypot(W, H);
-          const mx = W / 2, my = H / 2;
-          const dx = (Math.cos(a) * d) / 2;
-          const dy = (Math.sin(a) * d) / 2;
-          
-          const grad = tempCtx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-          });
-          
-          tempCtx.fillStyle = grad;
-          tempCtx.fillRect(0, 0, W, H);
-        } 
-        else if (s.type === 'conic') {
-          const start = ((s.startAngle - 90) * Math.PI) / 180;
-          const grad = tempCtx.createConicGradient(start, cx, cy);
-          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-          });
-          
-          tempCtx.fillStyle = grad;
-          tempCtx.fillRect(0, 0, W, H);
-        }
-      });
-      
-      ctx.globalCompositeOperation = state.bgBlendMode;
-      ctx.drawImage(tempCanvas, 0, 0, W, H);
-      ctx.globalCompositeOperation = 'source-over';
-      
-    } else {
-      // روش عادی
-      visibleStops.forEach(s => {
-        ctx.globalCompositeOperation = s.blendMode || 'screen';
-        
-        const cx = s.x * W;
-        const cy = s.y * H;
-        
-        if (s.type === 'radial') {
-          const scaledSize = s.size * sizeScale;
-          const solidEnd = 1 - s.feather / 100;
-          const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
-          const col = rgba(s.color, s.opacity / 100);
-          
-          grad.addColorStop(0, col);
-          if (solidEnd > 0 && solidEnd < 1) grad.addColorStop(solidEnd, col);
-          grad.addColorStop(1, rgba(s.color, 0));
-          
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
-          ctx.fill();
-        } 
-        else if (s.type === 'linear') {
-          const a = ((s.angle - 90) * Math.PI) / 180;
-          const d = Math.hypot(W, H);
-          const mx = W / 2, my = H / 2;
-          const dx = (Math.cos(a) * d) / 2;
-          const dy = (Math.sin(a) * d) / 2;
-          
-          const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-          });
-          
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, W, H);
-        } 
-        else if (s.type === 'conic') {
-          const start = ((s.startAngle - 90) * Math.PI) / 180;
-          const grad = ctx.createConicGradient(start, cx, cy);
-          [...s.stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-            grad.addColorStop(cs.pos / 100, rgba(cs.color, cs.opacity / 100));
-          });
-          
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, W, H);
-        }
-      });
-      
-      ctx.globalCompositeOperation = 'source-over';
-    }
-  }
-  
-  ctx.restore();
-  
-  // 3. فیلترها
-  if (hasActiveFilters()) {
-    if (filterState.blur > 0) {
-      applyBlur(ctx, displayWidth, displayHeight, filterState.blur * sizeScale);
-    }
-    if (hasNonBlurFilters()) {
-      const imageData = ctx.getImageData(0, 0, fullscreenCanvas.width, fullscreenCanvas.height);
-      applyFiltersToImageData(imageData);
-      ctx.putImageData(imageData, 0, 0);
-    }
-  }
-  
-  // 4. نویز
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    const noiseCanvas = await generateSVGNoise(displayWidth, displayHeight, noiseState.frequency);
-    if (noiseCanvas) {
-      ctx.globalCompositeOperation = noiseState.blend;
-      ctx.globalAlpha = noiseState.opacity / 100;
-      ctx.drawImage(noiseCanvas, 0, 0, displayWidth, displayHeight);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
-    }
-  }
+// ========== UTILS ==========
+function getPinchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
 }
 
-// Globals
+function getPinchCenter(touches) {
+  return {
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  };
+}
+
+// ========== GLOBALS ==========
 window.openFullscreenPreview = openFullscreenPreview;
 window.closeFullscreenPreview = closeFullscreenPreview;
 window.rotateFullscreen = rotateFullscreen;
@@ -6089,6 +6698,7 @@ window.setCustomAspectRatio = setCustomAspectRatio;
 window.toggleAspectLock = toggleAspectLock;
 window.swapDimensions = swapDimensions;
 window.setResolution = setResolution;
+window.getCanvasBlendMode = getCanvasBlendMode;
 
 // ========== EVENT BINDINGS ==========
 document.getElementById("bgBtn")?.addEventListener("click", () => {
