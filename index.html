@@ -131,7 +131,7 @@
       <img src="./icon/eye.svg" alt="toggle">
     </button>
   </div>
-  <div class="noise-controls">
+  <div class="section-content noise-controls">
     <div class="form-row">
       <label>Strength</label>
       <input type="number" id="noiseOpacity" class="num-input" min="0" max="100" value="0">
@@ -175,7 +175,7 @@
     </button>
   </div>
   
-  <div class="filter-controls">
+  <div class="section-content filter-controls">
     <!-- Brightness -->
     <div class="filter-row">
       <label>Brightness</label>
@@ -249,7 +249,7 @@
     </button>
   </div>
   
-  <div class="bg-controls">
+  <div class="section-content bg-controls">
     <!-- Color -->
     <div class="form-row">
       <label>Color</label>
@@ -282,7 +282,7 @@
     </div>
   </div>
 </div>
-    <div class="section">
+<div class="section">
       <div class="section-header">
         <div class="section-title">Layers</div>
         <div class="gradient-btn-bar">
@@ -292,13 +292,14 @@
         </div>
         <!-- <button id="btnReset" style="color:var(--danger)">Clear</button> -->
       </div>
-      <div id="list"></div>
-    </div>
-    <div class="section">
-      <div class="section-title" style="margin-bottom: 1rem;">Properties</div>
-      <div id="inspector"></div>
-    </div>
-<!-- Output Section با سه iframe جداگانه -->
+      <div class="section-content" id="list"></div>
+</div>
+<div class="section">
+  <div class="section-header">
+    <div class="section-title">Properties</div>
+  </div>
+<div class="section-content" id="inspector"></div>
+</div>
 <div class="section">
   <div class="section-header">
     <div class="section-title">Output</div>
@@ -322,8 +323,8 @@
       <span>Copy All</span>
     </button>
   </div>
-  
-  <!-- Gradient CSS -->
+  <div class="section-content">
+      <!-- Gradient CSS -->
   <div class="output-block">
     <div class="output-header">
       <span>Gradient</span>
@@ -353,8 +354,9 @@
     </div>
     <iframe id="cssSVG" class="css-output css-output-sm"></iframe>
   </div>
+  </div>
 </div>
-  </aside>
+</aside>
   </div>
 
   <div class="picker-overlay" id="pickerOverlay">

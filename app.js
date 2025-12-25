@@ -13,6 +13,103 @@ select.addEventListener('change', e => {
   applyTheme(e.target.value);
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.querySelector('.panel');
+  if (!container) return;
+
+  let draggingEl = null;
+
+  container.querySelectorAll('.section').forEach(section => {
+    const header = section.querySelector('.section-header');
+    if (!header) return;
+
+    // خود section درگ‌پذیره
+    section.draggable = true;
+
+    // ولی درگ فقط از هدر شروع میشه
+    header.addEventListener('mousedown', () => {
+      section.draggable = true;
+    });
+
+    section.addEventListener('dragstart', e => {
+      draggingEl = section;
+      section.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    section.addEventListener('dragend', () => {
+      section.classList.remove('dragging');
+      draggingEl = null;
+    });
+  });
+
+  container.addEventListener('dragover', e => {
+    e.preventDefault();
+    if (!draggingEl) return;
+
+    const afterEl = getDragAfterElement(container, e.clientY);
+    if (!afterEl) {
+      container.appendChild(draggingEl);
+    } else {
+      container.insertBefore(draggingEl, afterEl);
+    }
+  });
+
+  function getDragAfterElement(container, y) {
+    const els = [...container.querySelectorAll('.section:not(.dragging)')];
+    let closest = null;
+    let closestOffset = Number.NEGATIVE_INFINITY;
+
+    els.forEach(child => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closestOffset) {
+        closestOffset = offset;
+        closest = child;
+      }
+    });
+
+    return closest;
+  }
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.section').forEach(section => {
+    const title = section.querySelector('.section-title');
+    const content = section.querySelector('.section-content');
+
+    if (!title || !content) return;
+
+    let open = false;
+    content.style.height = '0px';
+
+    title.addEventListener('click', () => {
+      if (open) {
+        // بستن
+        const h = content.scrollHeight;
+        content.style.height = h + 'px';
+        requestAnimationFrame(() => {
+          content.style.height = '0px';
+        });
+      } else {
+        // باز کردن (با اندازه‌ی واقعی فعلی)
+        const h = content.scrollHeight;
+        content.style.height = h + 'px';
+      }
+      open = !open;
+    });
+
+    // بعد از باز شدن، height رو auto کن تا با تغییر محتوا سازگار باشه
+    content.addEventListener('transitionend', () => {
+      if (open) {
+        content.style.height = 'auto';
+      }
+    });
+  });
+});
+
+
 // ========== CONFIGURATION ==========
 const CONFIG = {
   canvas: {
@@ -2706,34 +2803,23 @@ function applyFiltersToImageData(imageData) {
     let b = data[i + 2];
     // alpha = data[i + 3] - don't touch
     
-    // ========== ترتیب اعمال فیلترها مثل CSS ==========
+    // ========== ترتیب صحیح - مطابق CSS ==========
     
-    // 1. Invert
-    if (invert > 0) {
-      r = r + (255 - 2 * r) * invert;
-      g = g + (255 - 2 * g) * invert;
-      b = b + (255 - 2 * b) * invert;
+    // 1. Brightness (اول)
+    if (brightness !== 1) {
+      r = r * brightness;
+      g = g * brightness;
+      b = b * brightness;
     }
     
-    // 2. Sepia
-    if (sepia > 0) {
-      const sr = Math.min(255, 0.393 * r + 0.769 * g + 0.189 * b);
-      const sg = Math.min(255, 0.349 * r + 0.686 * g + 0.168 * b);
-      const sb = Math.min(255, 0.272 * r + 0.534 * g + 0.131 * b);
-      r = r + (sr - r) * sepia;
-      g = g + (sg - g) * sepia;
-      b = b + (sb - b) * sepia;
+    // 2. Contrast
+    if (contrast !== 1) {
+      r = (r - 128) * contrast + 128;
+      g = (g - 128) * contrast + 128;
+      b = (b - 128) * contrast + 128;
     }
     
-    // 3. Grayscale
-    if (grayscale > 0) {
-      const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      r = r + (gray - r) * grayscale;
-      g = g + (gray - g) * grayscale;
-      b = b + (gray - b) * grayscale;
-    }
-    
-    // 4. Saturate
+    // 3. Saturate
     if (saturate !== 1) {
       const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       r = gray + (r - gray) * saturate;
@@ -2741,7 +2827,7 @@ function applyFiltersToImageData(imageData) {
       b = gray + (b - gray) * saturate;
     }
     
-    // 5. Hue Rotate
+    // 4. Hue Rotate
     if (hueMatrix) {
       const nr = r * hueMatrix[0] + g * hueMatrix[1] + b * hueMatrix[2];
       const ng = r * hueMatrix[3] + g * hueMatrix[4] + b * hueMatrix[5];
@@ -2751,18 +2837,29 @@ function applyFiltersToImageData(imageData) {
       b = nb;
     }
     
-    // 6. Brightness
-    if (brightness !== 1) {
-      r = r * brightness;
-      g = g * brightness;
-      b = b * brightness;
+    // 5. Grayscale
+    if (grayscale > 0) {
+      const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      r = r + (gray - r) * grayscale;
+      g = g + (gray - g) * grayscale;
+      b = b + (gray - b) * grayscale;
     }
     
-    // 7. Contrast
-    if (contrast !== 1) {
-      r = (r - 128) * contrast + 128;
-      g = (g - 128) * contrast + 128;
-      b = (b - 128) * contrast + 128;
+    // 6. Sepia
+    if (sepia > 0) {
+      const sr = 0.393 * r + 0.769 * g + 0.189 * b;
+      const sg = 0.349 * r + 0.686 * g + 0.168 * b;
+      const sb = 0.272 * r + 0.534 * g + 0.131 * b;
+      r = r + (sr - r) * sepia;
+      g = g + (sg - g) * sepia;
+      b = b + (sb - b) * sepia;
+    }
+    
+    // 7. Invert (آخر - مهم!)
+    if (invert > 0) {
+      r = r + (255 - 2 * r) * invert;
+      g = g + (255 - 2 * g) * invert;
+      b = b + (255 - 2 * b) * invert;
     }
     
     // Clamp to 0-255
@@ -2773,7 +2870,6 @@ function applyFiltersToImageData(imageData) {
   
   return imageData;
 }
-
 // ماتریس چرخش Hue
 function getHueRotationMatrix(degrees) {
   const rad = degrees * Math.PI / 180;
@@ -4814,6 +4910,7 @@ function drawGradForExport(s, ctx, width, height) {
   }
 }
 
+// ========== EXPORT AS SVG - FIXED ==========
 function exportAsSVG() {
   const width = state.canvasWidth;
   const height = state.canvasHeight;
@@ -4843,18 +4940,17 @@ function exportAsSVG() {
     content += `  <rect id="background" width="100%" height="100%" fill="rgb(${bg.r},${bg.g},${bg.b})" fill-opacity="${bgOpacity}"/>\n`;
   }
 
-  // ========== 4. Gradients Container ==========
-  // Filter attribute for all gradients
+  // ========== 4. Filter attribute ==========
   const filterAttr = hasActiveFilters() ? ' filter="url(#cssFilter)"' : '';
   
-  // If bgBlendMode is set, wrap gradients in a group with that blend
+  // ========== 5. Background Blend Mode wrapper ==========
   const hasBgBlend = state.bgEnabled && state.bgBlendMode && state.bgBlendMode !== 'normal';
   
   if (hasBgBlend) {
     content += `  <g style="mix-blend-mode: ${state.bgBlendMode}"${filterAttr}>\n`;
   }
 
-  // ========== 5. Each Gradient ==========
+  // ========== 6. Gradients ==========
   visibleStops.forEach((s, i) => {
     const id = `gradient${i}`;
     const blendMode = s.blendMode || 'screen';
@@ -4862,16 +4958,17 @@ function exportAsSVG() {
     const itemFilterAttr = hasBgBlend ? '' : filterAttr;
 
     if (s.type === "radial") {
+      const cx = (s.x * width).toFixed(2);
+      const cy = (s.y * height).toFixed(2);
       const rgb = hexToRgb(s.color);
-      const solidEnd = 1 - s.feather / 100;
       const opacity = (s.opacity / 100).toFixed(3);
+      const solidEnd = Math.max(0, Math.min(1, 1 - (s.feather || 60) / 100));
 
       defs += `
-    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" 
-                    cx="${(s.x * width).toFixed(2)}" cy="${(s.y * height).toFixed(2)}" r="${s.size}">
+    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${s.size}">
       <stop offset="0%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
       
-      if (solidEnd > 0 && solidEnd < 1) {
+      if (solidEnd > 0.01 && solidEnd < 0.99) {
         defs += `
       <stop offset="${(solidEnd * 100).toFixed(1)}%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
       }
@@ -4880,24 +4977,32 @@ function exportAsSVG() {
       <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
     </radialGradient>`;
 
-      content += `${indent}<circle cx="${(s.x * width).toFixed(2)}" cy="${(s.y * height).toFixed(2)}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode: ${blendMode}"${itemFilterAttr}/>\n`;
+      content += `${indent}<circle cx="${cx}" cy="${cy}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode: ${blendMode}"${itemFilterAttr}/>\n`;
     }
 
     else if (s.type === "linear") {
+      // ✅ محاسبه صحیح مختصات
       const angleRad = ((s.angle - 90) * Math.PI) / 180;
-      const x1 = (50 - Math.cos(angleRad) * 50).toFixed(2);
-      const y1 = (50 - Math.sin(angleRad) * 50).toFixed(2);
-      const x2 = (50 + Math.cos(angleRad) * 50).toFixed(2);
-      const y2 = (50 + Math.sin(angleRad) * 50).toFixed(2);
+      const cos = Math.cos(angleRad);
+      const sin = Math.sin(angleRad);
+      
+      // نقاط شروع و پایان بر اساس زاویه
+      const x1 = (50 - cos * 50).toFixed(2);
+      const y1 = (50 - sin * 50).toFixed(2);
+      const x2 = (50 + cos * 50).toFixed(2);
+      const y2 = (50 + sin * 50).toFixed(2);
 
       defs += `
     <linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">`;
       
-      [...s.stops].sort((a, b) => a.pos - b.pos).forEach((cs) => {
+      // ✅ استفاده از fixTransparentStops
+      const fixedStops = fixTransparentStops(s.stops);
+      fixedStops.forEach((cs) => {
         const c = hexToRgb(cs.color);
         const opacity = (cs.opacity / 100).toFixed(3);
+        const pos = Math.max(0, Math.min(100, cs.pos));
         defs += `
-      <stop offset="${cs.pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${opacity}"/>`;
+      <stop offset="${pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${opacity}"/>`;
       });
       
       defs += `
@@ -4907,12 +5012,12 @@ function exportAsSVG() {
     }
 
     else if (s.type === "conic") {
-      // Conic gradients need foreignObject as SVG doesn't support them natively
+      // ✅ Conic با foreignObject و fixTransparentStops
       const x = (s.x * 100).toFixed(2);
       const y = (s.y * 100).toFixed(2);
 
-      const stops = [...s.stops]
-        .sort((a, b) => a.pos - b.pos)
+      const fixedStops = fixTransparentStops(s.stops);
+      const stopsStr = fixedStops
         .map((cs) => {
           const c = hexToRgb(cs.color);
           const opacity = (cs.opacity / 100).toFixed(3);
@@ -4924,39 +5029,37 @@ function exportAsSVG() {
 ${indent}  <div xmlns="http://www.w3.org/1999/xhtml" style="
 ${indent}    width: 100%;
 ${indent}    height: 100%;
-${indent}    background: conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stops});
+${indent}    background: conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stopsStr});
 ${indent}    mix-blend-mode: ${blendMode};
 ${indent}  "></div>
 ${indent}</foreignObject>\n`;
     }
   });
 
-  // Close gradient group if using bgBlendMode
+  // Close gradient group
   if (hasBgBlend) {
     content += `  </g>\n`;
   }
 
-  // ========== 6. Noise Overlay ==========
+  // ========== 7. Noise Overlay ==========
   if (noiseState.enabled && noiseState.opacity > 0) {
     const noiseOpacity = (noiseState.opacity / 100).toFixed(3);
     content += `  <rect id="noise" width="100%" height="100%" fill="white" filter="url(#noiseFilter)" opacity="${noiseOpacity}" style="mix-blend-mode: ${noiseState.blend}"/>\n`;
   }
 
-  // ========== 7. Assemble SVG ==========
+  // ========== 8. Final SVG ==========
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" 
      xmlns:xhtml="http://www.w3.org/1999/xhtml"
      width="${width}" 
      height="${height}" 
      viewBox="0 0 ${width} ${height}">
-  
   <defs>${defs}
   </defs>
 
-${content}
-</svg>`;
+${content}</svg>`;
 
-  // ========== 8. Download ==========
+  // ========== 9. Download ==========
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const filename = `gradient-${width}x${height}.svg`;
@@ -4968,8 +5071,119 @@ ${content}
   a.click();
   document.body.removeChild(a);
   
-  // Cleanup
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ========== FIX: generateSVGFilterFromCSS ==========
+function generateSVGFilterFromCSS() {
+  if (!hasActiveFilters()) return '';
+  
+  let filterContent = '';
+  let lastResult = 'SourceGraphic';
+  let resultIndex = 0;
+  
+  // 1. Brightness
+  if (filterState.brightness !== 100) {
+    const brightness = filterState.brightness / 100;
+    filterContent += `
+      <feComponentTransfer in="${lastResult}" result="brightness${resultIndex}">
+        <feFuncR type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
+        <feFuncG type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
+        <feFuncB type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
+      </feComponentTransfer>`;
+    lastResult = `brightness${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 2. Contrast
+  if (filterState.contrast !== 100) {
+    const contrast = filterState.contrast / 100;
+    const intercept = (0.5 - 0.5 * contrast).toFixed(4);
+    filterContent += `
+      <feComponentTransfer in="${lastResult}" result="contrast${resultIndex}">
+        <feFuncR type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept}"/>
+        <feFuncG type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept}"/>
+        <feFuncB type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept}"/>
+      </feComponentTransfer>`;
+    lastResult = `contrast${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 3. Saturate
+  if (filterState.saturate !== 100) {
+    filterContent += `
+      <feColorMatrix type="saturate" values="${(filterState.saturate / 100).toFixed(3)}" in="${lastResult}" result="sat${resultIndex}"/>`;
+    lastResult = `sat${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 4. Hue-rotate
+  if (filterState.hue !== 0) {
+    filterContent += `
+      <feColorMatrix type="hueRotate" values="${filterState.hue}" in="${lastResult}" result="hue${resultIndex}"/>`;
+    lastResult = `hue${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 5. Grayscale
+  if (filterState.grayscale > 0) {
+    const g = 1 - filterState.grayscale / 100;
+    const matrix = [
+      (0.2126 + 0.7874 * g).toFixed(4), (0.7152 - 0.7152 * g).toFixed(4), (0.0722 - 0.0722 * g).toFixed(4), 0, 0,
+      (0.2126 - 0.2126 * g).toFixed(4), (0.7152 + 0.2848 * g).toFixed(4), (0.0722 - 0.0722 * g).toFixed(4), 0, 0,
+      (0.2126 - 0.2126 * g).toFixed(4), (0.7152 - 0.7152 * g).toFixed(4), (0.0722 + 0.9278 * g).toFixed(4), 0, 0,
+      0, 0, 0, 1, 0
+    ].join(' ');
+    
+    filterContent += `
+      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="gray${resultIndex}"/>`;
+    lastResult = `gray${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 6. Sepia
+  if (filterState.sepia > 0) {
+    const s = 1 - filterState.sepia / 100;
+    const matrix = [
+      (0.393 + 0.607 * s).toFixed(4), (0.769 - 0.769 * s).toFixed(4), (0.189 - 0.189 * s).toFixed(4), 0, 0,
+      (0.349 - 0.349 * s).toFixed(4), (0.686 + 0.314 * s).toFixed(4), (0.168 - 0.168 * s).toFixed(4), 0, 0,
+      (0.272 - 0.272 * s).toFixed(4), (0.534 - 0.534 * s).toFixed(4), (0.131 + 0.869 * s).toFixed(4), 0, 0,
+      0, 0, 0, 1, 0
+    ].join(' ');
+    
+    filterContent += `
+      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="sepia${resultIndex}"/>`;
+    lastResult = `sepia${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 7. Invert
+  if (filterState.invert > 0) {
+    const i = filterState.invert / 100;
+    filterContent += `
+      <feComponentTransfer in="${lastResult}" result="inv${resultIndex}">
+        <feFuncR type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
+        <feFuncG type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
+        <feFuncB type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
+      </feComponentTransfer>`;
+    lastResult = `inv${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 8. Blur
+  if (filterState.blur > 0) {
+    filterContent += `
+      <feGaussianBlur stdDeviation="${filterState.blur}" in="${lastResult}" result="blur${resultIndex}"/>`;
+    lastResult = `blur${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // Filter region extension for blur
+  const pad = filterState.blur > 0 ? Math.ceil(filterState.blur * 3 / 100 * 100) + 10 : 0;
+  
+  return `
+    <filter id="cssFilter" x="-${pad}%" y="-${pad}%" width="${100 + pad * 2}%" height="${100 + pad * 2}%">${filterContent}
+    </filter>`;
 }
 
 // ========== HELPER: Generate SVG Filter from CSS ==========
@@ -4980,24 +5194,36 @@ function generateSVGFilterFromCSS() {
   let lastResult = 'SourceGraphic';
   let resultIndex = 0;
   
-  // 1. Brightness & Contrast
-  if (filterState.brightness !== 100 || filterState.contrast !== 100) {
+  // ========== ترتیب صحیح - مطابق CSS ==========
+  
+  // 1. Brightness
+  if (filterState.brightness !== 100) {
     const brightness = filterState.brightness / 100;
-    const contrast = filterState.contrast / 100;
-    const slope = contrast * brightness;
-    const intercept = (-(0.5 * contrast) + 0.5) * brightness;
-    
     filterContent += `
-      <feComponentTransfer in="${lastResult}" result="bc${resultIndex}">
-        <feFuncR type="linear" slope="${slope.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
-        <feFuncG type="linear" slope="${slope.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
-        <feFuncB type="linear" slope="${slope.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
+      <feComponentTransfer in="${lastResult}" result="brightness${resultIndex}">
+        <feFuncR type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
+        <feFuncG type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
+        <feFuncB type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
       </feComponentTransfer>`;
-    lastResult = `bc${resultIndex}`;
+    lastResult = `brightness${resultIndex}`;
     resultIndex++;
   }
   
-  // 2. Saturate
+  // 2. Contrast
+  if (filterState.contrast !== 100) {
+    const contrast = filterState.contrast / 100;
+    const intercept = (-(0.5 * contrast) + 0.5);
+    filterContent += `
+      <feComponentTransfer in="${lastResult}" result="contrast${resultIndex}">
+        <feFuncR type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
+        <feFuncG type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
+        <feFuncB type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
+      </feComponentTransfer>`;
+    lastResult = `contrast${resultIndex}`;
+    resultIndex++;
+  }
+  
+  // 3. Saturate
   if (filterState.saturate !== 100) {
     filterContent += `
       <feColorMatrix type="saturate" values="${(filterState.saturate / 100).toFixed(3)}" in="${lastResult}" result="sat${resultIndex}"/>`;
@@ -5005,7 +5231,7 @@ function generateSVGFilterFromCSS() {
     resultIndex++;
   }
   
-  // 3. Hue-rotate
+  // 4. Hue-rotate
   if (filterState.hue !== 0) {
     filterContent += `
       <feColorMatrix type="hueRotate" values="${filterState.hue}" in="${lastResult}" result="hue${resultIndex}"/>`;
@@ -5013,10 +5239,9 @@ function generateSVGFilterFromCSS() {
     resultIndex++;
   }
   
-  // 4. Grayscale
+  // 5. Grayscale
   if (filterState.grayscale > 0) {
     const g = 1 - filterState.grayscale / 100;
-    // Standard grayscale matrix
     const matrix = [
       0.2126 + 0.7874 * g, 0.7152 - 0.7152 * g, 0.0722 - 0.0722 * g, 0, 0,
       0.2126 - 0.2126 * g, 0.7152 + 0.2848 * g, 0.0722 - 0.0722 * g, 0, 0,
@@ -5030,7 +5255,7 @@ function generateSVGFilterFromCSS() {
     resultIndex++;
   }
   
-  // 5. Sepia
+  // 6. Sepia
   if (filterState.sepia > 0) {
     const s = 1 - filterState.sepia / 100;
     const matrix = [
@@ -5046,20 +5271,20 @@ function generateSVGFilterFromCSS() {
     resultIndex++;
   }
   
-  // 6. Invert
+  // 7. Invert (قبل از blur)
   if (filterState.invert > 0) {
     const i = filterState.invert / 100;
     filterContent += `
       <feComponentTransfer in="${lastResult}" result="inv${resultIndex}">
-        <feFuncR type="table" tableValues="${i.toFixed(3)} ${(1-i).toFixed(3)}"/>
-        <feFuncG type="table" tableValues="${i.toFixed(3)} ${(1-i).toFixed(3)}"/>
-        <feFuncB type="table" tableValues="${i.toFixed(3)} ${(1-i).toFixed(3)}"/>
+        <feFuncR type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
+        <feFuncG type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
+        <feFuncB type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
       </feComponentTransfer>`;
     lastResult = `inv${resultIndex}`;
     resultIndex++;
   }
   
-  // 7. Blur (last because it's expensive)
+  // 8. Blur (آخر - چون سنگینه)
   if (filterState.blur > 0) {
     filterContent += `
       <feGaussianBlur stdDeviation="${filterState.blur}" in="${lastResult}" result="blur${resultIndex}"/>`;
@@ -5069,10 +5294,10 @@ function generateSVGFilterFromCSS() {
   
   // Extend filter region for blur
   const blurPadding = filterState.blur > 0 ? Math.ceil(filterState.blur * 3) : 0;
-  const pad = blurPadding > 0 ? `${blurPadding / 100 * 100 + 10}%` : '0%';
+  const padPercent = blurPadding > 0 ? (blurPadding / 100 * 100 + 10) : 0;
   
   return `
-    <filter id="cssFilter" x="-${pad}" y="-${pad}" width="${100 + parseFloat(pad) * 2}%" height="${100 + parseFloat(pad) * 2}%">${filterContent}
+    <filter id="cssFilter" x="-${padPercent}%" y="-${padPercent}%" width="${100 + padPercent * 2}%" height="${100 + padPercent * 2}%">${filterContent}
     </filter>`;
 }
 
@@ -6698,7 +6923,7 @@ window.setCustomAspectRatio = setCustomAspectRatio;
 window.toggleAspectLock = toggleAspectLock;
 window.swapDimensions = swapDimensions;
 window.setResolution = setResolution;
-window.getCanvasBlendMode = getCanvasBlendMode;
+
 
 // ========== EVENT BINDINGS ==========
 document.getElementById("bgBtn")?.addEventListener("click", () => {
