@@ -26,15 +26,18 @@ document.addEventListener('DOMContentLoaded', () => {
     clone: null,
     placeholder: null,
     startY: 0,
+    startX: 0,
     offsetY: 0,
     delayTimer: null,
     initialRect: null,
+    scrollCancelled: false, // 🆕 آیا اسکرول لغو شده
   };
 
   // ========== CONFIG ==========
   const DRAG_CONFIG = {
-    delay: 200,        // تأخیر برای شروع drag (موبایل)
-    threshold: 8,      // حداقل حرکت برای شروع drag
+    delay: 200,
+    threshold: 10,
+    scrollThreshold: 15, // 🆕 حداقل حرکت برای تشخیص اسکرول
   };
 
   // ========== INIT ==========
@@ -46,32 +49,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== MOUSE ==========
     header.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return; // فقط کلیک چپ
+      if (e.button !== 0) return;
+      if (e.target.closest('select, input, button, a, .control-btn')) return;
+
       e.preventDefault();
-      startPending(e, section, e.clientY);
+      startPending(e, section, e.clientX, e.clientY);
     });
 
     // ========== TOUCH ==========
     header.addEventListener('touchstart', (e) => {
       if (e.touches.length !== 1) return;
-      e.preventDefault();
-      startPending(e, section, e.touches[0].clientY);
-    }, { passive: false });
+      if (e.target.closest('select, input, button, a, .control-btn')) return;
+
+      // ❌ حذف e.preventDefault() - اجازه اسکرول اولیه
+      startPending(e, section, e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true }); // 🆕 passive: true
+
   });
 
   // ========== START PENDING ==========
-  function startPending(e, section, clientY) {
+  function startPending(e, section, clientX, clientY) {
     const rect = section.getBoundingClientRect();
 
     sectionDrag.pending = true;
     sectionDrag.element = section;
+    sectionDrag.startX = clientX;
     sectionDrag.startY = clientY;
     sectionDrag.offsetY = clientY - rect.top;
     sectionDrag.initialRect = rect;
+    sectionDrag.scrollCancelled = false;
 
-    // تایمر تأخیر
+    // تایمر تأخیر - فقط با نگه داشتن
     sectionDrag.delayTimer = setTimeout(() => {
-      if (sectionDrag.pending) {
+      if (sectionDrag.pending && !sectionDrag.scrollCancelled) {
         startActualDrag();
       }
     }, DRAG_CONFIG.delay);
@@ -79,23 +89,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listeners
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false }); // 🆕 passive: false برای کنترل
     document.addEventListener('touchend', onEnd);
     document.addEventListener('touchcancel', onEnd);
   }
 
   // ========== ON MOVE ==========
   function onMove(e) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
     // اگر هنوز در حالت pending هستیم
     if (sectionDrag.pending && !sectionDrag.active) {
+      const dx = Math.abs(clientX - sectionDrag.startX);
       const dy = Math.abs(clientY - sectionDrag.startY);
       
-      // اگر کافی حرکت کرد، drag را شروع کن
-      if (dy > DRAG_CONFIG.threshold) {
+      // 🆕 تشخیص اسکرول: اگر کاربر حرکت کرد قبل از تمام شدن delay
+      if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
+        // کاربر می‌خواهد اسکرول کند - لغو pending
         clearTimeout(sectionDrag.delayTimer);
-        startActualDrag();
+        sectionDrag.scrollCancelled = true;
+        sectionDrag.pending = false;
+        cleanup();
+        return; // 🆕 اجازه اسکرول طبیعی
       }
       return;
     }
@@ -103,13 +119,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // حرکت واقعی drag
     if (!sectionDrag.active || !sectionDrag.clone) return;
     
-    e.preventDefault();
+    e.preventDefault(); // 🆕 فقط وقتی drag فعال است
 
     // حرکت clone
     const newTop = clientY - sectionDrag.offsetY;
     sectionDrag.clone.style.top = newTop + 'px';
 
     // پیدا کردن موقعیت جدید
+    updatePlaceholderPosition(clientY);
+  }
+
+  // 🆕 تابع جداگانه برای بروزرسانی placeholder
+  function updatePlaceholderPosition(clientY) {
     const sections = [...container.querySelectorAll('.section:not(.drag-original)')];
     let targetSection = null;
     let insertBefore = true;
@@ -128,7 +149,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // جابجایی placeholder
     if (targetSection && sectionDrag.placeholder) {
       if (insertBefore) {
         if (sectionDrag.placeholder.nextElementSibling !== targetSection) {
@@ -191,16 +211,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // جایگزینی
     section.classList.add('drag-original');
-    section.style.opacity = '0';
-    section.style.height = '0';
-    section.style.margin = '0';
-    section.style.padding = '0';
-    section.style.overflow = 'hidden';
+    section.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
     
     section.parentNode.insertBefore(sectionDrag.placeholder, section);
 
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'grabbing';
+    
+    // 🆕 جلوگیری از اسکرول در حین drag
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
 
     // فیدبک هپتیک
     if (navigator.vibrate) {
@@ -219,12 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.removeEventListener('touchend', onEnd);
     document.removeEventListener('touchcancel', onEnd);
 
-    // اگر فقط pending بود (کلیک ساده)
-    if (sectionDrag.pending && !sectionDrag.active) {
-      cleanup();
-      return;
-    }
-
+    // اگر فقط pending بود یا اسکرول شد
     if (!sectionDrag.active) {
       cleanup();
       return;
@@ -240,9 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sectionDrag.clone.style.transform = 'scale(1)';
       sectionDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
 
-      setTimeout(() => {
-        finalizeDrag();
-      }, 250);
+      setTimeout(finalizeDrag, 250);
     } else {
       finalizeDrag();
     }
@@ -251,45 +264,45 @@ document.addEventListener('DOMContentLoaded', () => {
   // ========== FINALIZE DRAG ==========
   function finalizeDrag() {
     if (sectionDrag.element && sectionDrag.placeholder) {
-      // جابجایی واقعی element
       container.insertBefore(sectionDrag.element, sectionDrag.placeholder);
     }
-
     cleanup();
+    updateCSS();
   }
 
   // ========== CLEANUP ==========
   function cleanup() {
-    if (sectionDrag.clone && sectionDrag.clone.parentNode) {
-      sectionDrag.clone.parentNode.removeChild(sectionDrag.clone);
+    if (sectionDrag.clone?.parentNode) {
+      sectionDrag.clone.remove();
     }
 
-    if (sectionDrag.placeholder && sectionDrag.placeholder.parentNode) {
-      sectionDrag.placeholder.parentNode.removeChild(sectionDrag.placeholder);
+    if (sectionDrag.placeholder?.parentNode) {
+      sectionDrag.placeholder.remove();
     }
 
     if (sectionDrag.element) {
       sectionDrag.element.classList.remove('drag-original');
-      sectionDrag.element.style.opacity = '';
-      sectionDrag.element.style.height = '';
-      sectionDrag.element.style.margin = '';
-      sectionDrag.element.style.padding = '';
-      sectionDrag.element.style.overflow = '';
+      sectionDrag.element.style.cssText = '';
     }
 
-    sectionDrag.active = false;
-    sectionDrag.pending = false;
-    sectionDrag.element = null;
-    sectionDrag.clone = null;
-    sectionDrag.placeholder = null;
-    sectionDrag.delayTimer = null;
-    sectionDrag.initialRect = null;
-
+    // 🆕 بازگردانی اسکرول
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
+
+    Object.assign(sectionDrag, {
+      active: false,
+      pending: false,
+      element: null,
+      clone: null,
+      placeholder: null,
+      delayTimer: null,
+      initialRect: null,
+      scrollCancelled: false,
+    });
   }
 });
-
 
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.section').forEach(section => {
@@ -347,13 +360,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== Touch Events ==========
     header.addEventListener('touchstart', (e) => {
-      // جلوگیری از تداخل با دکمه‌ها
-      if (e.target.closest('button, input, select, a, .control-btn')) return;
-      
-      touchStartY = e.touches[0].clientY;
-      touchStartTime = Date.now();
-      isTouchMoved = false;
+      if (e.touches.length !== 1) return;
+      if (e.target.closest('select, input, button, a, .control-btn')) return;
+    
+      startPending(e, section, e.touches[0].clientY);
     }, { passive: true });
+    
 
     header.addEventListener('touchmove', (e) => {
       if (!touchStartTime) return;
@@ -1223,7 +1235,7 @@ const panState = {
   mode: false // true = pan mode فعال
 };
 
-// ========== PAN FUNCTIONS ==========
+
 // ========== PAN FUNCTIONS ==========
 function initPan() {
   const wrap = document.querySelector('.canvas-wrap');
@@ -1351,7 +1363,11 @@ function updatePanUI() {
   
   if (btn) {
     btn.classList.toggle('active', panState.mode);
+    btn.innerHTML = panState.mode
+      ? `<img src="./icon/pan.svg" alt="pan tool">`
+      : `<img src="./icon/hand.svg" alt="pan tool">`;
   }
+  
 }
 
 // Global
@@ -4009,268 +4025,346 @@ function updateAllStopItems() {
   state.stops.forEach(s => updateStopItem(s.id));
 }
 
-// ========== LAYER DRAG AND DROP ==========
-const layerDrag = {
-  active: false,
-  pending: false,        // ← در انتظار شروع
-  stopId: null,
-  element: null,
-  placeholder: null,
-  clone: null,
-  startX: 0,
-  startY: 0,
-  offsetY: 0,
-  listRect: null,
-  delayTimer: null       // ← تایمر تأخیر
-};
+// ========== LAYER DRAG & DROP - TOUCH + MOUSE ==========
+(function() {
+  // ========== STATE ==========
+  const layerDrag = {
+    active: false,
+    pending: false,
+    stopId: null,
+    element: null,
+    clone: null,
+    placeholder: null,
+    startX: 0,
+    startY: 0,
+    offsetY: 0,
+    delayTimer: null,
+    initialRect: null,
+    scrollCancelled: false,
+  };
 
-// ⚙️ تنظیمات
-const DRAG_CONFIG = {
-  delay: 150,            // میلی‌ثانیه تأخیر
-  threshold: 5           // پیکسل حداقل حرکت
-};
+  // ========== CONFIG ==========
+  const DRAG_CONFIG = {
+    delay: 200,
+    threshold: 10,
+    scrollThreshold: 15,
+  };
 
-function initLayerDragDrop() {
-  const list = document.getElementById("list");
-  if (!list) return;
-  
-  list.addEventListener("pointerdown", onLayerPointerDown);
-}
+  // ========== INIT ==========
+  function initLayerDragDrop() {
+    const list = document.getElementById("list");
+    if (!list) return;
 
-function onLayerPointerDown(e) {
-  const stopItem = e.target.closest(".stop-item");
-  if (!stopItem) return;
-  
-  // دکمه‌ها نباید drag شروع کنند
-  if (e.target.closest(".control-btn") || e.target.closest("button")) return;
-  
-  // فقط از هندل یا هدر drag شروع بشه
-  const handle = e.target.closest(".drag-handle");
-  const preview = e.target.closest(".stop-preview");
-  const info = e.target.closest(".stop-info");
-  
-  if (!handle && !preview && !info) return;
-  
-  e.preventDefault();
-  e.stopPropagation();
-  
-  const rect = stopItem.getBoundingClientRect();
-  const list = document.getElementById("list");
-  
-  // ذخیره اطلاعات اولیه
-  layerDrag.pending = true;
-  layerDrag.stopId = stopItem.dataset.id;
-  layerDrag.element = stopItem;
-  layerDrag.startX = e.clientX;
-  layerDrag.startY = e.clientY;
-  layerDrag.offsetY = e.clientY - rect.top;
-  layerDrag.listRect = list.getBoundingClientRect();
-  layerDrag.initialRect = rect;
-  
-  // شروع تایمر تأخیر
-  layerDrag.delayTimer = setTimeout(() => {
-    if (layerDrag.pending) {
-      startActualDrag(e);
-    }
-  }, DRAG_CONFIG.delay);
-  
-  document.addEventListener("pointermove", onLayerPointerMove);
-  document.addEventListener("pointerup", onLayerPointerUp);
-  document.addEventListener("pointercancel", onLayerPointerUp);
-}
+    // استفاده از event delegation
+    list.addEventListener('mousedown', onPointerDown);
+    list.addEventListener('touchstart', onTouchStart, { passive: true });
+  }
 
-function onLayerPointerMove(e) {
-  // اگر هنوز drag شروع نشده
-  if (layerDrag.pending && !layerDrag.active) {
-    const dx = Math.abs(e.clientX - layerDrag.startX);
-    const dy = Math.abs(e.clientY - layerDrag.startY);
-    const distance = Math.sqrt(dx * dx + dy * dy);
+  // ========== TOUCH START ==========
+  function onTouchStart(e) {
+    const stopItem = e.target.closest(".stop-item");
+    if (!stopItem) return;
+    if (e.touches.length !== 1) return;
+    if (!isValidDragTarget(e.target)) return;
+
+    // ❌ بدون preventDefault - اجازه اسکرول اولیه
+    const touch = e.touches[0];
+    startPending(stopItem, touch.clientX, touch.clientY);
+  }
+
+  // ========== MOUSE DOWN ==========
+  function onPointerDown(e) {
+    if (e.button !== 0) return;
     
-    // اگر خیلی زود حرکت کرد، لغو کن (مثلاً کلیک ساده بوده)
-    // یا اگر بیشتر از threshold حرکت کرد، زودتر شروع کن
-    if (distance > DRAG_CONFIG.threshold) {
-      clearTimeout(layerDrag.delayTimer);
-      startActualDrag(e);
-    }
-    return;
+    const stopItem = e.target.closest(".stop-item");
+    if (!stopItem) return;
+    if (!isValidDragTarget(e.target)) return;
+
+    e.preventDefault();
+    startPending(stopItem, e.clientX, e.clientY);
   }
-  
-  // حرکت واقعی drag
-  if (!layerDrag.active || !layerDrag.clone) return;
-  
-  e.preventDefault();
-  
-  // حرکت کلون
-  const newTop = e.clientY - layerDrag.offsetY;
-  layerDrag.clone.style.top = newTop + "px";
-  
-  // پیدا کردن موقعیت جدید
-  const list = document.getElementById("list");
-  const items = [...list.querySelectorAll(".stop-item:not(.drag-original)")];
-  
-  let targetItem = null;
-  let insertBefore = true;
-  
-  for (const item of items) {
-    const rect = item.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
+
+  // ========== VALIDATE TARGET ==========
+  function isValidDragTarget(target) {
+    // دکمه‌ها نباید drag شروع کنند
+    if (target.closest(".control-btn, button, input, select")) return false;
     
-    if (e.clientY < midY) {
-      targetItem = item;
-      insertBefore = true;
-      break;
-    } else {
-      targetItem = item;
-      insertBefore = false;
-    }
+    // فقط از هندل یا هدر drag شروع بشه
+    const handle = target.closest(".drag-handle");
+    const preview = target.closest(".stop-preview");
+    const info = target.closest(".stop-info");
+    
+    return handle || preview || info;
   }
-  
-  // جابجایی placeholder
-  if (targetItem) {
-    if (insertBefore) {
-      if (layerDrag.placeholder.nextElementSibling !== targetItem) {
-        list.insertBefore(layerDrag.placeholder, targetItem);
+
+  // ========== START PENDING ==========
+  function startPending(stopItem, clientX, clientY) {
+    const rect = stopItem.getBoundingClientRect();
+    const list = document.getElementById("list");
+
+    layerDrag.pending = true;
+    layerDrag.stopId = stopItem.dataset.id;
+    layerDrag.element = stopItem;
+    layerDrag.startX = clientX;
+    layerDrag.startY = clientY;
+    layerDrag.offsetY = clientY - rect.top;
+    layerDrag.initialRect = rect;
+    layerDrag.listRect = list.getBoundingClientRect();
+    layerDrag.scrollCancelled = false;
+
+    // تایمر تأخیر
+    layerDrag.delayTimer = setTimeout(() => {
+      if (layerDrag.pending && !layerDrag.scrollCancelled) {
+        startActualDrag();
       }
-    } else {
-      const next = targetItem.nextElementSibling;
-      if (next && next !== layerDrag.placeholder && next !== layerDrag.element) {
-        list.insertBefore(layerDrag.placeholder, next);
-      } else if (!next) {
-        list.appendChild(layerDrag.placeholder);
+    }, DRAG_CONFIG.delay);
+
+    // Event listeners
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
+  }
+
+  // ========== ON MOVE ==========
+  function onMove(e) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    // اگر هنوز در حالت pending هستیم
+    if (layerDrag.pending && !layerDrag.active) {
+      const dx = Math.abs(clientX - layerDrag.startX);
+      const dy = Math.abs(clientY - layerDrag.startY);
+
+      // تشخیص اسکرول: اگر کاربر حرکت کرد قبل از تمام شدن delay
+      if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
+        clearTimeout(layerDrag.delayTimer);
+        layerDrag.scrollCancelled = true;
+        layerDrag.pending = false;
+        cleanup();
+        return; // اجازه اسکرول طبیعی
+      }
+      return;
+    }
+
+    // حرکت واقعی drag
+    if (!layerDrag.active || !layerDrag.clone) return;
+
+    e.preventDefault();
+
+    // حرکت clone
+    const newTop = clientY - layerDrag.offsetY;
+    layerDrag.clone.style.top = newTop + 'px';
+
+    // پیدا کردن موقعیت جدید
+    updatePlaceholderPosition(clientY);
+  }
+
+  // ========== UPDATE PLACEHOLDER ==========
+  function updatePlaceholderPosition(clientY) {
+    const list = document.getElementById("list");
+    const items = [...list.querySelectorAll(".stop-item:not(.drag-original)")];
+
+    let targetItem = null;
+    let insertBefore = true;
+
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (clientY < midY) {
+        targetItem = item;
+        insertBefore = true;
+        break;
+      } else {
+        targetItem = item;
+        insertBefore = false;
+      }
+    }
+
+    if (targetItem && layerDrag.placeholder) {
+      if (insertBefore) {
+        if (layerDrag.placeholder.nextElementSibling !== targetItem) {
+          list.insertBefore(layerDrag.placeholder, targetItem);
+        }
+      } else {
+        const next = targetItem.nextElementSibling;
+        
+        // 🔧 اصلاح باگ آیتم آخر
+        if (next === layerDrag.placeholder) {
+          // در جای درست هست
+        } else if (next === layerDrag.element) {
+          // next همان المان مخفی است
+          list.insertBefore(layerDrag.placeholder, layerDrag.element);
+        } else if (next) {
+          list.insertBefore(layerDrag.placeholder, next);
+        } else {
+          list.appendChild(layerDrag.placeholder);
+        }
       }
     }
   }
-}
 
-function startActualDrag(e) {
-  if (layerDrag.active || !layerDrag.element) return;
-  
-  const stopItem = layerDrag.element;
-  const rect = layerDrag.initialRect;
-  const list = document.getElementById("list");
-  
-  layerDrag.pending = false;
-  layerDrag.active = true;
-  
-  // ایجاد کلون برای نمایش
-  layerDrag.clone = stopItem.cloneNode(true);
-  layerDrag.clone.classList.add("drag-clone");
-  layerDrag.clone.style.cssText = `
-    position: fixed;
-    left: ${rect.left}px;
-    top: ${rect.top}px;
-    width: ${rect.width}px;
-    height: ${rect.height}px;
-    z-index: 10000;
-    pointer-events: none;
-    opacity: 0.95;
-    box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-    transform: scale(1.03);
-    border-radius: 8px;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-  `;
-  document.body.appendChild(layerDrag.clone);
-  
-  // ایجاد placeholder
-  layerDrag.placeholder = document.createElement("div");
-  layerDrag.placeholder.className = "drag-placeholder";
-  layerDrag.placeholder.style.height = rect.height + "px";
-  
-  // جایگزینی
-  stopItem.classList.add("drag-original");
-  stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
-  
-  document.body.style.userSelect = "none";
-  document.body.style.cursor = "grabbing";
-  
-  // 🎯 فیدبک هپتیک برای موبایل
-  if (navigator.vibrate) {
-    navigator.vibrate(50);
-  }
-}
+  // ========== START ACTUAL DRAG ==========
+  function startActualDrag() {
+    if (layerDrag.active || !layerDrag.element) return;
 
-function onLayerPointerUp(e) {
-  // اگر هنوز pending بود، یعنی کلیک ساده بوده
-  if (layerDrag.pending && !layerDrag.active) {
-    cleanupLayerDrag();
-    return;
-  }
-  
-  if (!layerDrag.active) {
-    cleanupLayerDrag();
-    return;
-  }
-  
-  // محاسبه ترتیب جدید
-  const list = document.getElementById("list");
-  const children = [...list.children];
-  
-  // پیدا کردن index جدید
-  let newIndex = 0;
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-    if (child === layerDrag.placeholder) {
-      break;
-    }
-    if (child.classList.contains("stop-item") && !child.classList.contains("drag-original")) {
-      newIndex++;
+    const stopItem = layerDrag.element;
+    const rect = layerDrag.initialRect;
+    const list = document.getElementById("list");
+
+    layerDrag.pending = false;
+    layerDrag.active = true;
+
+    // ایجاد clone
+    layerDrag.clone = stopItem.cloneNode(true);
+    layerDrag.clone.classList.add('drag-clone');
+    layerDrag.clone.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0.95;
+      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+      transform: scale(1.03);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      border-radius: 8px;
+      background: var(--TransParent-bg, rgba(30,30,30,0.95));
+      backdrop-filter: blur(6px);
+      border: 2px solid var(--border, #444);
+    `;
+    document.body.appendChild(layerDrag.clone);
+
+    // ایجاد placeholder
+    layerDrag.placeholder = document.createElement('div');
+    layerDrag.placeholder.className = 'drag-placeholder';
+    layerDrag.placeholder.style.cssText = `
+      height: ${rect.height}px;
+      margin: 4px 0;
+      border: 2px dashed var(--border, #444);
+      border-radius: 8px;
+      background: var(--accent);
+      transition: height 0.2s ease;
+    `;
+
+    // مخفی کردن المان اصلی
+    stopItem.classList.add('drag-original');
+    stopItem.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
+
+    stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    // فیدبک هپتیک
+    if (navigator.vibrate) {
+      navigator.vibrate(30);
     }
   }
-  
-  // پیدا کردن index قدیم
-  const oldIndex = state.stops.findIndex(s => s.id === layerDrag.stopId);
-  
-  // اگر تغییر کرده، آرایه رو آپدیت کن
-  if (oldIndex !== -1 && oldIndex !== newIndex) {
-    const [removed] = state.stops.splice(oldIndex, 1);
-    state.stops.splice(newIndex, 0, removed);
-  }
-  
-  // پاکسازی
-  cleanupLayerDrag();
-  
-  // رفرش کامل
-  refresh();
-}
 
-function cleanupLayerDrag() {
-  // پاک کردن تایمر
-  if (layerDrag.delayTimer) {
+  // ========== ON END ==========
+  function onEnd() {
     clearTimeout(layerDrag.delayTimer);
-    layerDrag.delayTimer = null;
-  }
-  
-  if (layerDrag.clone && layerDrag.clone.parentNode) {
-    layerDrag.clone.parentNode.removeChild(layerDrag.clone);
-  }
-  
-  if (layerDrag.placeholder && layerDrag.placeholder.parentNode) {
-    layerDrag.placeholder.parentNode.removeChild(layerDrag.placeholder);
-  }
-  
-  if (layerDrag.element) {
-    layerDrag.element.classList.remove("drag-original");
-  }
-  
-  layerDrag.active = false;
-  layerDrag.pending = false;
-  layerDrag.stopId = null;
-  layerDrag.element = null;
-  layerDrag.placeholder = null;
-  layerDrag.clone = null;
-  layerDrag.initialRect = null;
-  
-  document.removeEventListener("pointermove", onLayerPointerMove);
-  document.removeEventListener("pointerup", onLayerPointerUp);
-  document.removeEventListener("pointercancel", onLayerPointerUp);
-  
-  document.body.style.userSelect = "";
-  document.body.style.cursor = "";
-}
 
-// Global
-window.initLayerDragDrop = initLayerDragDrop;
+    // حذف event listeners
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    document.removeEventListener('touchcancel', onEnd);
 
+    // اگر فقط pending بود یا اسکرول شد
+    if (!layerDrag.active) {
+      cleanup();
+      return;
+    }
+
+    // انیمیشن بازگشت
+    if (layerDrag.clone && layerDrag.placeholder) {
+      const placeholderRect = layerDrag.placeholder.getBoundingClientRect();
+
+      layerDrag.clone.style.transition = 'all 0.25s ease';
+      layerDrag.clone.style.top = placeholderRect.top + 'px';
+      layerDrag.clone.style.left = placeholderRect.left + 'px';
+      layerDrag.clone.style.transform = 'scale(1)';
+      layerDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+
+      setTimeout(finalizeDrag, 250);
+    } else {
+      finalizeDrag();
+    }
+  }
+
+  // ========== FINALIZE DRAG ==========
+  function finalizeDrag() {
+    const list = document.getElementById("list");
+    const children = [...list.children];
+
+    // محاسبه index جدید
+    let newIndex = 0;
+    for (const child of children) {
+      if (child === layerDrag.placeholder) break;
+      if (child.classList.contains("stop-item") && !child.classList.contains("drag-original")) {
+        newIndex++;
+      }
+    }
+
+    // پیدا کردن index قدیم
+    const oldIndex = state.stops.findIndex(s => s.id === layerDrag.stopId);
+
+    // اگر تغییر کرده، آرایه رو آپدیت کن
+    if (oldIndex !== -1 && oldIndex !== newIndex) {
+      const [removed] = state.stops.splice(oldIndex, 1);
+      state.stops.splice(newIndex, 0, removed);
+    }
+
+    cleanup();
+    refresh();
+  }
+
+  // ========== CLEANUP ==========
+  function cleanup() {
+    if (layerDrag.clone?.parentNode) {
+      layerDrag.clone.remove();
+    }
+
+    if (layerDrag.placeholder?.parentNode) {
+      layerDrag.placeholder.remove();
+    }
+
+    if (layerDrag.element) {
+      layerDrag.element.classList.remove('drag-original');
+      layerDrag.element.style.cssText = '';
+    }
+
+    // بازگردانی استایل‌ها
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+
+    Object.assign(layerDrag, {
+      active: false,
+      pending: false,
+      stopId: null,
+      element: null,
+      clone: null,
+      placeholder: null,
+      delayTimer: null,
+      initialRect: null,
+      scrollCancelled: false,
+    });
+  }
+
+  // Global
+  window.initLayerDragDrop = initLayerDragDrop;
+})();
 // ========== به‌روزرسانی renderList با data-id ==========
 function renderList() {
   const el = document.getElementById("list");
@@ -4865,8 +4959,7 @@ function updateCSS() {
   const hasNoise = noiseState.enabled && noiseState.opacity > 0;
   
   if (hasNoise) {
-    currentNoiseCSS = `/* Noise overlay - add as ::after pseudo-element */
-.gradient::after {
+    currentNoiseCSS = `
   content: '';
   position: absolute;
   top: 0;
@@ -4876,16 +4969,32 @@ function updateCSS() {
   pointer-events: none;
   opacity: ${(noiseState.opacity / 100).toFixed(2)};
   filter: url(#noiseFilter);
-  mix-blend-mode: ${noiseState.blend};
-}`;
+  mix-blend-mode: ${noiseState.blend};`;
 
-    currentSVGFilter = `<svg width="0" height="0">
-  <filter id="noiseFilter">
-    <feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch" result="noise"/>
-    <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise"/>
-    <feBlend in="SourceGraphic" in2="bwNoise" mode="${noiseState.blend}"/>
+currentSVGFilter = `
+<svg width="0" height="0" style="position:absolute">
+  <filter id="noiseFilter"
+          x="0%" y="0%"
+          width="100%" height="100%"
+          filterUnits="objectBoundingBox">
+    
+    <feTurbulence type="fractalNoise"
+                  baseFrequency="${noiseState.frequency}"
+                  numOctaves="4"
+                  stitchTiles="stitch"
+                  result="noise"/>
+    
+    <feColorMatrix type="saturate"
+                   values="0"
+                   in="noise"
+                   result="bwNoise"/>
+    
+    <feBlend in="SourceGraphic"
+             in2="bwNoise"
+             mode="${noiseState.blend}"/>
   </filter>
 </svg>`;
+
   } else {
     currentNoiseCSS = "";
     currentSVGFilter = "";
@@ -6410,38 +6519,26 @@ async function openFullscreenPreview() {
     </div>
     <div class="fullscreen-controls">
       <button class="fullscreen-btn" id="fsZoomOut" title="Zoom Out">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M8 11h6"/>
-        </svg>
+      <img src="./icon/minus.svg" alt="zoom out">
       </button>
       <span class="fullscreen-zoom-value" id="fsZoomValue">100%</span>
       <button class="fullscreen-btn" id="fsZoomIn" title="Zoom In">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
-        </svg>
+      <img src="./icon/plus.svg" alt="zoom in">
       </button>
       <div class="fullscreen-divider"></div>
       <button class="fullscreen-btn" id="fsRotate" title="Rotate (R)">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
-        </svg>
+<img src="./icon/reset.svg" alt="rotate">
       </button>
       <button class="fullscreen-btn" id="fsReset" title="Reset (0)">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/>
-        </svg>
+<img src="./icon/fit.svg" alt="fit">
       </button>
       <button class="fullscreen-btn" id="fsClose" title="Close (ESC)">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 6L6 18M6 6l12 12"/>
+<img src="./icon/full-screen-exit.svg" alt="fullscreen exit">
         </svg>
       </button>
     </div>
     <div class="fullscreen-info" id="fullscreenInfo">
       ${Math.round(state.canvasWidth)} × ${Math.round(state.canvasHeight)}
-    </div>
-    <div class="fullscreen-hint" id="fullscreenHint">
-      Double-tap to zoom • Pinch to zoom • Drag to pan
     </div>
   `;
   
