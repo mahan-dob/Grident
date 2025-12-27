@@ -1051,6 +1051,8 @@ header h1 {
   padding: 12px;
   margin-bottom: 18px;
   position: relative;
+  -webkit-touch-callout: none;
+
 }
 
 .section-header {
@@ -1079,12 +1081,55 @@ justify-self: start !important;
   transition: height .3s ease;
 }
 
-.section {
-  cursor: grab;
-}
 
 .section.dragging {
-  opacity: .5;
+  opacity: .3;
+}
+/* ========== Section Drag & Drop ========== */
+.section {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.section.drag-original {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.section-drag-clone {
+  /* Styles are inline */
+}
+
+.section-drag-placeholder {
+  /* Styles are inline */
+}
+
+
+/* Prevent text selection while dragging */
+body.dragging-section {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* ========== Collapsible Sections ========== */
+.section-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  -webkit-tap-highlight-color: transparent; 
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.section-header:hover {
+
+}
+
+.section-content {
+  overflow: hidden;
+  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ========================================

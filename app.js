@@ -13,96 +13,384 @@ select.addEventListener('change', e => {
   applyTheme(e.target.value);
 });
 
+// ========== SECTION DRAG & DROP - TOUCH + MOUSE ==========
 document.addEventListener('DOMContentLoaded', () => {
   const container = document.querySelector('.panel');
   if (!container) return;
 
-  let draggingEl = null;
+  // ========== STATE ==========
+  const sectionDrag = {
+    active: false,
+    pending: false,
+    element: null,
+    clone: null,
+    placeholder: null,
+    startY: 0,
+    offsetY: 0,
+    delayTimer: null,
+    initialRect: null,
+  };
 
+  // ========== CONFIG ==========
+  const DRAG_CONFIG = {
+    delay: 200,        // تأخیر برای شروع drag (موبایل)
+    threshold: 8,      // حداقل حرکت برای شروع drag
+  };
+
+  // ========== INIT ==========
   container.querySelectorAll('.section').forEach(section => {
     const header = section.querySelector('.section-header');
     if (!header) return;
 
-    // خود section درگ‌پذیره
-    section.draggable = true;
+    section.draggable = false;
 
-    // ولی درگ فقط از هدر شروع میشه
-    header.addEventListener('mousedown', () => {
-      section.draggable = true;
+    // ========== MOUSE ==========
+    header.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // فقط کلیک چپ
+      e.preventDefault();
+      startPending(e, section, e.clientY);
     });
 
-    section.addEventListener('dragstart', e => {
-      draggingEl = section;
-      section.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-
-    section.addEventListener('dragend', () => {
-      section.classList.remove('dragging');
-      draggingEl = null;
-    });
+    // ========== TOUCH ==========
+    header.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      startPending(e, section, e.touches[0].clientY);
+    }, { passive: false });
   });
 
-  container.addEventListener('dragover', e => {
-    e.preventDefault();
-    if (!draggingEl) return;
+  // ========== START PENDING ==========
+  function startPending(e, section, clientY) {
+    const rect = section.getBoundingClientRect();
 
-    const afterEl = getDragAfterElement(container, e.clientY);
-    if (!afterEl) {
-      container.appendChild(draggingEl);
-    } else {
-      container.insertBefore(draggingEl, afterEl);
-    }
-  });
+    sectionDrag.pending = true;
+    sectionDrag.element = section;
+    sectionDrag.startY = clientY;
+    sectionDrag.offsetY = clientY - rect.top;
+    sectionDrag.initialRect = rect;
 
-  function getDragAfterElement(container, y) {
-    const els = [...container.querySelectorAll('.section:not(.dragging)')];
-    let closest = null;
-    let closestOffset = Number.NEGATIVE_INFINITY;
-
-    els.forEach(child => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-      if (offset < 0 && offset > closestOffset) {
-        closestOffset = offset;
-        closest = child;
+    // تایمر تأخیر
+    sectionDrag.delayTimer = setTimeout(() => {
+      if (sectionDrag.pending) {
+        startActualDrag();
       }
-    });
+    }, DRAG_CONFIG.delay);
 
-    return closest;
+    // Event listeners
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
+  }
+
+  // ========== ON MOVE ==========
+  function onMove(e) {
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    // اگر هنوز در حالت pending هستیم
+    if (sectionDrag.pending && !sectionDrag.active) {
+      const dy = Math.abs(clientY - sectionDrag.startY);
+      
+      // اگر کافی حرکت کرد، drag را شروع کن
+      if (dy > DRAG_CONFIG.threshold) {
+        clearTimeout(sectionDrag.delayTimer);
+        startActualDrag();
+      }
+      return;
+    }
+
+    // حرکت واقعی drag
+    if (!sectionDrag.active || !sectionDrag.clone) return;
+    
+    e.preventDefault();
+
+    // حرکت clone
+    const newTop = clientY - sectionDrag.offsetY;
+    sectionDrag.clone.style.top = newTop + 'px';
+
+    // پیدا کردن موقعیت جدید
+    const sections = [...container.querySelectorAll('.section:not(.drag-original)')];
+    let targetSection = null;
+    let insertBefore = true;
+
+    for (const sec of sections) {
+      const rect = sec.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (clientY < midY) {
+        targetSection = sec;
+        insertBefore = true;
+        break;
+      } else {
+        targetSection = sec;
+        insertBefore = false;
+      }
+    }
+
+    // جابجایی placeholder
+    if (targetSection && sectionDrag.placeholder) {
+      if (insertBefore) {
+        if (sectionDrag.placeholder.nextElementSibling !== targetSection) {
+          container.insertBefore(sectionDrag.placeholder, targetSection);
+        }
+      } else {
+        const next = targetSection.nextElementSibling;
+        if (next && next !== sectionDrag.placeholder) {
+          container.insertBefore(sectionDrag.placeholder, next);
+        } else if (!next) {
+          container.appendChild(sectionDrag.placeholder);
+        }
+      }
+    }
+  }
+
+  // ========== START ACTUAL DRAG ==========
+  function startActualDrag() {
+    if (sectionDrag.active || !sectionDrag.element) return;
+
+    const section = sectionDrag.element;
+    const rect = sectionDrag.initialRect;
+
+    sectionDrag.pending = false;
+    sectionDrag.active = true;
+
+    // ایجاد clone
+    sectionDrag.clone = section.cloneNode(true);
+    sectionDrag.clone.classList.add('section-drag-clone');
+    sectionDrag.clone.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0.95;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      transform: scale(1.02);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      border-radius: 8px;
+      background: var(--TransParent-bg);
+      backdrop-filter: blur(6px);
+      border: 2px solid var(--border);
+    `;
+    document.body.appendChild(sectionDrag.clone);
+
+    // ایجاد placeholder
+    sectionDrag.placeholder = document.createElement('div');
+    sectionDrag.placeholder.className = 'section-drag-placeholder';
+    sectionDrag.placeholder.style.cssText = `
+      height: ${rect.height}px;
+      margin: 8px 0;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      transition: height 0.2s ease;
+    `;
+
+    // جایگزینی
+    section.classList.add('drag-original');
+    section.style.opacity = '0';
+    section.style.height = '0';
+    section.style.margin = '0';
+    section.style.padding = '0';
+    section.style.overflow = 'hidden';
+    
+    section.parentNode.insertBefore(sectionDrag.placeholder, section);
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+
+    // فیدبک هپتیک
+    if (navigator.vibrate) {
+      navigator.vibrate(30);
+    }
+  }
+
+  // ========== ON END ==========
+  function onEnd() {
+    clearTimeout(sectionDrag.delayTimer);
+
+    // حذف event listeners
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    document.removeEventListener('touchcancel', onEnd);
+
+    // اگر فقط pending بود (کلیک ساده)
+    if (sectionDrag.pending && !sectionDrag.active) {
+      cleanup();
+      return;
+    }
+
+    if (!sectionDrag.active) {
+      cleanup();
+      return;
+    }
+
+    // انیمیشن بازگشت
+    if (sectionDrag.clone && sectionDrag.placeholder) {
+      const placeholderRect = sectionDrag.placeholder.getBoundingClientRect();
+      
+      sectionDrag.clone.style.transition = 'all 0.25s ease';
+      sectionDrag.clone.style.top = placeholderRect.top + 'px';
+      sectionDrag.clone.style.left = placeholderRect.left + 'px';
+      sectionDrag.clone.style.transform = 'scale(1)';
+      sectionDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+
+      setTimeout(() => {
+        finalizeDrag();
+      }, 250);
+    } else {
+      finalizeDrag();
+    }
+  }
+
+  // ========== FINALIZE DRAG ==========
+  function finalizeDrag() {
+    if (sectionDrag.element && sectionDrag.placeholder) {
+      // جابجایی واقعی element
+      container.insertBefore(sectionDrag.element, sectionDrag.placeholder);
+    }
+
+    cleanup();
+  }
+
+  // ========== CLEANUP ==========
+  function cleanup() {
+    if (sectionDrag.clone && sectionDrag.clone.parentNode) {
+      sectionDrag.clone.parentNode.removeChild(sectionDrag.clone);
+    }
+
+    if (sectionDrag.placeholder && sectionDrag.placeholder.parentNode) {
+      sectionDrag.placeholder.parentNode.removeChild(sectionDrag.placeholder);
+    }
+
+    if (sectionDrag.element) {
+      sectionDrag.element.classList.remove('drag-original');
+      sectionDrag.element.style.opacity = '';
+      sectionDrag.element.style.height = '';
+      sectionDrag.element.style.margin = '';
+      sectionDrag.element.style.padding = '';
+      sectionDrag.element.style.overflow = '';
+    }
+
+    sectionDrag.active = false;
+    sectionDrag.pending = false;
+    sectionDrag.element = null;
+    sectionDrag.clone = null;
+    sectionDrag.placeholder = null;
+    sectionDrag.delayTimer = null;
+    sectionDrag.initialRect = null;
+
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
   }
 });
 
 
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.section').forEach(section => {
-    const title = section.querySelector('.section-title');
+    const header = section.querySelector('.section-header');
     const content = section.querySelector('.section-content');
 
-    if (!title || !content) return;
+    if (!header || !content) return;
 
-    let open = false;
+    let isOpen = false;
+    let isAnimating = false;
+    
+    // ========== Touch State ==========
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isTouchMoved = false;
+
+    // ========== CONFIG ==========
+    const TAP_THRESHOLD = 10;      // حداکثر حرکت برای تشخیص tap (px)
+    const TAP_MAX_DURATION = 300;  // حداکثر زمان برای tap (ms)
+
+    // ✅ مقداردهی اولیه
     content.style.height = '0px';
 
-    title.addEventListener('click', () => {
-      if (open) {
-        // بستن
-        const h = content.scrollHeight;
-        content.style.height = h + 'px';
-        requestAnimationFrame(() => {
-          content.style.height = '0px';
-        });
+    // ========== Toggle Function ==========
+    function toggle() {
+      if (isAnimating) return;
+      isAnimating = true;
+
+      if (isOpen) {
+        // ═══════════ بستن ═══════════
+        content.style.height = content.scrollHeight + 'px';
+        content.offsetHeight; // Force reflow
+        content.style.height = '0px';
+        section.classList.remove('open');
       } else {
-        // باز کردن (با اندازه‌ی واقعی فعلی)
-        const h = content.scrollHeight;
-        content.style.height = h + 'px';
+        // ═══════════ باز کردن ═══════════
+        content.style.height = content.scrollHeight + 'px';
+        section.classList.add('open');
+        
+        // ✅ Haptic feedback
+        if (navigator.vibrate) {
+          navigator.vibrate(10);
+        }
       }
-      open = !open;
+      
+      isOpen = !isOpen;
+    }
+
+    // ========== Mouse Click ==========
+    header.addEventListener('click', (e) => {
+      // جلوگیری از تداخل با دکمه‌ها
+      if (e.target.closest('button, input, select, a, .control-btn')) return;
+      toggle();
     });
 
-    // بعد از باز شدن، height رو auto کن تا با تغییر محتوا سازگار باشه
-    content.addEventListener('transitionend', () => {
-      if (open) {
+    // ========== Touch Events ==========
+    header.addEventListener('touchstart', (e) => {
+      // جلوگیری از تداخل با دکمه‌ها
+      if (e.target.closest('button, input, select, a, .control-btn')) return;
+      
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+      isTouchMoved = false;
+    }, { passive: true });
+
+    header.addEventListener('touchmove', (e) => {
+      if (!touchStartTime) return;
+      
+      const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
+      
+      // اگر بیشتر از threshold حرکت کرد، scroll است نه tap
+      if (deltaY > TAP_THRESHOLD) {
+        isTouchMoved = true;
+      }
+    }, { passive: true });
+
+    header.addEventListener('touchend', (e) => {
+      // جلوگیری از تداخل با دکمه‌ها
+      if (e.target.closest('button, input, select, a, .control-btn')) return;
+      
+      const touchDuration = Date.now() - touchStartTime;
+      
+      // ✅ فقط اگر tap بود (نه scroll)
+      if (!isTouchMoved && touchDuration < TAP_MAX_DURATION) {
+        e.preventDefault(); // جلوگیری از ghost click
+        toggle();
+      }
+      
+      // Reset
+      touchStartY = 0;
+      touchStartTime = 0;
+      isTouchMoved = false;
+    }, { passive: false });
+
+    // ========== Transition End ==========
+    content.addEventListener('transitionend', (e) => {
+      if (e.propertyName !== 'height') return;
+      
+      isAnimating = false;
+      
+      if (isOpen) {
         content.style.height = 'auto';
       }
     });
@@ -4911,155 +5199,36 @@ function drawGradForExport(s, ctx, width, height) {
 }
 
 // ========== EXPORT AS SVG - FIXED ==========
-function exportAsSVG() {
+// ========== EXPORT AS SVG - PIXEL PERFECT ==========
+async function exportAsSVG() {
   const width = state.canvasWidth;
   const height = state.canvasHeight;
-  const visibleStops = state.stops.filter((s) => s.visible);
-
-  let defs = "";
-  let content = "";
-
-  // ========== 1. CSS Filters ==========
-  if (hasActiveFilters()) {
-    defs += generateSVGFilterFromCSS();
-  }
-
-  // ========== 2. Noise Filter ==========
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    defs += `
-    <filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch" result="noise"/>
-      <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise"/>
-    </filter>`;
-  }
-
-  // ========== 3. Background ==========
-  if (state.bgEnabled) {
-    const bg = hexToRgb(state.bgColor);
-    const bgOpacity = (state.bgAlpha / 100).toFixed(3);
-    content += `  <rect id="background" width="100%" height="100%" fill="rgb(${bg.r},${bg.g},${bg.b})" fill-opacity="${bgOpacity}"/>\n`;
-  }
-
-  // ========== 4. Filter attribute ==========
-  const filterAttr = hasActiveFilters() ? ' filter="url(#cssFilter)"' : '';
   
-  // ========== 5. Background Blend Mode wrapper ==========
-  const hasBgBlend = state.bgEnabled && state.bgBlendMode && state.bgBlendMode !== 'normal';
+  // ========== 1. ساخت Canvas موقت و رندر کامل ==========
+  const exportCanvas = document.createElement('canvas');
+  exportCanvas.width = width;
+  exportCanvas.height = height;
+  const exportCtx = exportCanvas.getContext('2d');
   
-  if (hasBgBlend) {
-    content += `  <g style="mix-blend-mode: ${state.bgBlendMode}"${filterAttr}>\n`;
-  }
-
-  // ========== 6. Gradients ==========
-  visibleStops.forEach((s, i) => {
-    const id = `gradient${i}`;
-    const blendMode = s.blendMode || 'screen';
-    const indent = hasBgBlend ? '    ' : '  ';
-    const itemFilterAttr = hasBgBlend ? '' : filterAttr;
-
-    if (s.type === "radial") {
-      const cx = (s.x * width).toFixed(2);
-      const cy = (s.y * height).toFixed(2);
-      const rgb = hexToRgb(s.color);
-      const opacity = (s.opacity / 100).toFixed(3);
-      const solidEnd = Math.max(0, Math.min(1, 1 - (s.feather || 60) / 100));
-
-      defs += `
-    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${s.size}">
-      <stop offset="0%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
-      
-      if (solidEnd > 0.01 && solidEnd < 0.99) {
-        defs += `
-      <stop offset="${(solidEnd * 100).toFixed(1)}%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
-      }
-      
-      defs += `
-      <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
-    </radialGradient>`;
-
-      content += `${indent}<circle cx="${cx}" cy="${cy}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode: ${blendMode}"${itemFilterAttr}/>\n`;
-    }
-
-    else if (s.type === "linear") {
-      // ✅ محاسبه صحیح مختصات
-      const angleRad = ((s.angle - 90) * Math.PI) / 180;
-      const cos = Math.cos(angleRad);
-      const sin = Math.sin(angleRad);
-      
-      // نقاط شروع و پایان بر اساس زاویه
-      const x1 = (50 - cos * 50).toFixed(2);
-      const y1 = (50 - sin * 50).toFixed(2);
-      const x2 = (50 + cos * 50).toFixed(2);
-      const y2 = (50 + sin * 50).toFixed(2);
-
-      defs += `
-    <linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">`;
-      
-      // ✅ استفاده از fixTransparentStops
-      const fixedStops = fixTransparentStops(s.stops);
-      fixedStops.forEach((cs) => {
-        const c = hexToRgb(cs.color);
-        const opacity = (cs.opacity / 100).toFixed(3);
-        const pos = Math.max(0, Math.min(100, cs.pos));
-        defs += `
-      <stop offset="${pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${opacity}"/>`;
-      });
-      
-      defs += `
-    </linearGradient>`;
-
-      content += `${indent}<rect width="100%" height="100%" fill="url(#${id})" style="mix-blend-mode: ${blendMode}"${itemFilterAttr}/>\n`;
-    }
-
-    else if (s.type === "conic") {
-      // ✅ Conic با foreignObject و fixTransparentStops
-      const x = (s.x * 100).toFixed(2);
-      const y = (s.y * 100).toFixed(2);
-
-      const fixedStops = fixTransparentStops(s.stops);
-      const stopsStr = fixedStops
-        .map((cs) => {
-          const c = hexToRgb(cs.color);
-          const opacity = (cs.opacity / 100).toFixed(3);
-          return `rgba(${c.r},${c.g},${c.b},${opacity}) ${cs.pos}%`;
-        })
-        .join(", ");
-
-      content += `${indent}<foreignObject width="100%" height="100%"${itemFilterAttr}>
-${indent}  <div xmlns="http://www.w3.org/1999/xhtml" style="
-${indent}    width: 100%;
-${indent}    height: 100%;
-${indent}    background: conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%, ${stopsStr});
-${indent}    mix-blend-mode: ${blendMode};
-${indent}  "></div>
-${indent}</foreignObject>\n`;
-    }
-  });
-
-  // Close gradient group
-  if (hasBgBlend) {
-    content += `  </g>\n`;
-  }
-
-  // ========== 7. Noise Overlay ==========
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    const noiseOpacity = (noiseState.opacity / 100).toFixed(3);
-    content += `  <rect id="noise" width="100%" height="100%" fill="white" filter="url(#noiseFilter)" opacity="${noiseOpacity}" style="mix-blend-mode: ${noiseState.blend}"/>\n`;
-  }
-
-  // ========== 8. Final SVG ==========
+  // رندر کامل صحنه (بدون هندل‌ها)
+  await renderSceneToContext(exportCtx, width, height);
+  
+  // ========== 2. تبدیل به Base64 ==========
+  const imageData = exportCanvas.toDataURL('image/png');
+  
+  // ========== 3. ساخت SVG با تصویر embed شده ==========
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" 
-     xmlns:xhtml="http://www.w3.org/1999/xhtml"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${width}" 
      height="${height}" 
      viewBox="0 0 ${width} ${height}">
-  <defs>${defs}
-  </defs>
+  <title>Gradient Export</title>
+  <desc>Generated by Gradient Editor</desc>
+  <image width="${width}" height="${height}" xlink:href="${imageData}"/>
+</svg>`;
 
-${content}</svg>`;
-
-  // ========== 9. Download ==========
+  // ========== 4. دانلود ==========
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const filename = `gradient-${width}x${height}.svg`;
@@ -5074,6 +5243,305 @@ ${content}</svg>`;
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ========== رندر کامل صحنه - یکبار نوشته شده برای همه جا ==========
+async function renderSceneToContext(targetCtx, width, height) {
+  const visibleStops = state.stops.filter(s => s.visible);
+  const reversedStops = [...visibleStops].reverse();
+  
+  // ========== Canvas موقت برای فیلترها ==========
+  const needsFilter = hasActiveFilters();
+  let workCanvas = document.createElement('canvas');
+  workCanvas.width = width;
+  workCanvas.height = height;
+  let workCtx = workCanvas.getContext('2d');
+  
+  // ========== 1. پس‌زمینه ==========
+  if (state.bgEnabled) {
+    workCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    workCtx.fillRect(0, 0, width, height);
+  }
+  
+  // ========== 2. گرادینت‌ها ==========
+  if (reversedStops.length > 0) {
+    const needsBgBlend = state.bgEnabled && 
+                         state.bgBlendMode && 
+                         state.bgBlendMode !== 'normal';
+    
+    if (needsBgBlend) {
+      // Canvas جداگانه برای گرادینت‌ها
+      const gradCanvas = document.createElement('canvas');
+      gradCanvas.width = width;
+      gradCanvas.height = height;
+      const gradCtx = gradCanvas.getContext('2d');
+      
+      // رسم همه گرادینت‌ها
+      reversedStops.forEach(s => {
+        gradCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+        renderGradient(s, gradCtx, width, height);
+      });
+      gradCtx.globalCompositeOperation = 'source-over';
+      
+      // ترکیب با background blend mode
+      workCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
+      workCtx.drawImage(gradCanvas, 0, 0);
+      workCtx.globalCompositeOperation = 'source-over';
+      
+    } else {
+      // بدون background blend - مستقیم رسم کن
+      reversedStops.forEach(s => {
+        workCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+        renderGradient(s, workCtx, width, height);
+      });
+      workCtx.globalCompositeOperation = 'source-over';
+    }
+  }
+  
+  // ========== 3. فیلترها ==========
+  if (needsFilter) {
+    // Blur
+    if (filterState.blur > 0) {
+      const blurCanvas = document.createElement('canvas');
+      blurCanvas.width = width;
+      blurCanvas.height = height;
+      const blurCtx = blurCanvas.getContext('2d');
+      blurCtx.filter = `blur(${filterState.blur}px)`;
+      blurCtx.drawImage(workCanvas, 0, 0);
+      workCanvas = blurCanvas;
+      workCtx = blurCanvas.getContext('2d');
+    }
+    
+    // سایر فیلترها
+    if (hasNonBlurFilters()) {
+      const imageData = workCtx.getImageData(0, 0, width, height);
+      applyFiltersToImageData(imageData);
+      workCtx.putImageData(imageData, 0, 0);
+    }
+  }
+  
+  // ========== 4. نویز ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    const noiseCanvas = await generateSVGNoise(width, height, noiseState.frequency);
+    if (noiseCanvas) {
+      workCtx.globalCompositeOperation = noiseState.blend;
+      workCtx.globalAlpha = noiseState.opacity / 100;
+      workCtx.drawImage(noiseCanvas, 0, 0, width, height);
+      workCtx.globalAlpha = 1;
+      workCtx.globalCompositeOperation = 'source-over';
+    }
+  }
+  
+  // ========== 5. کپی به context هدف ==========
+  targetCtx.drawImage(workCanvas, 0, 0);
+}
+
+// ========== رندر یک گرادینت ==========
+function renderGradient(s, ctx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const solidEnd = 1 - (s.feather || 60) / 100;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, s.size);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0.01 && solidEnd < 0.99) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === "linear") {
+    const angleRad = ((s.angle - 90) * Math.PI) / 180;
+    const diagonal = Math.hypot(width, height);
+    const mx = width / 2;
+    const my = height / 2;
+    const dx = (Math.cos(angleRad) * diagonal) / 2;
+    const dy = (Math.sin(angleRad) * diagonal) / 2;
+    
+    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(startAngle, cx, cy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
+// ========== اطمینان از وجود تابع ==========
+function getCanvasBlendMode(cssBlendMode) {
+  if (!cssBlendMode || cssBlendMode === 'normal') {
+    return 'source-over';
+  }
+  return cssBlendMode;
+}
+
+// ========== EXPORT AS VECTOR SVG ==========
+function exportAsVectorSVG() {
+  const width = state.canvasWidth;
+  const height = state.canvasHeight;
+  const visibleStops = state.stops.filter((s) => s.visible);
+  
+  // ✅ ترتیب معکوس - مثل Canvas
+  const reversedStops = [...visibleStops].reverse();
+
+  let defs = "";
+  let content = "";
+
+  // ========== 1. تعریف گرادینت‌ها ==========
+  reversedStops.forEach((s, i) => {
+    const id = `grad${i}`;
+
+    if (s.type === "radial") {
+      const cx = (s.x * width).toFixed(2);
+      const cy = (s.y * height).toFixed(2);
+      const rgb = hexToRgb(s.color);
+      const opacity = (s.opacity / 100).toFixed(3);
+      const solidEnd = Math.max(0, Math.min(1, 1 - (s.feather || 60) / 100));
+
+      defs += `
+    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${s.size}">
+      <stop offset="0%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
+      if (solidEnd > 0.01 && solidEnd < 0.99) {
+        defs += `
+      <stop offset="${(solidEnd * 100).toFixed(1)}%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
+      }
+      defs += `
+      <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
+    </radialGradient>`;
+    }
+    else if (s.type === "linear") {
+      const angleRad = ((s.angle - 90) * Math.PI) / 180;
+      const x1 = (50 - Math.cos(angleRad) * 50).toFixed(2);
+      const y1 = (50 - Math.sin(angleRad) * 50).toFixed(2);
+      const x2 = (50 + Math.cos(angleRad) * 50).toFixed(2);
+      const y2 = (50 + Math.sin(angleRad) * 50).toFixed(2);
+
+      defs += `
+    <linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">`;
+      
+      const fixedStops = fixTransparentStops(s.stops);
+      fixedStops.forEach((cs) => {
+        const c = hexToRgb(cs.color);
+        defs += `
+      <stop offset="${cs.pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${(cs.opacity / 100).toFixed(3)}"/>`;
+      });
+      defs += `
+    </linearGradient>`;
+    }
+  });
+
+  // ========== 2. Noise Filter ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    defs += `
+    <filter id="noise" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>`;
+  }
+
+  // ========== 3. پس‌زمینه ==========
+  if (state.bgEnabled) {
+    const bg = hexToRgb(state.bgColor);
+    content += `  <rect id="bg" width="100%" height="100%" fill="rgb(${bg.r},${bg.g},${bg.b})" fill-opacity="${(state.bgAlpha / 100).toFixed(3)}"/>\n`;
+  }
+
+  // ========== 4. گرادینت‌ها ==========
+  const hasBgBlend = state.bgEnabled && state.bgBlendMode && state.bgBlendMode !== 'normal';
+  
+  if (hasBgBlend) {
+    content += `  <g style="mix-blend-mode:${state.bgBlendMode}">\n`;
+  }
+  
+  reversedStops.forEach((s, i) => {
+    const id = `grad${i}`;
+    const blend = s.blendMode || 'screen';
+    const indent = hasBgBlend ? '    ' : '  ';
+    
+    if (s.type === "radial") {
+      content += `${indent}<circle cx="${(s.x * width).toFixed(2)}" cy="${(s.y * height).toFixed(2)}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode:${blend}"/>\n`;
+    }
+    else if (s.type === "linear") {
+      content += `${indent}<rect width="100%" height="100%" fill="url(#${id})" style="mix-blend-mode:${blend}"/>\n`;
+    }
+    else if (s.type === "conic") {
+      const x = (s.x * 100).toFixed(2);
+      const y = (s.y * 100).toFixed(2);
+      const fixedStops = fixTransparentStops(s.stops);
+      const stopsCSS = fixedStops.map(cs => {
+        const c = hexToRgb(cs.color);
+        return `rgba(${c.r},${c.g},${c.b},${(cs.opacity/100).toFixed(3)}) ${cs.pos}%`;
+      }).join(',');
+      
+      content += `${indent}<foreignObject width="100%" height="100%">
+${indent}  <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%,${stopsCSS});mix-blend-mode:${blend}"></div>
+${indent}</foreignObject>\n`;
+    }
+  });
+  
+  if (hasBgBlend) {
+    content += `  </g>\n`;
+  }
+
+  // ========== 5. نویز ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    content += `  <rect width="100%" height="100%" fill="white" filter="url(#noise)" opacity="${(noiseState.opacity / 100).toFixed(3)}" style="mix-blend-mode:${noiseState.blend}"/>\n`;
+  }
+
+  // ========== 6. اخطار فیلتر ==========
+  let filterNote = "";
+  if (hasActiveFilters()) {
+    filterNote = `
+  <!-- ⚠️ CSS Filters applied in editor: ${getFilterString()} -->
+  <!-- For accurate results, use PNG/JPG export or apply CSS filter to this SVG -->`;
+  }
+
+  // ========== 7. SVG نهایی ==========
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" 
+     xmlns:xhtml="http://www.w3.org/1999/xhtml"
+     width="${width}" height="${height}" 
+     viewBox="0 0 ${width} ${height}">${filterNote}
+  <defs>${defs}
+  </defs>
+${content}</svg>`;
+
+  // Download
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gradient-${width}x${height}.svg`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 // ========== FIX: generateSVGFilterFromCSS ==========
 function generateSVGFilterFromCSS() {
   if (!hasActiveFilters()) return '';
