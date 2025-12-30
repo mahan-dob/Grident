@@ -109,6 +109,7 @@ body {
 body {
   display: grid;
   grid-template-columns: 70% 30%;
+  grid-template-rows: 10rem 10rem auto;
   transition: background-color var(--btn-transition),
     color var(--btn-transition);
 }
@@ -258,7 +259,7 @@ header {
   grid-column: 1 / -1;
   background: var(--bg);
   padding: 1rem;
-  height: 100%;
+  height: 10rem;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -663,7 +664,7 @@ header h1 {
   position: relative;
   display: grid;
   place-items: center;
-  height: 100%;
+  height: 100% !important;
   overflow: hidden;
   background-color: var(--sec-bg);
   background-image: linear-gradient(45deg, var(--bg) 25%, transparent 25%),
@@ -673,6 +674,8 @@ header h1 {
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
   border-top-right-radius: 12px;
+  grid-column: 1 / 2;
+  grid-row: 3 / 4;
 }
 
 .canvas-container {
@@ -691,12 +694,33 @@ header h1 {
 }
 
 #canvas {
+  position: relative;
   display: block;
   border-radius: 1rem;
   cursor: crosshair;
   border: 1px dashed var(--white-color);
-  margin: 10px 50px 40px 10px;
+}
+.canvas-noise {
+  position: relative;
+  display: inline-block;
+}
 
+.canvas-noise canvas {
+  display: block;
+  border-radius: 1rem;
+}
+
+/* overlay نویز */
+.canvas-noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: transparent;
+  filter: url(#noiseFilter);
+  opacity: var(--noise-opacity, 0);
+  mix-blend-mode: var(--noise-blend, overlay);
+  border-radius: 1rem;
 }
 
 .canvas-wrap.panning * {
@@ -714,16 +738,16 @@ header h1 {
   align-items: center;
   justify-content: center;
   justify-self: anchor-center;
-
-  transform: translateX(-15%);
+  position: absolute;
   background: var(--TransParent-bg);
   backdrop-filter: blur(2px);
-  margin-top: -29px;
+  bottom: -3.5rem;
   cursor: ns-resize;
   width: max-content;
   padding: 1rem;
   border-radius: 999px;
   border: 1px solid var(--border);
+
 }
 
 #resizeHeightHandle {
@@ -742,7 +766,7 @@ header h1 {
   align-self: anchor-center;
   background: var(--TransParent-bg);
   backdrop-filter: blur(2px);
-  right: 0.5rem;
+  right: -3.7rem;
   top: 0;
   cursor: ew-resize;
   padding: 1rem;
@@ -1020,7 +1044,7 @@ header h1 {
   pointer-events: none;
   opacity: 0;
   transition: all 0.2s ease;
-  z-index: 2000;
+  z-index: 999999;
   backdrop-filter: blur(8px);
 }
 
@@ -1921,7 +1945,7 @@ display: none;
 /* ========================================
    RESPONSIVE / MEDIA QUERIES
 ======================================== */
-@media (max-width: 1000px) {
+@media (max-width: 1240px) {
   header{
     height: max-content;
   }

@@ -99,7 +99,9 @@
 
     <div class="canvas-container">
       <div class="canvas-wrapper">
-        <canvas id="canvas"></canvas>
+        <div class="canvas-noise">
+          <canvas id="canvas"></canvas>
+        </div>
         <div class="resize-w">
           <div id="resizeWidthHandle" class="resize-width"></div>
           <button id="btnLock" class="Handle-btn" title="Lock to Center">
@@ -209,12 +211,12 @@
     </div>
     
     <!-- Blur -->
-    <div class="filter-row">
+    <!-- <div class="filter-row">
       <label>Blur</label>
       <input type="range" id="filterBlur" class="filter-slider" min="0" max="20" step="0.5" value="0">
       <input type="number" id="filterBlurNum" class="num-input" min="0" max="20" step="0.5" value="0">
       <span class="unit">px</span>
-    </div>
+    </div> -->
     
     <!-- Grayscale -->
     <div class="filter-row">
@@ -259,7 +261,7 @@
     </div>
     
     <!-- Blend Mode -->
-    <div class="form-row">
+    <!-- <div class="form-row">
       <label>Blend</label>
       <select id="bgBlendMode" class="blend-select">
         <option value="normal" selected>Normal</option>
@@ -279,7 +281,7 @@
         <option value="color">Color</option>
         <option value="luminosity">Luminosity</option>
       </select>
-    </div>
+    </div> -->
   </div>
 </div>
 <div class="section">
@@ -396,6 +398,19 @@
       </div>
     </div>
   </div>
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="noiseFilter" width="100%" height="100%" x="0%" y="0%"
+    filterUnits="objectBoundingBox">
+      <feTurbulence id="noiseTurbulence"
+        type="fractalNoise"
+        baseFrequency="0.65"
+        numOctaves="4"
+        stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+  </svg>
+  
+  
   <script src="app.js"></script>
 </body>
 

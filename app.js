@@ -1,415 +1,3 @@
-const select = document.getElementById('themeSelect');
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  localStorage.setItem('theme', theme);
-}
-
-const saved = localStorage.getItem('theme') || 'ocean';
-select.value = saved;
-applyTheme(saved);
-
-select.addEventListener('change', e => {
-  applyTheme(e.target.value);
-});
-
-// ========== SECTION DRAG & DROP - TOUCH + MOUSE ==========
-document.addEventListener('DOMContentLoaded', () => {
-  const container = document.querySelector('.panel');
-  if (!container) return;
-
-  // ========== STATE ==========
-  const sectionDrag = {
-    active: false,
-    pending: false,
-    element: null,
-    clone: null,
-    placeholder: null,
-    startY: 0,
-    startX: 0,
-    offsetY: 0,
-    delayTimer: null,
-    initialRect: null,
-    scrollCancelled: false, // 🆕 آیا اسکرول لغو شده
-  };
-
-  // ========== CONFIG ==========
-  const DRAG_CONFIG = {
-    delay: 200,
-    threshold: 10,
-    scrollThreshold: 15, // 🆕 حداقل حرکت برای تشخیص اسکرول
-  };
-
-  // ========== INIT ==========
-  container.querySelectorAll('.section').forEach(section => {
-    const header = section.querySelector('.section-header');
-    if (!header) return;
-
-    section.draggable = false;
-
-    // ========== MOUSE ==========
-    header.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      if (e.target.closest('select, input, button, a, .control-btn')) return;
-
-      e.preventDefault();
-      startPending(e, section, e.clientX, e.clientY);
-    });
-
-    // ========== TOUCH ==========
-    header.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) return;
-      if (e.target.closest('select, input, button, a, .control-btn')) return;
-
-      // ❌ حذف e.preventDefault() - اجازه اسکرول اولیه
-      startPending(e, section, e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: true }); // 🆕 passive: true
-
-  });
-
-  // ========== START PENDING ==========
-  function startPending(e, section, clientX, clientY) {
-    const rect = section.getBoundingClientRect();
-
-    sectionDrag.pending = true;
-    sectionDrag.element = section;
-    sectionDrag.startX = clientX;
-    sectionDrag.startY = clientY;
-    sectionDrag.offsetY = clientY - rect.top;
-    sectionDrag.initialRect = rect;
-    sectionDrag.scrollCancelled = false;
-
-    // تایمر تأخیر - فقط با نگه داشتن
-    sectionDrag.delayTimer = setTimeout(() => {
-      if (sectionDrag.pending && !sectionDrag.scrollCancelled) {
-        startActualDrag();
-      }
-    }, DRAG_CONFIG.delay);
-
-    // Event listeners
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchmove', onMove, { passive: false }); // 🆕 passive: false برای کنترل
-    document.addEventListener('touchend', onEnd);
-    document.addEventListener('touchcancel', onEnd);
-  }
-
-  // ========== ON MOVE ==========
-  function onMove(e) {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    // اگر هنوز در حالت pending هستیم
-    if (sectionDrag.pending && !sectionDrag.active) {
-      const dx = Math.abs(clientX - sectionDrag.startX);
-      const dy = Math.abs(clientY - sectionDrag.startY);
-      
-      // 🆕 تشخیص اسکرول: اگر کاربر حرکت کرد قبل از تمام شدن delay
-      if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
-        // کاربر می‌خواهد اسکرول کند - لغو pending
-        clearTimeout(sectionDrag.delayTimer);
-        sectionDrag.scrollCancelled = true;
-        sectionDrag.pending = false;
-        cleanup();
-        return; // 🆕 اجازه اسکرول طبیعی
-      }
-      return;
-    }
-
-    // حرکت واقعی drag
-    if (!sectionDrag.active || !sectionDrag.clone) return;
-    
-    e.preventDefault(); // 🆕 فقط وقتی drag فعال است
-
-    // حرکت clone
-    const newTop = clientY - sectionDrag.offsetY;
-    sectionDrag.clone.style.top = newTop + 'px';
-
-    // پیدا کردن موقعیت جدید
-    updatePlaceholderPosition(clientY);
-  }
-
-  // 🆕 تابع جداگانه برای بروزرسانی placeholder
-  function updatePlaceholderPosition(clientY) {
-    const sections = [...container.querySelectorAll('.section:not(.drag-original)')];
-    let targetSection = null;
-    let insertBefore = true;
-
-    for (const sec of sections) {
-      const rect = sec.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-
-      if (clientY < midY) {
-        targetSection = sec;
-        insertBefore = true;
-        break;
-      } else {
-        targetSection = sec;
-        insertBefore = false;
-      }
-    }
-
-    if (targetSection && sectionDrag.placeholder) {
-      if (insertBefore) {
-        if (sectionDrag.placeholder.nextElementSibling !== targetSection) {
-          container.insertBefore(sectionDrag.placeholder, targetSection);
-        }
-      } else {
-        const next = targetSection.nextElementSibling;
-        if (next && next !== sectionDrag.placeholder) {
-          container.insertBefore(sectionDrag.placeholder, next);
-        } else if (!next) {
-          container.appendChild(sectionDrag.placeholder);
-        }
-      }
-    }
-  }
-
-  // ========== START ACTUAL DRAG ==========
-  function startActualDrag() {
-    if (sectionDrag.active || !sectionDrag.element) return;
-
-    const section = sectionDrag.element;
-    const rect = sectionDrag.initialRect;
-
-    sectionDrag.pending = false;
-    sectionDrag.active = true;
-
-    // ایجاد clone
-    sectionDrag.clone = section.cloneNode(true);
-    sectionDrag.clone.classList.add('section-drag-clone');
-    sectionDrag.clone.style.cssText = `
-      position: fixed;
-      left: ${rect.left}px;
-      top: ${rect.top}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      z-index: 10000;
-      pointer-events: none;
-      opacity: 0.95;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-      transform: scale(1.02);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      border-radius: 8px;
-      background: var(--TransParent-bg);
-      backdrop-filter: blur(6px);
-      border: 2px solid var(--border);
-    `;
-    document.body.appendChild(sectionDrag.clone);
-
-    // ایجاد placeholder
-    sectionDrag.placeholder = document.createElement('div');
-    sectionDrag.placeholder.className = 'section-drag-placeholder';
-    sectionDrag.placeholder.style.cssText = `
-      height: ${rect.height}px;
-      margin: 8px 0;
-      border: 2px dashed var(--border);
-      border-radius: 8px;
-      background: rgba(255,255,255,0.05);
-      transition: height 0.2s ease;
-    `;
-
-    // جایگزینی
-    section.classList.add('drag-original');
-    section.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
-    
-    section.parentNode.insertBefore(sectionDrag.placeholder, section);
-
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'grabbing';
-    
-    // 🆕 جلوگیری از اسکرول در حین drag
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-
-    // فیدبک هپتیک
-    if (navigator.vibrate) {
-      navigator.vibrate(30);
-    }
-  }
-
-  // ========== ON END ==========
-  function onEnd() {
-    clearTimeout(sectionDrag.delayTimer);
-
-    // حذف event listeners
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onEnd);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onEnd);
-    document.removeEventListener('touchcancel', onEnd);
-
-    // اگر فقط pending بود یا اسکرول شد
-    if (!sectionDrag.active) {
-      cleanup();
-      return;
-    }
-
-    // انیمیشن بازگشت
-    if (sectionDrag.clone && sectionDrag.placeholder) {
-      const placeholderRect = sectionDrag.placeholder.getBoundingClientRect();
-      
-      sectionDrag.clone.style.transition = 'all 0.25s ease';
-      sectionDrag.clone.style.top = placeholderRect.top + 'px';
-      sectionDrag.clone.style.left = placeholderRect.left + 'px';
-      sectionDrag.clone.style.transform = 'scale(1)';
-      sectionDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-
-      setTimeout(finalizeDrag, 250);
-    } else {
-      finalizeDrag();
-    }
-  }
-
-  // ========== FINALIZE DRAG ==========
-  function finalizeDrag() {
-    if (sectionDrag.element && sectionDrag.placeholder) {
-      container.insertBefore(sectionDrag.element, sectionDrag.placeholder);
-    }
-    cleanup();
-    updateCSS();
-  }
-
-  // ========== CLEANUP ==========
-  function cleanup() {
-    if (sectionDrag.clone?.parentNode) {
-      sectionDrag.clone.remove();
-    }
-
-    if (sectionDrag.placeholder?.parentNode) {
-      sectionDrag.placeholder.remove();
-    }
-
-    if (sectionDrag.element) {
-      sectionDrag.element.classList.remove('drag-original');
-      sectionDrag.element.style.cssText = '';
-    }
-
-    // 🆕 بازگردانی اسکرول
-    document.body.style.overflow = '';
-    document.body.style.touchAction = '';
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-
-    Object.assign(sectionDrag, {
-      active: false,
-      pending: false,
-      element: null,
-      clone: null,
-      placeholder: null,
-      delayTimer: null,
-      initialRect: null,
-      scrollCancelled: false,
-    });
-  }
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.section').forEach(section => {
-    const header = section.querySelector('.section-header');
-    const content = section.querySelector('.section-content');
-
-    if (!header || !content) return;
-
-    let isOpen = false;
-    let isAnimating = false;
-    
-    // ========== Touch State ==========
-    let touchStartY = 0;
-    let touchStartTime = 0;
-    let isTouchMoved = false;
-
-    // ========== CONFIG ==========
-    const TAP_THRESHOLD = 10;      // حداکثر حرکت برای تشخیص tap (px)
-    const TAP_MAX_DURATION = 300;  // حداکثر زمان برای tap (ms)
-
-    // ✅ مقداردهی اولیه
-    content.style.height = '0px';
-
-    // ========== Toggle Function ==========
-    function toggle() {
-      if (isAnimating) return;
-      isAnimating = true;
-
-      if (isOpen) {
-        // ═══════════ بستن ═══════════
-        content.style.height = content.scrollHeight + 'px';
-        content.offsetHeight; // Force reflow
-        content.style.height = '0px';
-        section.classList.remove('open');
-      } else {
-        // ═══════════ باز کردن ═══════════
-        content.style.height = content.scrollHeight + 'px';
-        section.classList.add('open');
-        
-        // ✅ Haptic feedback
-        if (navigator.vibrate) {
-          navigator.vibrate(10);
-        }
-      }
-      
-      isOpen = !isOpen;
-    }
-
-    // ========== Mouse Click ==========
-    header.addEventListener('click', (e) => {
-      // جلوگیری از تداخل با دکمه‌ها
-      if (e.target.closest('button, input, select, a, .control-btn')) return;
-      toggle();
-    });
-
-    // ========== Touch Events ==========
-    header.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1) return;
-      if (e.target.closest('select, input, button, a, .control-btn')) return;
-    
-      startPending(e, section, e.touches[0].clientY);
-    }, { passive: true });
-    
-
-    header.addEventListener('touchmove', (e) => {
-      if (!touchStartTime) return;
-      
-      const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
-      
-      // اگر بیشتر از threshold حرکت کرد، scroll است نه tap
-      if (deltaY > TAP_THRESHOLD) {
-        isTouchMoved = true;
-      }
-    }, { passive: true });
-
-    header.addEventListener('touchend', (e) => {
-      // جلوگیری از تداخل با دکمه‌ها
-      if (e.target.closest('button, input, select, a, .control-btn')) return;
-      
-      const touchDuration = Date.now() - touchStartTime;
-      
-      // ✅ فقط اگر tap بود (نه scroll)
-      if (!isTouchMoved && touchDuration < TAP_MAX_DURATION) {
-        e.preventDefault(); // جلوگیری از ghost click
-        toggle();
-      }
-      
-      // Reset
-      touchStartY = 0;
-      touchStartTime = 0;
-      isTouchMoved = false;
-    }, { passive: false });
-
-    // ========== Transition End ==========
-    content.addEventListener('transitionend', (e) => {
-      if (e.propertyName !== 'height') return;
-      
-      isAnimating = false;
-      
-      if (isOpen) {
-        content.style.height = 'auto';
-      }
-    });
-  });
-});
-
-
 // ========== CONFIGURATION ==========
 const CONFIG = {
   canvas: {
@@ -445,7 +33,6 @@ const ctx = canvas.getContext("2d");
 const canvasWidth = document.getElementById("canvasWidth");
 const canvasHeight = document.getElementById("canvasHeight");
 
-// ========== STATE ==========
 let W = 800,
   H = 600,
   counter = 0;
@@ -456,8 +43,8 @@ const state = {
   selected: null,
   bgColor: "#0a0e14",
   bgAlpha: 100,
-  bgBlendMode: 'normal',  // ✅ اضافه شد
-  bgEnabled: true,         // ✅ اضافه شد
+  bgBlendMode: 'normal',
+  bgEnabled: true,
   cssFormat: "rgba",
   canvasWidth: 800,
   canvasHeight: 600,
@@ -486,7 +73,7 @@ let sbDrag = false,
   alphaDrag = false;
 let pickerDragging = false;
 
-// ========== ASPECT RATIO & RESOLUTION STATE (یکپارچه) ==========
+// ========== ASPECT RATIO & RESOLUTION STATE ==========
 const aspectPresets = {
   free: { w: null, h: null },
   "1:1": { w: 1, h: 1 },
@@ -820,6 +407,417 @@ function lighten(hex, amount = 20) {
     b.toString(16).padStart(2, "0")
   );
 }
+
+const select = document.getElementById('themeSelect');
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('theme', theme);
+}
+
+const saved = localStorage.getItem('theme') || 'ocean';
+select.value = saved;
+applyTheme(saved);
+
+select.addEventListener('change', e => {
+  applyTheme(e.target.value);
+});
+
+// ========== SECTION DRAG & DROP - TOUCH + MOUSE ==========
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.querySelector('.panel');
+  if (!container) return;
+
+  // ========== STATE ==========
+  const sectionDrag = {
+    active: false,
+    pending: false,
+    element: null,
+    clone: null,
+    placeholder: null,
+    startY: 0,
+    startX: 0,
+    offsetY: 0,
+    delayTimer: null,
+    initialRect: null,
+    scrollCancelled: false, // 🆕 آیا اسکرول لغو شده
+  };
+
+  // ========== CONFIG ==========
+  const DRAG_CONFIG = {
+    delay: 200,
+    threshold: 10,
+    scrollThreshold: 15, // 🆕 حداقل حرکت برای تشخیص اسکرول
+  };
+
+  // ========== INIT ==========
+  container.querySelectorAll('.section').forEach(section => {
+    const header = section.querySelector('.section-header');
+    if (!header) return;
+
+    section.draggable = false;
+
+    // ========== MOUSE ==========
+    header.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest('select, input, button, a, .control-btn')) return;
+
+      e.preventDefault();
+      startPending(e, section, e.clientX, e.clientY);
+    });
+
+    // ========== TOUCH ==========
+    header.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      if (e.target.closest('select, input, button, a, .control-btn')) return;
+
+      // ❌ حذف e.preventDefault() - اجازه اسکرول اولیه
+      startPending(e, section, e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true }); // 🆕 passive: true
+
+  });
+
+  // ========== START PENDING ==========
+  function startPending(e, section, clientX, clientY) {
+    const rect = section.getBoundingClientRect();
+
+    sectionDrag.pending = true;
+    sectionDrag.element = section;
+    sectionDrag.startX = clientX;
+    sectionDrag.startY = clientY;
+    sectionDrag.offsetY = clientY - rect.top;
+    sectionDrag.initialRect = rect;
+    sectionDrag.scrollCancelled = false;
+
+    // تایمر تأخیر - فقط با نگه داشتن
+    sectionDrag.delayTimer = setTimeout(() => {
+      if (sectionDrag.pending && !sectionDrag.scrollCancelled) {
+        startActualDrag();
+      }
+    }, DRAG_CONFIG.delay);
+
+    // Event listeners
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false }); // 🆕 passive: false برای کنترل
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
+  }
+
+  // ========== ON MOVE ==========
+  function onMove(e) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    // اگر هنوز در حالت pending هستیم
+    if (sectionDrag.pending && !sectionDrag.active) {
+      const dx = Math.abs(clientX - sectionDrag.startX);
+      const dy = Math.abs(clientY - sectionDrag.startY);
+      
+      // 🆕 تشخیص اسکرول: اگر کاربر حرکت کرد قبل از تمام شدن delay
+      if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
+        // کاربر می‌خواهد اسکرول کند - لغو pending
+        clearTimeout(sectionDrag.delayTimer);
+        sectionDrag.scrollCancelled = true;
+        sectionDrag.pending = false;
+        cleanup();
+        return; // 🆕 اجازه اسکرول طبیعی
+      }
+      return;
+    }
+
+    // حرکت واقعی drag
+    if (!sectionDrag.active || !sectionDrag.clone) return;
+    
+    e.preventDefault(); // 🆕 فقط وقتی drag فعال است
+
+    // حرکت clone
+    const newTop = clientY - sectionDrag.offsetY;
+    sectionDrag.clone.style.top = newTop + 'px';
+
+    // پیدا کردن موقعیت جدید
+    updatePlaceholderPosition(clientY);
+  }
+
+  // 🆕 تابع جداگانه برای بروزرسانی placeholder
+  function updatePlaceholderPosition(clientY) {
+    const sections = [...container.querySelectorAll('.section:not(.drag-original)')];
+    let targetSection = null;
+    let insertBefore = true;
+
+    for (const sec of sections) {
+      const rect = sec.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (clientY < midY) {
+        targetSection = sec;
+        insertBefore = true;
+        break;
+      } else {
+        targetSection = sec;
+        insertBefore = false;
+      }
+    }
+
+    if (targetSection && sectionDrag.placeholder) {
+      if (insertBefore) {
+        if (sectionDrag.placeholder.nextElementSibling !== targetSection) {
+          container.insertBefore(sectionDrag.placeholder, targetSection);
+        }
+      } else {
+        const next = targetSection.nextElementSibling;
+        if (next && next !== sectionDrag.placeholder) {
+          container.insertBefore(sectionDrag.placeholder, next);
+        } else if (!next) {
+          container.appendChild(sectionDrag.placeholder);
+        }
+      }
+    }
+  }
+
+  // ========== START ACTUAL DRAG ==========
+  function startActualDrag() {
+    if (sectionDrag.active || !sectionDrag.element) return;
+
+    const section = sectionDrag.element;
+    const rect = sectionDrag.initialRect;
+
+    sectionDrag.pending = false;
+    sectionDrag.active = true;
+
+    // ایجاد clone
+    sectionDrag.clone = section.cloneNode(true);
+    sectionDrag.clone.classList.add('section-drag-clone');
+    sectionDrag.clone.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0.95;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      transform: scale(1.02);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      border-radius: 8px;
+      background: var(--TransParent-bg);
+      backdrop-filter: blur(6px);
+      border: 2px solid var(--border);
+    `;
+    document.body.appendChild(sectionDrag.clone);
+
+    // ایجاد placeholder
+    sectionDrag.placeholder = document.createElement('div');
+    sectionDrag.placeholder.className = 'section-drag-placeholder';
+    sectionDrag.placeholder.style.cssText = `
+      height: ${rect.height}px;
+      margin-bottom: 18px;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      transition: height 0.2s ease;
+    `;
+
+    // جایگزینی
+    section.classList.add('drag-original');
+    section.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
+    
+    section.parentNode.insertBefore(sectionDrag.placeholder, section);
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+    
+    // 🆕 جلوگیری از اسکرول در حین drag
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    // فیدبک هپتیک
+    if (navigator.vibrate) {
+      navigator.vibrate(30);
+    }
+  }
+
+  // ========== ON END ==========
+  function onEnd() {
+    clearTimeout(sectionDrag.delayTimer);
+
+    // حذف event listeners
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    document.removeEventListener('touchcancel', onEnd);
+
+    // اگر فقط pending بود یا اسکرول شد
+    if (!sectionDrag.active) {
+      cleanup();
+      return;
+    }
+
+    // انیمیشن بازگشت
+    if (sectionDrag.clone && sectionDrag.placeholder) {
+      const placeholderRect = sectionDrag.placeholder.getBoundingClientRect();
+      
+      sectionDrag.clone.style.transition = 'all 0.25s ease';
+      sectionDrag.clone.style.top = placeholderRect.top + 'px';
+      sectionDrag.clone.style.left = placeholderRect.left + 'px';
+      sectionDrag.clone.style.transform = 'scale(1)';
+      sectionDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+
+      setTimeout(finalizeDrag, 250);
+    } else {
+      finalizeDrag();
+    }
+  }
+
+  // ========== FINALIZE DRAG ==========
+  function finalizeDrag() {
+    if (sectionDrag.element && sectionDrag.placeholder) {
+      container.insertBefore(sectionDrag.element, sectionDrag.placeholder);
+    }
+    cleanup();
+    updateCSS();
+  }
+
+  // ========== CLEANUP ==========
+  function cleanup() {
+    if (sectionDrag.clone?.parentNode) {
+      sectionDrag.clone.remove();
+    }
+
+    if (sectionDrag.placeholder?.parentNode) {
+      sectionDrag.placeholder.remove();
+    }
+
+    if (sectionDrag.element) {
+      sectionDrag.element.classList.remove('drag-original');
+      sectionDrag.element.style.cssText = '';
+    }
+
+    // 🆕 بازگردانی اسکرول
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+
+    Object.assign(sectionDrag, {
+      active: false,
+      pending: false,
+      element: null,
+      clone: null,
+      placeholder: null,
+      delayTimer: null,
+      initialRect: null,
+      scrollCancelled: false,
+    });
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.section').forEach(section => {
+    const header = section.querySelector('.section-header');
+    const content = section.querySelector('.section-content');
+
+    if (!header || !content) return;
+
+    let isOpen = false;
+    let isAnimating = false;
+    
+    // ========== Touch State ==========
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isTouchMoved = false;
+
+    // ========== CONFIG ==========
+    const TAP_THRESHOLD = 10;      // حداکثر حرکت برای تشخیص tap (px)
+    const TAP_MAX_DURATION = 300;  // حداکثر زمان برای tap (ms)
+
+    // ✅ مقداردهی اولیه
+    content.style.height = '0px';
+
+    // ========== Toggle Function ==========
+    function toggle() {
+      if (isAnimating) return;
+      isAnimating = true;
+
+      if (isOpen) {
+        // ═══════════ بستن ═══════════
+        content.style.height = content.scrollHeight + 'px';
+        content.offsetHeight; // Force reflow
+        content.style.height = '0px';
+        section.classList.remove('open');
+      } else {
+        // ═══════════ باز کردن ═══════════
+        content.style.height = content.scrollHeight + 'px';
+        section.classList.add('open');
+        
+        // ✅ Haptic feedback
+        if (navigator.vibrate) {
+          navigator.vibrate(10);
+        }
+      }
+      
+      isOpen = !isOpen;
+    }
+
+    // ========== Mouse Click ==========
+    header.addEventListener('click', (e) => {
+      // جلوگیری از تداخل با دکمه‌ها
+      if (e.target.closest('button, input, select, a, .control-btn')) return;
+      toggle();
+    });
+
+    // ========== Touch Events ==========
+    header.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      if (e.target.closest('select, input, button, a, .control-btn')) return;
+    
+      startPending(e, section, e.touches[0].clientY);
+    }, { passive: true });
+    
+
+    header.addEventListener('touchmove', (e) => {
+      if (!touchStartTime) return;
+      
+      const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
+      
+      // اگر بیشتر از threshold حرکت کرد، scroll است نه tap
+      if (deltaY > TAP_THRESHOLD) {
+        isTouchMoved = true;
+      }
+    }, { passive: true });
+
+    header.addEventListener('touchend', (e) => {
+      // جلوگیری از تداخل با دکمه‌ها
+      if (e.target.closest('button, input, select, a, .control-btn')) return;
+      
+      const touchDuration = Date.now() - touchStartTime;
+      
+      // ✅ فقط اگر tap بود (نه scroll)
+      if (!isTouchMoved && touchDuration < TAP_MAX_DURATION) {
+        e.preventDefault(); // جلوگیری از ghost click
+        toggle();
+      }
+      
+      // Reset
+      touchStartY = 0;
+      touchStartTime = 0;
+      isTouchMoved = false;
+    }, { passive: false });
+
+    // ========== Transition End ==========
+    content.addEventListener('transitionend', (e) => {
+      if (e.propertyName !== 'height') return;
+      
+      isAnimating = false;
+      
+      if (isOpen) {
+        content.style.height = 'auto';
+      }
+    });
+  });
+});
 
 // ========== DIMENSION SYSTEM ==========
 function clearAllPresetSelections() {
@@ -1225,154 +1223,7 @@ function updateSizeDisplay() {
   }
 }
 
-// ========== PAN STATE ==========
-const panState = {
-  active: false,
-  startX: 0,
-  startY: 0,
-  scrollLeft: 0,
-  scrollTop: 0,
-  mode: false // true = pan mode فعال
-};
-
-
-// ========== PAN FUNCTIONS ==========
-function initPan() {
-  const wrap = document.querySelector('.canvas-wrap');
-  const canvas = document.getElementById('canvas');
-  if (!wrap || !canvas) return;
-
-  // ✅ دکمه Pan
-  const panBtn = document.getElementById('panBtn');
-  if (panBtn) {
-    panBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      togglePanMode();
-    });
-    
-    panBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      togglePanMode();
-    }, { passive: false });
-  }
-
-  // ========== MOUSE - فقط روی Canvas ==========
-  canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 1 || (e.button === 0 && panState.mode)) {
-      e.preventDefault();
-      e.stopPropagation();
-      startPan(e.clientX, e.clientY, wrap);
-    }
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (panState.active) {
-      e.preventDefault();
-      doPan(e.clientX, e.clientY, wrap);
-    }
-  });
-
-  document.addEventListener('mouseup', () => {
-    endPan(wrap);
-  });
-
-  // Space + drag (desktop)
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && !e.target.closest('input, textarea')) {
-      e.preventDefault();
-      panState.mode = true;
-      updatePanUI();
-    }
-  });
-
-  document.addEventListener('keyup', (e) => {
-    if (e.code === 'Space') {
-      panState.mode = false;
-      updatePanUI();
-    }
-  });
-
-  // ========== TOUCH - فقط روی Canvas ==========
-  canvas.addEventListener('touchstart', (e) => {
-    if (panState.mode && e.touches.length === 1) {
-      e.preventDefault();
-      e.stopPropagation();
-      startPan(e.touches[0].clientX, e.touches[0].clientY, wrap);
-    }
-  }, { passive: false });
-
-  canvas.addEventListener('touchmove', (e) => {
-    if (panState.active && e.touches.length === 1) {
-      e.preventDefault();
-      doPan(e.touches[0].clientX, e.touches[0].clientY, wrap);
-    }
-  }, { passive: false });
-
-  canvas.addEventListener('touchend', () => {
-    endPan(wrap);
-  });
-
-  canvas.addEventListener('touchcancel', () => {
-    endPan(wrap);
-  });
-}
-
-function startPan(x, y, wrap) {
-  panState.active = true;
-  panState.startX = x;
-  panState.startY = y;
-  panState.scrollLeft = wrap.scrollLeft;
-  panState.scrollTop = wrap.scrollTop;
-  wrap.classList.add('panning');
-}
-
-function doPan(x, y, wrap) {
-  if (!panState.active) return;
-  
-  const dx = x - panState.startX;
-  const dy = y - panState.startY;
-  
-  wrap.scrollLeft = panState.scrollLeft - dx;
-  wrap.scrollTop = panState.scrollTop - dy;
-}
-
-function endPan(wrap) {
-  panState.active = false;
-  wrap.classList.remove('panning');
-}
-
-function togglePanMode() {
-  panState.mode = !panState.mode;
-  updatePanUI();
-}
-
-function updatePanUI() {
-  const wrap = document.querySelector('.canvas-wrap');
-  const canvas = document.getElementById('canvas');
-  const btn = document.getElementById('panBtn');
-  
-  if (wrap) {
-    wrap.style.cursor = panState.mode ? 'grab' : '';
-  }
-  
-  if (canvas) {
-    canvas.style.cursor = panState.mode ? 'grab' : 'crosshair';
-  }
-  
-  if (btn) {
-    btn.classList.toggle('active', panState.mode);
-    btn.innerHTML = panState.mode
-      ? `<img src="./icon/pan.svg" alt="pan tool">`
-      : `<img src="./icon/hand.svg" alt="pan tool">`;
-  }
-  
-}
-
-// Global
-window.togglePanMode = togglePanMode;
-// ========== CANVAS RESIZE ==========
+// ========== CANVAS ==========
 function resize() {
   W = state.canvasWidth;
   H = state.canvasHeight;
@@ -1412,1041 +1263,17 @@ function resize() {
 
   draw();
 }
+const toolbar = document.querySelector('.tool-bar');
+const zoomControls = document.querySelector('.zoom-controls');
+const canvasWrap = document.querySelector('.canvas-wrap');
+
+canvasWrap.addEventListener('scroll', () => {
+  const x = canvasWrap.scrollLeft;
+  const y = canvasWrap.scrollTop;
+  toolbar.style.transform = `translate(${x}px, ${y}px)`;
+  zoomControls.style.transform = `translate(${x}px, ${y}px)`;
+});
 
-// ========== checkAndFixZoom ==========
-let lastCanvasW = 0;
-let lastCanvasH = 0;
-function checkAndFixZoom() {
-  if (state.canvasWidth === lastCanvasW && state.canvasHeight === lastCanvasH) {
-    return;
-  }
-  
-  lastCanvasW = state.canvasWidth;
-  lastCanvasH = state.canvasHeight;
-
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
-
-  const rect = wrap.getBoundingClientRect();
-  const padding = zoomState.padding * 2;
-  const scale = zoomState.current / 100;
-
-  const displayWidth = state.canvasWidth * scale;
-  const displayHeight = state.canvasHeight * scale;
-
-  const tooLarge =
-    displayWidth > rect.width - padding ||
-    displayHeight > rect.height - padding;
-
-  const tooSmall =
-    displayWidth < (rect.width - padding) * 0.93 &&
-    displayHeight < (rect.height - padding) * 0.3;
-
-  if (tooLarge || tooSmall) {
-    fitToScreen();
-  } else {
-    canvas.style.width = state.canvasWidth * scale + "px";
-    canvas.style.height = state.canvasHeight * scale + "px";
-    updateZoomUI();
-  }
-}
-
-function setCanvasSize(w, h) {
-  state.canvasWidth = Math.floor(
-    clamp(w, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth)
-  );
-  state.canvasHeight = Math.floor(
-    clamp(h, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight)
-  );
-  refresh();
-}
-
-// ========== STOP CRUD ==========
-function getStop(id) {
-  return state.stops.find((s) => s.id === id);
-}
-
-// ========== در تابع addStop ==========
-function addStop(type) {
-  counter++;
-  const typeNames = { radial: "Radial", linear: "Linear", conic: "Conic" };
-  const s = {
-    id: uid(),
-    name: `${typeNames[type]} ${counter}`,
-    type,
-    visible: true,
-    x: 0.2 + Math.random() * 0.6,
-    y: state.lockVertical ? 0.5 : 0.2 + Math.random() * 0.6,
-    color: randColor(),
-    size: 80 + Math.random() * 100,
-    feather: 60,
-    opacity: 100,
-    angle: Math.floor(Math.random() * 180),
-    startAngle: 0,
-    blendMode: 'screen',  // ✅ اضافه شد - پیش‌فرض screen
-    stops: [
-      { pos: 0, color: randColor(), opacity: 100 },
-      { pos: 100, color: randColor(), opacity: 100 },
-    ],
-  };
-  state.stops.push(s);
-  state.selected = s.id;
-  refresh();
-}
-
-function delStop(id) {
-  state.stops = state.stops.filter((s) => s.id !== id);
-  if (state.selected === id) state.selected = null;
-  refresh();
-}
-
-function dupStop(id) {
-  const o = getStop(id);
-  if (!o) return;
-  counter++;
-  const c = JSON.parse(JSON.stringify(o));
-  c.id = uid();
-  c.name += " Copy";
-  c.x = clamp(c.x + 0.04, 0, 1);
-  c.y = clamp(c.y + 0.04, 0, 1);
-  state.stops.push(c);
-  state.selected = c.id;
-  refresh();
-}
-
-function toggleVis(id) {
-  const s = getStop(id);
-  if (s) {
-    s.visible = !s.visible;
-    refresh();
-  }
-}
-
-function addColorStop(s) {
-  const pos =
-    s.stops.length < 5
-      ? Math.round(100 / (s.stops.length + 1)) * s.stops.length
-      : 50;
-  s.stops.push({ pos, color: randColor(), opacity: 100 });
-  s.stops.sort((a, b) => a.pos - b.pos);
-  refresh();
-}
-
-function delColorStop(s, i) {
-  if (s.stops.length > 2) {
-    s.stops.splice(i, 1);
-    refresh();
-  }
-}
-
-function safeButtonAction(action) {
-  isButtonInteraction = true;
-  
-  try {
-    action();
-  } finally {
-    setTimeout(() => {
-      isButtonInteraction = false;
-    }, 100);
-  }
-}
-// ========== TOGGLE HANDLES ==========
-const toggleBtn = document.getElementById("toggleHandles");
-let lastToggleTime = 0;
-
-function handleToggleClick(e) {
-  if (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-  }
-  
-  const now = Date.now();
-  if (now - lastToggleTime < 300) return;
-  lastToggleTime = now;
-
-  state.showHandles = !state.showHandles;
-
-  if (toggleBtn) {
-    toggleBtn.innerHTML = state.showHandles
-      ? '<img src="./icon/eye.svg" alt="show handel">'
-      : '<img src="./icon/eye-close.svg" alt="hide handel">';
-    toggleBtn.classList.toggle("handles-hidden", !state.showHandles);
-  }
-  draw();
-}
-
-if (toggleBtn) {
-  toggleBtn.addEventListener("click", handleToggleClick);
-  
-  toggleBtn.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, { passive: false });
-  
-  toggleBtn.addEventListener("touchend", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleToggleClick(e);
-  }, { passive: false });
-}
-
-
-// ========== DRAWING FUNCTIONS ==========
-function getLinearGradientPoints(angle, width, height) {
-  const angleRad = ((angle - 90) * Math.PI) / 180;
-  const diagonal = Math.hypot(width, height);
-  const cx = width / 2;
-  const cy = height / 2;
-  const dx = (Math.cos(angleRad) * diagonal) / 2;
-  const dy = (Math.sin(angleRad) * diagonal) / 2;
-
-  return { x1: cx - dx, y1: cy - dy, x2: cx + dx, y2: cy + dy, cx, cy };
-}
-
-function getHandleSize(selected = false) {
-  const scale = Math.max(W, H) / 800;
-  const baseSize = selected ? 12 : 8;
-  const size = baseSize * scale;
-  return clamp(size, selected ? 12 : 8, selected ? 50 : 35);
-}
-
-function getLineWidth(selected = false) {
-  const scale = Math.max(W, H) / 800;
-  const baseWidth = selected ? 5 : 4;
-  const width = baseWidth * scale;
-  return clamp(width, selected ? 5 : 4, selected ? 16 : 12);
-}
-
-function getFontSize() {
-  const scale = Math.max(W, H) / 800;
-  const baseSize = 10;
-  const size = baseSize * scale;
-  return clamp(size, 10, 36);
-}
-
-// ========== BACKGROUND CONTROLS ==========
-
-function toggleBackground() {
-  state.bgEnabled = !state.bgEnabled;
-  updateBgUI();
-  draw();
-  updateCSS();
-}
-
-function setBgBlendMode(mode) {
-  state.bgBlendMode = mode;
-  draw();
-  updateCSS();
-}
-
-function updateBgUI() {
-  const toggleBtn = document.getElementById('bgToggleBtn');
-  const bgControls = document.querySelector('.bg-controls');
-  
-  if (toggleBtn) {
-    const img = toggleBtn.querySelector('img');
-    if (img) {
-      img.src = state.bgEnabled ? './icon/eye.svg' : './icon/eye-close.svg';
-    }
-    toggleBtn.classList.toggle('disabled', !state.bgEnabled);
-  }
-  
-  if (bgControls) {
-    bgControls.classList.toggle('disabled', !state.bgEnabled);
-  }
-  
-  const blendSelect = document.getElementById('bgBlendMode');
-  if (blendSelect) {
-    blendSelect.value = state.bgBlendMode;
-  }
-}
-
-function initBackgroundEvents() {
-  // Toggle button
-  document.getElementById('bgToggleBtn')?.addEventListener('click', toggleBackground);
-  
-  // Blend mode select
-  document.getElementById('bgBlendMode')?.addEventListener('change', (e) => {
-    setBgBlendMode(e.target.value);
-  });
-}
-
-// Add to globals
-window.toggleBackground = toggleBackground;
-window.setBgBlendMode = setBgBlendMode;
-
-// ========== BLEND MODE HELPER ==========
-function getCanvasBlendMode(cssBlendMode) {
-  // CSS 'normal' = Canvas 'source-over'
-  if (!cssBlendMode || cssBlendMode === 'normal') {
-    return 'source-over';
-  }
-  return cssBlendMode;
-}
-// ========== DRAW FUNCTION ==========
-// ========== DRAW FUNCTION - WITH BG BLEND MODE ==========
-function draw() {
-  ctx.clearRect(0, 0, W, H);
-  
-  const visibleStops = state.stops.filter((s) => s.visible);
-  const dpr = canvas.width / W;
-  
-  const needsFilter = hasActiveFilters();
-  let targetCtx = ctx;
-  let tempCanvas = null;
-  
-  if (needsFilter) {
-    tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
-    targetCtx = tempCanvas.getContext('2d');
-    targetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  
-  // ========== 1. پس‌زمینه ==========
-  if (state.bgEnabled) {
-    targetCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-    targetCtx.fillRect(0, 0, W, H);
-  }
-
-  // ========== 2. خط قفل عمودی ==========
-  if (state.lockVertical) {
-    const scale = Math.max(W, H) / 800;
-    targetCtx.strokeStyle = "rgba(255,255,255,0.5)";
-    targetCtx.lineWidth = 2 * scale;
-    targetCtx.setLineDash([10 * scale, 5 * scale]);
-    targetCtx.beginPath();
-    targetCtx.moveTo(0, H / 2);
-    targetCtx.lineTo(W, H / 2);
-    targetCtx.stroke();
-    targetCtx.setLineDash([]);
-  }
-
-  // ========== 3. گرادینت‌ها با Background Blend Mode ==========
-  if (visibleStops.length > 0) {
-    const reversedStops = [...visibleStops].reverse();
-    
-    // ✅ چک کردن آیا bgBlendMode فعاله
-    const needsBgBlend = state.bgEnabled && 
-                         state.bgBlendMode && 
-                         state.bgBlendMode !== 'normal';
-    
-    if (needsBgBlend) {
-      // ✅ Canvas موقت برای گرادینت‌ها
-      const gradCanvas = document.createElement('canvas');
-      gradCanvas.width = canvas.width;
-      gradCanvas.height = canvas.height;
-      const gradCtx = gradCanvas.getContext('2d');
-      gradCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      
-      // رسم گرادینت‌ها روی canvas موقت
-      reversedStops.forEach(s => {
-        gradCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
-        drawGradToCtx(s, gradCtx, W, H);
-      });
-      gradCtx.globalCompositeOperation = 'source-over';
-      
-      // ✅ ترکیب با bgBlendMode روی پس‌زمینه
-      targetCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
-      targetCtx.drawImage(gradCanvas, 0, 0);
-      targetCtx.globalCompositeOperation = 'source-over';
-      
-    } else {
-      // بدون bg blend - مستقیم رسم کن
-      reversedStops.forEach(s => {
-        targetCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
-        drawGradToCtx(s, targetCtx, W, H);
-      });
-      targetCtx.globalCompositeOperation = 'source-over';
-    }
-  }
-
-  // ========== 4. فیلترها ==========
-  if (needsFilter && tempCanvas) {
-    if (filterState.blur > 0) {
-      const blurCanvas = document.createElement('canvas');
-      blurCanvas.width = canvas.width;
-      blurCanvas.height = canvas.height;
-      const blurCtx = blurCanvas.getContext('2d');
-      blurCtx.filter = `blur(${filterState.blur}px)`;
-      blurCtx.drawImage(tempCanvas, 0, 0);
-      tempCanvas = blurCanvas;
-      targetCtx = blurCanvas.getContext('2d');
-    }
-    
-    if (hasNonBlurFilters()) {
-      const imageData = targetCtx.getImageData(0, 0, canvas.width, canvas.height);
-      applyFiltersToImageData(imageData);
-      targetCtx.putImageData(imageData, 0, 0);
-    }
-    
-    ctx.drawImage(tempCanvas, 0, 0);
-  }
-
-  // ========== 5. نویز ==========
-  drawNoise();
-
-  // ========== 6. هندل‌ها ==========
-  if (state.showHandles) {
-    visibleStops.forEach(drawHandle);
-  }
-}
-
-function fixTransparentStops(stops) {
-  const sorted = [...stops].sort((a, b) => a.pos - b.pos);
-  const result = [];
-  
-  for (let i = 0; i < sorted.length; i++) {
-    const cs = sorted[i];
-    const prev = sorted[i - 1];
-    const next = sorted[i + 1];
-    
-    if (cs.opacity === 0) {
-      // ✅ برای Hard Edge: دو stop شفاف در همان position
-      
-      if (prev) {
-        result.push({
-          pos: cs.pos,
-          color: prev.color,
-          opacity: 0
-        });
-      }
-      
-      if (next) {
-        result.push({
-          pos: cs.pos,  // ✅ همان position - بدون فاصله!
-          color: next.color,
-          opacity: 0
-        });
-      }
-      
-      // اگر تنها stop شفاف است
-      if (!prev && !next) {
-        result.push(cs);
-      }
-      
-    } else {
-      result.push(cs);
-    }
-  }
-  
-  return result;
-}
-
-// ========== تابع drawGradToCtx اصلاح‌شده ==========
-function drawGradToCtx(s, targetCtx, width = W, height = H) {
-  const cx = s.x * width;
-  const cy = s.y * height;
-
-  if (s.type === "radial") {
-    const outer = s.size;
-    const solidEnd = 1 - s.feather / 100;
-    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-    const color = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    targetCtx.fillStyle = grad;
-    targetCtx.beginPath();
-    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
-    targetCtx.fill();
-  } 
-  else if (s.type === "linear") {
-    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
-    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
-
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  } 
-  else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
-
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  }
-}
-
-// ========== تابع کمکی برای رسم گرادینت روی context دلخواه ==========
-function drawGradToContext(s, targetCtx, width, height) {
-  const cx = s.x * width;
-  const cy = s.y * height;
-
-  if (s.type === "radial") {
-    const outer = s.size;
-    const solidEnd = 1 - s.feather / 100;
-    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-    const color = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    targetCtx.fillStyle = grad;
-    targetCtx.beginPath();
-    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
-    targetCtx.fill();
-  } 
-  else if (s.type === "linear") {
-    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
-    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  } 
-  else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  }
-}
-
-// ========== تابع کمکی برای رسم گرادینت روی context دلخواه ==========
-function drawGradToContext(s, targetCtx) {
-  const cx = s.x * W;
-  const cy = s.y * H;
-
-  if (s.type === "radial") {
-    const outer = s.size;
-    const solidEnd = 1 - s.feather / 100;
-    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-    const color = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    targetCtx.fillStyle = grad;
-    targetCtx.beginPath();
-    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
-    targetCtx.fill();
-  } 
-  else if (s.type === "linear") {
-    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
-    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, W, H);
-  } 
-  else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, W, H);
-  }
-}
-function drawGrad(s) {
-  const cx = s.x * W;
-  const cy = s.y * H;
-
-  if (s.type === "radial") drawRadialGradient(s, cx, cy);
-  else if (s.type === "linear") drawLinearGradient(s);
-  else if (s.type === "conic") drawConicGradient(s, cx, cy);
-}
-
-function drawRadialGradient(s, cx, cy) {
-  const outer = s.size;
-  const solidEnd = 1 - s.feather / 100;
-
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-  const color = rgba(s.color, s.opacity / 100);
-
-  grad.addColorStop(0, color);
-  if (solidEnd > 0 && solidEnd < 1) {
-    grad.addColorStop(solidEnd, color);
-  }
-  grad.addColorStop(1, rgba(s.color, 0));
-
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, outer, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawLinearGradient(s) {
-  const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
-  const grad = ctx.createLinearGradient(x1, y1, x2, y2);
-
-  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
-  const finalStops = [];
-  
-  for (let i = 0; i < sortedStops.length; i++) {
-    const cs = sortedStops[i];
-    
-    if (cs.opacity === 0) {
-      const prev = sortedStops[i - 1];
-      const next = sortedStops[i + 1];
-      
-      // شفاف با رنگ قبلی
-      if (prev) {
-        finalStops.push({
-          pos: cs.pos,
-          color: prev.color,
-          opacity: 0
-        });
-      }
-      
-      // شفاف با رنگ بعدی
-      if (next && (!prev || next.color !== prev.color)) {
-        finalStops.push({
-          pos: cs.pos + 0.001,
-          color: next.color,
-          opacity: 0
-        });
-      }
-      
-      // اگه اولین یا آخرین stop بود
-      if (!prev && next) {
-        finalStops.push({ pos: cs.pos, color: next.color, opacity: 0 });
-      }
-      if (!next && prev) {
-        finalStops.push({ pos: cs.pos, color: prev.color, opacity: 0 });
-      }
-    } else {
-      finalStops.push(cs);
-    }
-  }
-
-  finalStops.sort((a, b) => a.pos - b.pos);
-
-  finalStops.forEach((cs) => {
-    grad.addColorStop(
-      clamp(cs.pos / 100, 0, 1),
-      rgba(cs.color, cs.opacity / 100)
-    );
-  });
-
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-}
-
-function drawConicGradient(s, cx, cy) {
-  const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-  const grad = ctx.createConicGradient(startAngle, cx, cy);
-
-  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
-  const finalStops = [];
-  const len = sortedStops.length;
-
-  for (let i = 0; i < len; i++) {
-    const cs = sortedStops[i];
-    const prev = sortedStops[(i - 1 + len) % len];
-    const next = sortedStops[(i + 1) % len];
-
-    if (cs.opacity === 0) {
-      // ✅ مرز تیز: دو stop شفاف دقیقاً در یک pos
-      if (prev) {
-        finalStops.push({
-          pos: cs.pos,
-          color: prev.color,
-          opacity: 0
-        });
-      }
-
-      if (next && (!prev || next.color !== prev.color)) {
-        finalStops.push({
-          pos: cs.pos,
-          color: next.color,
-          opacity: 0
-        });
-      }
-    } else {
-      finalStops.push(cs);
-    }
-  }
-
-  finalStops.sort((a, b) => a.pos - b.pos);
-
-  finalStops.forEach(cs => {
-    grad.addColorStop(
-      clamp(cs.pos / 100, 0, 1),
-      rgba(cs.color, cs.opacity / 100)
-    );
-  });
-
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-}
-
-
-function drawHandle(s) {
-  const sel = state.selected === s.id;
-  const cx = s.x * W;
-  const cy = s.y * H;
-
-  if (s.type === "radial") drawRadialHandle(s, cx, cy, sel);
-  else if (s.type === "linear") drawLinearHandle(s, cx, cy, sel);
-  else if (s.type === "conic") drawConicHandle(s, cx, cy, sel);
-}
-
-function drawRadialHandle(s, cx, cy, sel) {
-  const handleSize = getHandleSize(sel);
-  const lineWidth = getLineWidth(sel);
-  const scale = Math.max(W, H) / 800;
-
-  if (sel) {
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.2)";
-    ctx.setLineDash([8 * scale, 4 * scale]);
-    ctx.lineWidth = 2 * scale;
-    ctx.beginPath();
-    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.save();
-    ctx.shadowColor = s.color;
-    ctx.shadowBlur = 20 * scale;
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, handleSize * 1.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.5)";
-  ctx.shadowBlur = 8 * scale;
-  ctx.shadowOffsetY = 2 * scale;
-
-  ctx.strokeStyle = s.color;
-  ctx.lineWidth = lineWidth;
-  ctx.beginPath();
-  ctx.arc(cx, cy, handleSize, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = s.color;
-  ctx.beginPath();
-  ctx.arc(cx, cy, handleSize * 0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawLinearHandle(s, cx, cy, sel) {
-  const handleSize = getHandleSize(sel);
-  const lineWidth = getLineWidth(sel);
-  const fontSize = getFontSize();
-  const scale = Math.max(W, H) / 800;
-
-  const angleRad = ((s.angle - 90) * Math.PI) / 180;
-  const handleLen = Math.min(W, H) * 0.35;
-  const dx = Math.cos(angleRad) * handleLen;
-  const dy = Math.sin(angleRad) * handleLen;
-  const x1 = cx - dx,
-    y1 = cy - dy;
-  const x2 = cx + dx,
-    y2 = cy + dy;
-
-  ctx.save();
-  if (sel) {
-    ctx.shadowColor = "rgba(255,255,255,0.3)";
-    ctx.shadowBlur = 10 * scale;
-  }
-
-  const lineGrad = ctx.createLinearGradient(x1, y1, x2, y2);
-  if (s.stops.length >= 2) {
-    s.stops.forEach((cs) => {
-      lineGrad.addColorStop(cs.pos / 100, rgba(cs.color, sel ? 0.8 : 0.4));
-    });
-  } else {
-    lineGrad.addColorStop(
-      0,
-      sel ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"
-    );
-    lineGrad.addColorStop(
-      1,
-      sel ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"
-    );
-  }
-
-  ctx.strokeStyle = lineGrad;
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-  ctx.restore();
-
-  s.stops.forEach((cs, i) => {
-    const px = lerp(x1, x2, cs.pos / 100);
-    const py = lerp(y1, y2, cs.pos / 100);
-    drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale);
-
-    if (sel) {
-      drawStopLabel(
-        px,
-        py + handleSize + 12 * scale,
-        cs.pos + "%",
-        fontSize,
-        scale
-      );
-    }
-  });
-
-  drawCenterHandle(cx, cy, sel, handleSize * 0.6, lineWidth, scale);
-}
-
-function drawConicHandle(s, cx, cy, sel) {
-  const handleSize = getHandleSize(sel);
-  const lineWidth = getLineWidth(sel);
-  const fontSize = getFontSize();
-  const scale = Math.max(W, H) / 800;
-
-  const radius = Math.min(W, H) * 0.25;
-  const startAngleRad = ((s.startAngle - 90) * Math.PI) / 180;
-
-  // ۱. دایره راهنما (خط‌چین)
-  if (sel) {
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.2)";
-    ctx.setLineDash([5 * scale, 5 * scale]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // ۲. خط شعاعی (نشانگر شروع زاویه)
-  const rotateX = cx + Math.cos(startAngleRad) * radius;
-  const rotateY = cy + Math.sin(startAngleRad) * radius;
-
-  ctx.save();
-  ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
-  ctx.lineWidth = lineWidth;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(rotateX, rotateY);
-  ctx.stroke();
-  
-  // ۳. رسم یک هندل کوچک در انتهای خط برای چرخش (اختیاری)
-  if (sel) {
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(rotateX, rotateY, 4 * scale, 0, Math.PI * 2);
-      ctx.fill();
-  }
-  ctx.restore();
-
-  // ۴. رسم Color Stops
-  s.stops.forEach((cs) => {
-    // زاویه هر استاپ نسبت به startAngle محاسبه می‌شود
-    const stopAngle = startAngleRad + (cs.pos / 100) * Math.PI * 2;
-    const px = cx + Math.cos(stopAngle) * radius;
-    const py = cy + Math.sin(stopAngle) * radius;
-
-    drawColorStop(px, py, cs, sel, handleSize * 0.8, lineWidth, scale);
-
-    if (sel) {
-      const labelR = radius + handleSize + 20 * scale;
-      const lx = cx + Math.cos(stopAngle) * labelR;
-      const ly = cy + Math.sin(stopAngle) * labelR;
-      drawStopLabel(lx, ly, cs.pos + "%", fontSize, scale);
-    }
-  });
-
-  // ۵. دسته مرکزی برای جابجایی کل گرادینت
-  drawCenterHandle(cx, cy, sel, handleSize, lineWidth, scale, s.stops[0]?.color);
-}
-
-
-function drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale) {
-  if (sel) {
-    ctx.save();
-    ctx.shadowColor = cs.color;
-    ctx.shadowBlur = 15 * scale;
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
-    ctx.beginPath();
-    ctx.arc(px, py, handleSize * 1.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 8 * scale;
-  ctx.shadowOffsetY = 3 * scale;
-
-  ctx.strokeStyle = cs.color;
-  ctx.lineWidth = lineWidth * 0.8;
-  ctx.beginPath();
-  ctx.arc(px, py, handleSize, 0, Math.PI * 2);
-  ctx.stroke();
-
-  const innerGrad = ctx.createRadialGradient(
-    px - handleSize * 0.2,
-    py - handleSize * 0.2,
-    0,
-    px,
-    py,
-    handleSize * 0.6
-  );
-  innerGrad.addColorStop(0, lighten(cs.color, 30));
-  innerGrad.addColorStop(1, cs.color);
-
-  ctx.fillStyle = innerGrad;
-  ctx.beginPath();
-  ctx.arc(px, py, handleSize * 0.55, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawStopLabel(x, y, text, fontSize, scale) {
-  ctx.save();
-  const padding = 4 * scale;
-  const bgWidth = fontSize * 2.5 + padding * 2;
-  const bgHeight = fontSize + padding * 2;
-
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.beginPath();
-  ctx.roundRect(
-    x - bgWidth / 2,
-    y - bgHeight / 2,
-    bgWidth,
-    bgHeight,
-    4 * scale
-  );
-  ctx.fill();
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, x, y);
-  ctx.restore();
-}
-
-function drawCenterHandle(cx, cy, sel, size, lineWidth, scale, color = null) {
-  if (sel) {
-    ctx.save();
-    ctx.shadowColor = "rgba(255,255,255,0.5)";
-    ctx.shadowBlur = 12 * scale;
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, size * 1.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 6 * scale;
-  ctx.shadowOffsetY = 2 * scale;
-
-  const outerGrad = ctx.createRadialGradient(
-    cx - size * 0.3,
-    cy - size * 0.3,
-    0,
-    cx,
-    cy,
-    size
-  );
-  outerGrad.addColorStop(0, "#ffffff");
-  outerGrad.addColorStop(1, "#e0e0e0");
-
-  ctx.fillStyle = outerGrad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, size, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  ctx.strokeStyle = sel ? "rgba(100,100,100,0.5)" : "rgba(150,150,150,0.3)";
-  ctx.lineWidth = lineWidth * 0.5;
-  ctx.beginPath();
-  ctx.arc(cx, cy, size, 0, Math.PI * 2);
-  ctx.stroke();
-
-  if (sel) {
-    ctx.strokeStyle = "rgba(100,100,100,0.6)";
-    ctx.lineWidth = 2 * scale;
-    ctx.lineCap = "round";
-
-    const crossSize = size * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(cx - crossSize, cy);
-    ctx.lineTo(cx + crossSize, cy);
-    ctx.moveTo(cx, cy - crossSize);
-    ctx.lineTo(cx, cy + crossSize);
-    ctx.stroke();
-  }
-}
-
-// ========== THROTTLE ==========
-let drawRAF = null;
-
-function throttledDraw() {
-  if (drawRAF) return;
-  drawRAF = requestAnimationFrame(() => {
-    drawRAF = null;
-    draw();
-  });
-}
-
-// ========== CANVAS INTERACTION ==========
 function getEventPos(e) {
   const rect = canvas.getBoundingClientRect();
 
@@ -2656,7 +1483,800 @@ function onPointerUp() {
   drag = null;
 }
 
-// ========== رسم هندل کونیک با دسته چرخش بهتر ==========
+// Canvas events
+canvas.addEventListener("mousedown", onPointerDown);
+canvas.addEventListener("touchstart", onPointerDown, { passive: false });
+document.addEventListener("mousemove", onPointerMove);
+document.addEventListener("touchmove", onPointerMove, { passive: false });
+document.addEventListener("mouseup", onPointerUp);
+document.addEventListener("touchend", onPointerUp);
+// ========== DRAWING FUNCTIONS ==========
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  
+  const visibleStops = state.stops.filter((s) => s.visible);
+  const dpr = canvas.width / W;
+  
+  const needsFilter = hasActiveFilters();
+  let targetCtx = ctx;
+  let tempCanvas = null;
+  
+  if (needsFilter) {
+    tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    targetCtx = tempCanvas.getContext('2d');
+    targetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  
+  // ========== 1. پس‌زمینه ==========
+  if (state.bgEnabled) {
+    targetCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    targetCtx.fillRect(0, 0, W, H);
+  }
+
+  // ========== 2. خط قفل عمودی ==========
+  if (state.lockVertical) {
+    const scale = Math.max(W, H) / 800;
+    targetCtx.strokeStyle = "rgba(255,255,255,0.5)";
+    targetCtx.lineWidth = 2 * scale;
+    targetCtx.setLineDash([10 * scale, 5 * scale]);
+    targetCtx.beginPath();
+    targetCtx.moveTo(0, H / 2);
+    targetCtx.lineTo(W, H / 2);
+    targetCtx.stroke();
+    targetCtx.setLineDash([]);
+  }
+
+  // ========== 3. گرادینت‌ها با Background Blend Mode ==========
+  if (visibleStops.length > 0) {
+    const reversedStops = [...visibleStops].reverse();
+    
+    // ✅ چک کردن آیا bgBlendMode فعاله
+    const needsBgBlend = state.bgEnabled && 
+                         state.bgBlendMode && 
+                         state.bgBlendMode !== 'normal';
+    
+    if (needsBgBlend) {
+      // ✅ Canvas موقت برای گرادینت‌ها
+      const gradCanvas = document.createElement('canvas');
+      gradCanvas.width = canvas.width;
+      gradCanvas.height = canvas.height;
+      const gradCtx = gradCanvas.getContext('2d');
+      gradCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      
+      // رسم گرادینت‌ها روی canvas موقت
+      reversedStops.forEach(s => {
+        gradCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+        drawGradToCtx(s, gradCtx, W, H);
+      });
+      gradCtx.globalCompositeOperation = 'source-over';
+      
+      // ✅ ترکیب با bgBlendMode روی پس‌زمینه
+      targetCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
+      targetCtx.drawImage(gradCanvas, 0, 0);
+      targetCtx.globalCompositeOperation = 'source-over';
+      
+    } else {
+      // بدون bg blend - مستقیم رسم کن
+      reversedStops.forEach(s => {
+        targetCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+        drawGradToCtx(s, targetCtx, W, H);
+      });
+      targetCtx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  // ========== 4. فیلترها ==========
+  if (needsFilter && tempCanvas) {
+    if (filterState.blur > 0) {
+      const blurCanvas = document.createElement('canvas');
+      blurCanvas.width = canvas.width;
+      blurCanvas.height = canvas.height;
+      const blurCtx = blurCanvas.getContext('2d');
+      blurCtx.filter = `blur(${filterState.blur}px)`;
+      blurCtx.drawImage(tempCanvas, 0, 0);
+      tempCanvas = blurCanvas;
+      targetCtx = blurCanvas.getContext('2d');
+    }
+    
+    if (hasNonBlurFilters()) {
+      const imageData = targetCtx.getImageData(0, 0, canvas.width, canvas.height);
+      applyFiltersToImageData(imageData);
+      targetCtx.putImageData(imageData, 0, 0);
+    }
+    
+    ctx.drawImage(tempCanvas, 0, 0);
+  }
+
+  // ========== 5. نویز ==========
+
+
+  // ========== 6. هندل‌ها ==========
+  if (state.showHandles) {
+    visibleStops.forEach(drawHandle);
+  }
+}
+
+function getLinearGradientPoints(angle, width, height) {
+  const angleRad = ((angle - 90) * Math.PI) / 180;
+  const diagonal = Math.hypot(width, height);
+  const cx = width / 2;
+  const cy = height / 2;
+  const dx = (Math.cos(angleRad) * diagonal) / 2;
+  const dy = (Math.sin(angleRad) * diagonal) / 2;
+
+  return { x1: cx - dx, y1: cy - dy, x2: cx + dx, y2: cy + dy, cx, cy };
+}
+
+function getHandleSize(selected = false) {
+  const scale = Math.max(W, H) / 800;
+  const baseSize = selected ? 12 : 8;
+  const size = baseSize * scale;
+  return clamp(size, selected ? 12 : 8, selected ? 50 : 35);
+}
+
+function getLineWidth(selected = false) {
+  const scale = Math.max(W, H) / 800;
+  const baseWidth = selected ? 5 : 4;
+  const width = baseWidth * scale;
+  return clamp(width, selected ? 5 : 4, selected ? 16 : 12);
+}
+
+function getFontSize() {
+  const scale = Math.max(W, H) / 800;
+  const baseSize = 10;
+  const size = baseSize * scale;
+  return clamp(size, 10, 36);
+}
+
+// ========== BLEND MODE HELPER ==========
+function getCanvasBlendMode(cssBlendMode) {
+  // CSS 'normal' = Canvas 'source-over'
+  if (!cssBlendMode || cssBlendMode === 'normal') {
+    return 'source-over';
+  }
+  return cssBlendMode;
+}
+
+function fixTransparentStops(stops) {
+  const sorted = [...stops].sort((a, b) => a.pos - b.pos);
+  const result = [];
+  
+  for (let i = 0; i < sorted.length; i++) {
+    const cs = sorted[i];
+    const prev = sorted[i - 1];
+    const next = sorted[i + 1];
+    
+    if (cs.opacity === 0) {
+      // ✅ برای Hard Edge: دو stop شفاف در همان position
+      
+      if (prev) {
+        result.push({
+          pos: cs.pos,
+          color: prev.color,
+          opacity: 0
+        });
+      }
+      
+      if (next) {
+        result.push({
+          pos: cs.pos,  // ✅ همان position - بدون فاصله!
+          color: next.color,
+          opacity: 0
+        });
+      }
+      
+      // اگر تنها stop شفاف است
+      if (!prev && !next) {
+        result.push(cs);
+      }
+      
+    } else {
+      result.push(cs);
+    }
+  }
+  
+  return result;
+}
+
+function drawGradToCtx(s, targetCtx, width = W, height = H) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const outer = s.size;
+    const solidEnd = 1 - s.feather / 100;
+    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    targetCtx.fillStyle = grad;
+    targetCtx.beginPath();
+    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
+    targetCtx.fill();
+  } 
+  else if (s.type === "linear") {
+    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
+    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
+  }
+}
+
+function drawGradToContext(s, targetCtx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    const outer = s.size;
+    const solidEnd = 1 - s.feather / 100;
+    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    targetCtx.fillStyle = grad;
+    targetCtx.beginPath();
+    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
+    targetCtx.fill();
+  } 
+  else if (s.type === "linear") {
+    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
+    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, width, height);
+  }
+}
+
+function drawGradToContext(s, targetCtx) {
+  const cx = s.x * W;
+  const cy = s.y * H;
+
+  if (s.type === "radial") {
+    const outer = s.size;
+    const solidEnd = 1 - s.feather / 100;
+    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    targetCtx.fillStyle = grad;
+    targetCtx.beginPath();
+    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
+    targetCtx.fill();
+  } 
+  else if (s.type === "linear") {
+    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
+    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, W, H);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
+
+    [...s.stops]
+      .sort((a, b) => a.pos - b.pos)
+      .forEach((cs) => {
+        grad.addColorStop(
+          clamp(cs.pos / 100, 0, 1),
+          rgba(cs.color, cs.opacity / 100)
+        );
+      });
+
+    targetCtx.fillStyle = grad;
+    targetCtx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawGrad(s) {
+  const cx = s.x * W;
+  const cy = s.y * H;
+
+  if (s.type === "radial") drawRadialGradient(s, cx, cy);
+  else if (s.type === "linear") drawLinearGradient(s);
+  else if (s.type === "conic") drawConicGradient(s, cx, cy);
+}
+
+function drawRadialGradient(s, cx, cy) {
+  const outer = s.size;
+  const solidEnd = 1 - s.feather / 100;
+
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+  const color = rgba(s.color, s.opacity / 100);
+
+  grad.addColorStop(0, color);
+  if (solidEnd > 0 && solidEnd < 1) {
+    grad.addColorStop(solidEnd, color);
+  }
+  grad.addColorStop(1, rgba(s.color, 0));
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, outer, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawLinearGradient(s) {
+  const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
+  const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+
+  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
+  const finalStops = [];
+  
+  for (let i = 0; i < sortedStops.length; i++) {
+    const cs = sortedStops[i];
+    
+    if (cs.opacity === 0) {
+      const prev = sortedStops[i - 1];
+      const next = sortedStops[i + 1];
+      
+      // شفاف با رنگ قبلی
+      if (prev) {
+        finalStops.push({
+          pos: cs.pos,
+          color: prev.color,
+          opacity: 0
+        });
+      }
+      
+      // شفاف با رنگ بعدی
+      if (next && (!prev || next.color !== prev.color)) {
+        finalStops.push({
+          pos: cs.pos + 0.001,
+          color: next.color,
+          opacity: 0
+        });
+      }
+      
+      // اگه اولین یا آخرین stop بود
+      if (!prev && next) {
+        finalStops.push({ pos: cs.pos, color: next.color, opacity: 0 });
+      }
+      if (!next && prev) {
+        finalStops.push({ pos: cs.pos, color: prev.color, opacity: 0 });
+      }
+    } else {
+      finalStops.push(cs);
+    }
+  }
+
+  finalStops.sort((a, b) => a.pos - b.pos);
+
+  finalStops.forEach((cs) => {
+    grad.addColorStop(
+      clamp(cs.pos / 100, 0, 1),
+      rgba(cs.color, cs.opacity / 100)
+    );
+  });
+
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawConicGradient(s, cx, cy) {
+  const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+  const grad = ctx.createConicGradient(startAngle, cx, cy);
+
+  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
+  const finalStops = [];
+  const len = sortedStops.length;
+
+  for (let i = 0; i < len; i++) {
+    const cs = sortedStops[i];
+    const prev = sortedStops[(i - 1 + len) % len];
+    const next = sortedStops[(i + 1) % len];
+
+    if (cs.opacity === 0) {
+      // ✅ مرز تیز: دو stop شفاف دقیقاً در یک pos
+      if (prev) {
+        finalStops.push({
+          pos: cs.pos,
+          color: prev.color,
+          opacity: 0
+        });
+      }
+
+      if (next && (!prev || next.color !== prev.color)) {
+        finalStops.push({
+          pos: cs.pos,
+          color: next.color,
+          opacity: 0
+        });
+      }
+    } else {
+      finalStops.push(cs);
+    }
+  }
+
+  finalStops.sort((a, b) => a.pos - b.pos);
+
+  finalStops.forEach(cs => {
+    grad.addColorStop(
+      clamp(cs.pos / 100, 0, 1),
+      rgba(cs.color, cs.opacity / 100)
+    );
+  });
+
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawHandle(s) {
+  const sel = state.selected === s.id;
+  const cx = s.x * W;
+  const cy = s.y * H;
+
+  if (s.type === "radial") drawRadialHandle(s, cx, cy, sel);
+  else if (s.type === "linear") drawLinearHandle(s, cx, cy, sel);
+  else if (s.type === "conic") drawConicHandle(s, cx, cy, sel);
+}
+
+function drawRadialHandle(s, cx, cy, sel) {
+  const handleSize = getHandleSize(sel);
+  const lineWidth = getLineWidth(sel);
+  const scale = Math.max(W, H) / 800;
+
+  if (sel) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.setLineDash([8 * scale, 4 * scale]);
+    ctx.lineWidth = 2 * scale;
+    ctx.beginPath();
+    ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.shadowColor = s.color;
+    ctx.shadowBlur = 20 * scale;
+    ctx.fillStyle = "rgba(255,255,255,0.1)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, handleSize * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 8 * scale;
+  ctx.shadowOffsetY = 2 * scale;
+
+  ctx.strokeStyle = s.color;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.arc(cx, cy, handleSize, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = s.color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, handleSize * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLinearHandle(s, cx, cy, sel) {
+  const handleSize = getHandleSize(sel);
+  const lineWidth = getLineWidth(sel);
+  const fontSize = getFontSize();
+  const scale = Math.max(W, H) / 800;
+
+  const angleRad = ((s.angle - 90) * Math.PI) / 180;
+  const handleLen = Math.min(W, H) * 0.35;
+  const dx = Math.cos(angleRad) * handleLen;
+  const dy = Math.sin(angleRad) * handleLen;
+  const x1 = cx - dx,
+    y1 = cy - dy;
+  const x2 = cx + dx,
+    y2 = cy + dy;
+
+  ctx.save();
+  if (sel) {
+    ctx.shadowColor = "rgba(255,255,255,0.3)";
+    ctx.shadowBlur = 10 * scale;
+  }
+
+  const lineGrad = ctx.createLinearGradient(x1, y1, x2, y2);
+  if (s.stops.length >= 2) {
+    s.stops.forEach((cs) => {
+      lineGrad.addColorStop(cs.pos / 100, rgba(cs.color, sel ? 0.8 : 0.4));
+    });
+  } else {
+    lineGrad.addColorStop(
+      0,
+      sel ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"
+    );
+    lineGrad.addColorStop(
+      1,
+      sel ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"
+    );
+  }
+
+  ctx.strokeStyle = lineGrad;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.restore();
+
+  s.stops.forEach((cs, i) => {
+    const px = lerp(x1, x2, cs.pos / 100);
+    const py = lerp(y1, y2, cs.pos / 100);
+    drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale);
+
+    if (sel) {
+      drawStopLabel(
+        px,
+        py + handleSize + 12 * scale,
+        cs.pos + "%",
+        fontSize,
+        scale
+      );
+    }
+  });
+
+  drawCenterHandle(cx, cy, sel, handleSize * 0.6, lineWidth, scale);
+}
+
+function drawConicHandle(s, cx, cy, sel) {
+  const handleSize = getHandleSize(sel);
+  const lineWidth = getLineWidth(sel);
+  const fontSize = getFontSize();
+  const scale = Math.max(W, H) / 800;
+
+  const radius = Math.min(W, H) * 0.25;
+  const startAngleRad = ((s.startAngle - 90) * Math.PI) / 180;
+
+  // ۱. دایره راهنما (خط‌چین)
+  if (sel) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.setLineDash([5 * scale, 5 * scale]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ۲. خط شعاعی (نشانگر شروع زاویه)
+  const rotateX = cx + Math.cos(startAngleRad) * radius;
+  const rotateY = cy + Math.sin(startAngleRad) * radius;
+
+  ctx.save();
+  ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(rotateX, rotateY);
+  ctx.stroke();
+  
+  // ۳. رسم یک هندل کوچک در انتهای خط برای چرخش (اختیاری)
+  if (sel) {
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(rotateX, rotateY, 4 * scale, 0, Math.PI * 2);
+      ctx.fill();
+  }
+  ctx.restore();
+
+  // ۴. رسم Color Stops
+  s.stops.forEach((cs) => {
+    // زاویه هر استاپ نسبت به startAngle محاسبه می‌شود
+    const stopAngle = startAngleRad + (cs.pos / 100) * Math.PI * 2;
+    const px = cx + Math.cos(stopAngle) * radius;
+    const py = cy + Math.sin(stopAngle) * radius;
+
+    drawColorStop(px, py, cs, sel, handleSize * 0.8, lineWidth, scale);
+
+    if (sel) {
+      const labelR = radius + handleSize + 20 * scale;
+      const lx = cx + Math.cos(stopAngle) * labelR;
+      const ly = cy + Math.sin(stopAngle) * labelR;
+      drawStopLabel(lx, ly, cs.pos + "%", fontSize, scale);
+    }
+  });
+
+  // ۵. دسته مرکزی برای جابجایی کل گرادینت
+  drawCenterHandle(cx, cy, sel, handleSize, lineWidth, scale, s.stops[0]?.color);
+}
+
+function drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale) {
+  if (sel) {
+    ctx.save();
+    ctx.shadowColor = cs.color;
+    ctx.shadowBlur = 15 * scale;
+    ctx.fillStyle = "rgba(255,255,255,0.1)";
+    ctx.beginPath();
+    ctx.arc(px, py, handleSize * 1.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.4)";
+  ctx.shadowBlur = 8 * scale;
+  ctx.shadowOffsetY = 3 * scale;
+
+  ctx.strokeStyle = cs.color;
+  ctx.lineWidth = lineWidth * 0.8;
+  ctx.beginPath();
+  ctx.arc(px, py, handleSize, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const innerGrad = ctx.createRadialGradient(
+    px - handleSize * 0.2,
+    py - handleSize * 0.2,
+    0,
+    px,
+    py,
+    handleSize * 0.6
+  );
+  innerGrad.addColorStop(0, lighten(cs.color, 30));
+  innerGrad.addColorStop(1, cs.color);
+
+  ctx.fillStyle = innerGrad;
+  ctx.beginPath();
+  ctx.arc(px, py, handleSize * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawStopLabel(x, y, text, fontSize, scale) {
+  ctx.save();
+  const padding = 4 * scale;
+  const bgWidth = fontSize * 2.5 + padding * 2;
+  const bgHeight = fontSize + padding * 2;
+
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.beginPath();
+  ctx.roundRect(
+    x - bgWidth / 2,
+    y - bgHeight / 2,
+    bgWidth,
+    bgHeight,
+    4 * scale
+  );
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawCenterHandle(cx, cy, sel, size, lineWidth, scale, color = null) {
+  if (sel) {
+    ctx.save();
+    ctx.shadowColor = "rgba(255,255,255,0.5)";
+    ctx.shadowBlur = 12 * scale;
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.4)";
+  ctx.shadowBlur = 6 * scale;
+  ctx.shadowOffsetY = 2 * scale;
+
+  const outerGrad = ctx.createRadialGradient(
+    cx - size * 0.3,
+    cy - size * 0.3,
+    0,
+    cx,
+    cy,
+    size
+  );
+  outerGrad.addColorStop(0, "#ffffff");
+  outerGrad.addColorStop(1, "#e0e0e0");
+
+  ctx.fillStyle = outerGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = sel ? "rgba(100,100,100,0.5)" : "rgba(150,150,150,0.3)";
+  ctx.lineWidth = lineWidth * 0.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (sel) {
+    ctx.strokeStyle = "rgba(100,100,100,0.6)";
+    ctx.lineWidth = 2 * scale;
+    ctx.lineCap = "round";
+
+    const crossSize = size * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - crossSize, cy);
+    ctx.lineTo(cx + crossSize, cy);
+    ctx.moveTo(cx, cy - crossSize);
+    ctx.lineTo(cx, cy + crossSize);
+    ctx.stroke();
+  }
+}
+
 function drawConicHandle(s, cx, cy, sel) {
   const handleSize = getHandleSize(sel);
   const lineWidth = getLineWidth(sel);
@@ -2717,21 +2337,1296 @@ function drawConicHandle(s, cx, cy, sel) {
 
   drawCenterHandle(cx, cy, sel, handleSize, lineWidth, scale, s.stops[0]?.color);
 }
+let drawRAF = null;
 
-// Canvas events
-canvas.addEventListener("mousedown", onPointerDown);
-canvas.addEventListener("touchstart", onPointerDown, { passive: false });
-document.addEventListener("mousemove", onPointerMove);
-document.addEventListener("touchmove", onPointerMove, { passive: false });
-document.addEventListener("mouseup", onPointerUp);
-document.addEventListener("touchend", onPointerUp);
+function throttledDraw() {
+  if (drawRAF) return;
+  drawRAF = requestAnimationFrame(() => {
+    drawRAF = null;
+    draw();
+  });
+}
 
-function refreshUI() {
+// ========== RESIZE HANDLES ==========
+const widthHandle = document.querySelector(".resize-h");
+const heightHandle = document.querySelector(".resize-w");
+
+function startResizeW(e) {
+  resizingW = true;
+  startY = e.clientY || e.touches?.[0]?.clientY || 0;
+  startH = state.canvasHeight;
+  document.body.classList.add("no-touch-scroll");
+  e.preventDefault();
+}
+
+function startResizeH(e) {
+  resizingH = true;
+  startX = e.clientX || e.touches?.[0]?.clientX || 0;
+  startW = state.canvasWidth;
+  document.body.classList.add("no-touch-scroll");
+  e.preventDefault();
+}
+
+if (widthHandle) {
+  widthHandle.addEventListener("mousedown", startResizeW);
+  widthHandle.addEventListener("touchstart", startResizeW, { passive: false });
+}
+
+if (heightHandle) {
+  heightHandle.addEventListener("mousedown", startResizeH);
+  heightHandle.addEventListener("touchstart", startResizeH, { passive: false });
+}
+
+document.addEventListener("mousemove", (e) => {
+  if (!resizingW && !resizingH) return;
+
+  if (resizingW) {
+    let newH = startH + (e.clientY - startY);
+    let newW = state.canvasWidth;
+
+    if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+      newW = Math.round(newH * dimensionState.aspectRatio);
+      
+      if (newW < CONFIG.canvas.minWidth) {
+        newW = CONFIG.canvas.minWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+      } else if (newW > CONFIG.canvas.maxWidth) {
+        newW = CONFIG.canvas.maxWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+      }
+      
+      if (newH < CONFIG.canvas.minHeight) {
+        newH = CONFIG.canvas.minHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+      } else if (newH > CONFIG.canvas.maxHeight) {
+        newH = CONFIG.canvas.maxHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+      }
+    } else {
+      newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+    }
+
+    if (newH !== lastH) {
+      lastH = newH;
+      state.canvasHeight = newH;
+      state.canvasWidth = newW;
+      
+      if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
+      if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
+      clearResolutionPreset();
+      refresh();
+    }
+  }
+
+  if (resizingH) {
+    let newW = startW + (e.clientX - startX);
+    let newH = state.canvasHeight;
+
+    if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+      newH = Math.round(newW / dimensionState.aspectRatio);
+      
+      if (newH < CONFIG.canvas.minHeight) {
+        newH = CONFIG.canvas.minHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+      } else if (newH > CONFIG.canvas.maxHeight) {
+        newH = CONFIG.canvas.maxHeight;
+        newW = Math.round(newH * dimensionState.aspectRatio);
+      }
+      
+      if (newW < CONFIG.canvas.minWidth) {
+        newW = CONFIG.canvas.minWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+      } else if (newW > CONFIG.canvas.maxWidth) {
+        newW = CONFIG.canvas.maxWidth;
+        newH = Math.round(newW / dimensionState.aspectRatio);
+        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+      }
+    } else {
+      newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+    }
+
+    if (newW !== lastW) {
+      lastW = newW;
+      state.canvasWidth = newW;
+      state.canvasHeight = newH;
+      
+      if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
+      if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
+      clearResolutionPreset();
+      refresh();
+    }
+  }
+});
+
+document.addEventListener(
+  "touchmove",
+  (e) => {
+    if (!resizingW && !resizingH) return;
+    e.preventDefault();
+
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
+
+    if (resizingW) {
+      let newH = startH + (clientY - startY);
+      let newW = state.canvasWidth;
+
+      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+        newW = Math.round(newH * dimensionState.aspectRatio);
+        
+        if (newW < CONFIG.canvas.minWidth) {
+          newW = CONFIG.canvas.minWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+        } else if (newW > CONFIG.canvas.maxWidth) {
+          newW = CONFIG.canvas.maxWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+        }
+        
+        if (newH < CONFIG.canvas.minHeight) {
+          newH = CONFIG.canvas.minHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+          newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+        } else if (newH > CONFIG.canvas.maxHeight) {
+          newH = CONFIG.canvas.maxHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+          newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+        }
+      } else {
+        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+      }
+
+      if (newH !== lastH) {
+        lastH = newH;
+        state.canvasHeight = newH;
+        state.canvasWidth = newW;
+        
+        if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
+        if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
+        clearResolutionPreset();
+        refresh();
+      }
+    }
+
+    if (resizingH) {
+      let newW = startW + (clientX - startX);
+      let newH = state.canvasHeight;
+
+      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
+        newH = Math.round(newW / dimensionState.aspectRatio);
+        
+        if (newH < CONFIG.canvas.minHeight) {
+          newH = CONFIG.canvas.minHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+        } else if (newH > CONFIG.canvas.maxHeight) {
+          newH = CONFIG.canvas.maxHeight;
+          newW = Math.round(newH * dimensionState.aspectRatio);
+        }
+        
+        if (newW < CONFIG.canvas.minWidth) {
+          newW = CONFIG.canvas.minWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+          newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+        } else if (newW > CONFIG.canvas.maxWidth) {
+          newW = CONFIG.canvas.maxWidth;
+          newH = Math.round(newW / dimensionState.aspectRatio);
+          newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
+        }
+      } else {
+        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
+      }
+
+      if (newW !== lastW) {
+        lastW = newW;
+        state.canvasWidth = newW;
+        state.canvasHeight = newH;
+        
+        if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
+        if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
+        clearResolutionPreset();
+        refresh();
+      }
+    }
+  },
+  { passive: false }
+);
+
+document.addEventListener("mouseup", () => {
+  resizingW = false;
+  resizingH = false;
+  document.body.classList.remove("no-touch-scroll");
+});
+
+document.addEventListener("touchend", () => {
+  resizingW = false;
+  resizingH = false;
+  document.body.classList.remove("no-touch-scroll");
+});
+
+// ========== PAN ==========
+const panState = {
+  active: false,
+  startX: 0,
+  startY: 0,
+  scrollLeft: 0,
+  scrollTop: 0,
+  mode: false // true = pan mode فعال
+};
+
+function initPan() {
+  const wrap = document.querySelector('.canvas-wrap');
+  const canvas = document.getElementById('canvas');
+  if (!wrap || !canvas) return;
+
+  // ✅ دکمه Pan
+  const panBtn = document.getElementById('panBtn');
+  if (panBtn) {
+    panBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePanMode();
+    });
+    
+    panBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePanMode();
+    }, { passive: false });
+  }
+
+  // ========== MOUSE - فقط روی Canvas ==========
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 1 || (e.button === 0 && panState.mode)) {
+      e.preventDefault();
+      e.stopPropagation();
+      startPan(e.clientX, e.clientY, wrap);
+    }
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (panState.active) {
+      e.preventDefault();
+      doPan(e.clientX, e.clientY, wrap);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    endPan(wrap);
+  });
+
+  // Space + drag (desktop)
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.target.closest('input, textarea')) {
+      e.preventDefault();
+      panState.mode = true;
+      updatePanUI();
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') {
+      panState.mode = false;
+      updatePanUI();
+    }
+  });
+
+  // ========== TOUCH - فقط روی Canvas ==========
+  canvas.addEventListener('touchstart', (e) => {
+    if (panState.mode && e.touches.length === 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      startPan(e.touches[0].clientX, e.touches[0].clientY, wrap);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (panState.active && e.touches.length === 1) {
+      e.preventDefault();
+      doPan(e.touches[0].clientX, e.touches[0].clientY, wrap);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => {
+    endPan(wrap);
+  });
+
+  canvas.addEventListener('touchcancel', () => {
+    endPan(wrap);
+  });
+}
+
+function startPan(x, y, wrap) {
+  panState.active = true;
+  panState.startX = x;
+  panState.startY = y;
+  panState.scrollLeft = wrap.scrollLeft;
+  panState.scrollTop = wrap.scrollTop;
+  wrap.classList.add('panning');
+}
+
+function doPan(x, y, wrap) {
+  if (!panState.active) return;
+  
+  const dx = x - panState.startX;
+  const dy = y - panState.startY;
+  
+  wrap.scrollLeft = panState.scrollLeft - dx;
+  wrap.scrollTop = panState.scrollTop - dy;
+}
+
+function endPan(wrap) {
+  panState.active = false;
+  wrap.classList.remove('panning');
+}
+
+function togglePanMode() {
+  panState.mode = !panState.mode;
+  updatePanUI();
+}
+
+function updatePanUI() {
+  const wrap = document.querySelector('.canvas-wrap');
+  const canvas = document.getElementById('canvas');
+  const btn = document.getElementById('panBtn');
+  
+  if (wrap) {
+    wrap.style.cursor = panState.mode ? 'grab' : '';
+  }
+  
+  if (canvas) {
+    canvas.style.cursor = panState.mode ? 'grab' : 'crosshair';
+  }
+  
+  if (btn) {
+    btn.classList.toggle('active', panState.mode);
+    btn.innerHTML = panState.mode
+      ? `<img src="./icon/pan.svg" alt="pan tool">`
+      : `<img src="./icon/hand.svg" alt="pan tool">`;
+  }
+  
+}
+window.togglePanMode = togglePanMode;
+
+// ========== FULLSCREEN PREVIEW - COMPLETE FIXED ==========
+let fullscreenOverlay = null;
+let fullscreenCanvas = null;
+let fullscreenCtx = null;
+let fullscreenRotation = 0;
+
+const fullscreenZoom = {
+  scale: 1,
+  minScale: 0.5,
+  maxScale: 10,
+  translateX: 0,
+  translateY: 0,
+  
+  isPinching: false,
+  isPanning: false,
+  startDist: 0,
+  startScale: 1,
+  startX: 0,
+  startY: 0,
+  startTranslateX: 0,
+  startTranslateY: 0,
+  pinchCenterX: 0,
+  pinchCenterY: 0,
+  lastTap: 0,
+  lastTapX: 0,
+  lastTapY: 0,
+};
+
+async function openFullscreenPreview() {
+  // ریست
+  fullscreenRotation = 0;
+  Object.assign(fullscreenZoom, {
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    isPinching: false,
+    isPanning: false,
+  });
+  
+  // History برای Back
+  history.pushState({ fullscreen: true }, '', '');
+  
+  // ساخت overlay
+  fullscreenOverlay = document.createElement('div');
+  fullscreenOverlay.className = 'fullscreen-overlay';
+  fullscreenOverlay.innerHTML = `
+    <div class="fullscreen-canvas-container" id="fsContainer">
+      <canvas id="fullscreenCanvas"></canvas>
+    </div>
+    <div class="fullscreen-controls">
+      <button class="fullscreen-btn" id="fsZoomOut" title="Zoom Out">
+      <img src="./icon/minus.svg" alt="zoom out">
+      </button>
+      <span class="fullscreen-zoom-value" id="fsZoomValue">100%</span>
+      <button class="fullscreen-btn" id="fsZoomIn" title="Zoom In">
+      <img src="./icon/plus.svg" alt="zoom in">
+      </button>
+      <div class="fullscreen-divider"></div>
+      <button class="fullscreen-btn" id="fsRotate" title="Rotate (R)">
+<img src="./icon/reset.svg" alt="rotate">
+      </button>
+      <button class="fullscreen-btn" id="fsReset" title="Reset (0)">
+<img src="./icon/fit.svg" alt="fit">
+      </button>
+      <button class="fullscreen-btn" id="fsClose" title="Close (ESC)">
+<img src="./icon/full-screen-exit.svg" alt="fullscreen exit">
+        </svg>
+      </button>
+    </div>
+    <div class="fullscreen-info" id="fullscreenInfo">
+      ${Math.round(state.canvasWidth)} × ${Math.round(state.canvasHeight)}
+    </div>
+  `;
+  
+  document.body.appendChild(fullscreenOverlay);
+  document.body.style.overflow = 'hidden';
+  
+  fullscreenCanvas = document.getElementById('fullscreenCanvas');
+  fullscreenCtx = fullscreenCanvas.getContext('2d');
+  
+  const container = document.getElementById('fsContainer');
+  
+  // ✅ رندر و منتظر بمون
+  await renderFullscreenCanvas();
+  
+  // Event Listeners
+  fullscreenOverlay.addEventListener('click', (e) => {
+    if (e.target === fullscreenOverlay) history.back();
+  });
+  
+  document.getElementById('fsClose').addEventListener('click', () => history.back());
+  document.getElementById('fsRotate').addEventListener('click', rotateFullscreen);
+  document.getElementById('fsReset').addEventListener('click', resetFullscreenView);
+  document.getElementById('fsZoomIn').addEventListener('click', () => zoomFullscreen(1.5, null, null));
+  document.getElementById('fsZoomOut').addEventListener('click', () => zoomFullscreen(0.67, null, null));
+  
+  document.addEventListener('keydown', handleFullscreenKeys);
+  window.addEventListener('popstate', handleFullscreenPopState);
+  
+  container.addEventListener('touchstart', handleFSTouchStart, { passive: false });
+  container.addEventListener('touchmove', handleFSTouchMove, { passive: false });
+  container.addEventListener('touchend', handleFSTouchEnd, { passive: false });
+  container.addEventListener('touchcancel', handleFSTouchEnd, { passive: false });
+  
+  container.addEventListener('wheel', handleFSWheel, { passive: false });
+  container.addEventListener('mousedown', handleFSMouseDown);
+  container.addEventListener('dblclick', handleFSDoubleClick);
+  document.addEventListener('mousemove', handleFSMouseMove);
+  document.addEventListener('mouseup', handleFSMouseUp);
+  
+  window.addEventListener('resize', handleFSResize);
+  
+  // انیمیشن
+  requestAnimationFrame(() => {
+    fullscreenOverlay.classList.add('show');
+    setTimeout(() => {
+      const hint = document.getElementById('fullscreenHint');
+      if (hint) hint.classList.add('hide');
+    }, 3000);
+  });
+}
+
+function closeFullscreenPreview() {
+  if (!fullscreenOverlay) return;
+  
+  document.removeEventListener('keydown', handleFullscreenKeys);
+  window.removeEventListener('popstate', handleFullscreenPopState);
+  window.removeEventListener('resize', handleFSResize);
+  document.removeEventListener('mousemove', handleFSMouseMove);
+  document.removeEventListener('mouseup', handleFSMouseUp);
+  
+  fullscreenOverlay.classList.remove('show');
+  
+  setTimeout(() => {
+    if (fullscreenOverlay?.parentNode) {
+      fullscreenOverlay.parentNode.removeChild(fullscreenOverlay);
+    }
+    fullscreenOverlay = null;
+    fullscreenCanvas = null;
+    fullscreenCtx = null;
+    fullscreenRotation = 0;
+  }, 300);
+  
+  document.body.style.overflow = '';
+}
+
+function handleFullscreenPopState() {
+  if (fullscreenOverlay) closeFullscreenPreview();
+}
+
+function handleFullscreenKeys(e) {
+  if (!fullscreenOverlay) return;
+  
+  switch(e.key) {
+    case 'Escape': e.preventDefault(); history.back(); break;
+    case 'r': case 'R': e.preventDefault(); rotateFullscreen(); break;
+    case '+': case '=': e.preventDefault(); zoomFullscreen(1.25, null, null); break;
+    case '-': case '_': e.preventDefault(); zoomFullscreen(0.8, null, null); break;
+    case '0': e.preventDefault(); resetFullscreenView(); break;
+  }
+}
+
+async function renderFullscreenCanvas() {
+  if (!fullscreenCanvas) return;
+  
+  const originalW = state.canvasWidth;
+  const originalH = state.canvasHeight;
+  
+  // ========== محاسبه ابعاد نمایش ==========
+  const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
+  const sourceW = isRotated ? originalH : originalW;
+  const sourceH = isRotated ? originalW : originalH;
+  
+  const vpW = window.innerWidth;
+  const vpH = window.innerHeight;
+  const scaleX = vpW / sourceW;
+  const scaleY = vpH / sourceH;
+  const fitScale = Math.min(scaleX, scaleY, 1); // حداکثر 100%
+  
+  const dispW = sourceW * fitScale;
+  const dispH = sourceH * fitScale;
+  
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  
+  // ========== تنظیم سایز canvas نمایش ==========
+  fullscreenCanvas.width = dispW * dpr;
+  fullscreenCanvas.height = dispH * dpr;
+  fullscreenCanvas.style.width = dispW + 'px';
+  fullscreenCanvas.style.height = dispH + 'px';
+  
+  // ========== رندر در ابعاد اصلی (بدون چرخش) ==========
+  const workCanvas = document.createElement('canvas');
+  workCanvas.width = originalW;
+  workCanvas.height = originalH;
+  const workCtx = workCanvas.getContext('2d');
+  
+  // ✅ استفاده از همان منطق draw()
+  await renderSceneToContext(workCtx, originalW, originalH);
+  
+  // ========== انتقال به canvas نمایش با چرخش ==========
+  const ctx = fullscreenCanvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, fullscreenCanvas.width, fullscreenCanvas.height);
+  
+  ctx.save();
+  
+  // چرخش و مقیاس
+  if (fullscreenRotation === 0) {
+    ctx.scale(dispW / originalW * dpr, dispH / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  } 
+  else if (fullscreenRotation === 90) {
+    ctx.translate(dispW * dpr, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.scale(dispH / originalW * dpr, dispW / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  } 
+  else if (fullscreenRotation === 180) {
+    ctx.translate(dispW * dpr, dispH * dpr);
+    ctx.rotate(Math.PI);
+    ctx.scale(dispW / originalW * dpr, dispH / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  } 
+  else if (fullscreenRotation === 270) {
+    ctx.translate(0, dispH * dpr);
+    ctx.rotate(-Math.PI / 2);
+    ctx.scale(dispH / originalW * dpr, dispW / originalH * dpr);
+    ctx.drawImage(workCanvas, 0, 0);
+  }
+  
+  ctx.restore();
+}
+
+// ========== تابع اصلی رندر - مشترک بین canvas و fullscreen ==========
+async function renderSceneToContext(targetCtx, width, height) {
+  // ذخیره W و H اصلی
+  const savedW = W;
+  const savedH = H;
+  
+  // تنظیم موقت برای رندر
+  W = width;
+  H = height;
+  
+  targetCtx.clearRect(0, 0, width, height);
+  
+  const visibleStops = state.stops.filter(s => s.visible);
+  const needsFilter = hasActiveFilters();
+  
+  let renderCtx = targetCtx;
+  let tempCanvas = null;
+  
+  // اگر فیلتر داریم، روی canvas موقت رندر کن
+  if (needsFilter) {
+    tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    renderCtx = tempCanvas.getContext('2d');
+  }
+  
+  // ========== 1. پس‌زمینه ==========
+  if (state.bgEnabled) {
+    renderCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    renderCtx.fillRect(0, 0, width, height);
+  }
+  
+  // ========== 2. خط قفل عمودی ==========
+  if (state.lockVertical) {
+    const scale = Math.max(width, height) / 800;
+    renderCtx.strokeStyle = "rgba(255,255,255,0.5)";
+    renderCtx.lineWidth = 2 * scale;
+    renderCtx.setLineDash([10 * scale, 5 * scale]);
+    renderCtx.beginPath();
+    renderCtx.moveTo(0, height / 2);
+    renderCtx.lineTo(width, height / 2);
+    renderCtx.stroke();
+    renderCtx.setLineDash([]);
+  }
+  
+  // ========== 3. گرادینت‌ها (ترتیب معکوس) ==========
+  if (visibleStops.length > 0) {
+    const reversedStops = [...visibleStops].reverse();
+    
+    reversedStops.forEach(s => {
+      renderCtx.globalCompositeOperation = s.blendMode || 'screen';
+      drawGradToCtxGeneric(s, renderCtx, width, height);
+    });
+    
+    renderCtx.globalCompositeOperation = 'source-over';
+  }
+  
+  // ========== 4. فیلترها ==========
+  if (needsFilter && tempCanvas) {
+    // Blur
+    if (filterState.blur > 0) {
+      const blurCanvas = document.createElement('canvas');
+      blurCanvas.width = width;
+      blurCanvas.height = height;
+      const blurCtx = blurCanvas.getContext('2d');
+      blurCtx.filter = `blur(${filterState.blur}px)`;
+      blurCtx.drawImage(tempCanvas, 0, 0);
+      tempCanvas = blurCanvas;
+      renderCtx = blurCanvas.getContext('2d');
+    }
+    
+    // سایر فیلترها
+    if (hasNonBlurFilters()) {
+      const imageData = renderCtx.getImageData(0, 0, width, height);
+      applyFiltersToImageData(imageData);
+      renderCtx.putImageData(imageData, 0, 0);
+    }
+    
+    // کپی به context اصلی
+    targetCtx.drawImage(tempCanvas, 0, 0);
+  }
+  
+  // ========== 5. نویز ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    const noiseCanvas = await getNoiseCanvas(
+      width,
+      height,
+      noiseState.frequency
+    );
+  
+    if (noiseCanvas) {
+      targetCtx.save();
+      targetCtx.globalCompositeOperation = noiseState.blend;
+      targetCtx.globalAlpha = noiseState.opacity / 100;
+      targetCtx.drawImage(noiseCanvas, 0, 0, width, height);
+      targetCtx.restore();
+    }
+  }
+  
+  
+  
+  // برگرداندن W و H
+  W = savedW;
+  H = savedH;
+}
+
+// ========== رسم گرادینت روی هر context با ابعاد دلخواه ==========
+function drawGradToCtxGeneric(s, ctx, width, height) {
+  const cx = s.x * width;
+  const cy = s.y * height;
+
+  if (s.type === "radial") {
+    // مقیاس‌بندی سایز بر اساس نسبت ابعاد
+    const sizeScale = Math.max(width, height) / Math.max(W || 800, H || 600);
+    const scaledSize = s.size * sizeScale;
+    
+    const solidEnd = 1 - s.feather / 100;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+    const color = rgba(s.color, s.opacity / 100);
+
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === "linear") {
+    const angleRad = ((s.angle - 90) * Math.PI) / 180;
+    const diagonal = Math.hypot(width, height);
+    const mx = width / 2;
+    const my = height / 2;
+    const dx = (Math.cos(angleRad) * diagonal) / 2;
+    const dy = (Math.sin(angleRad) * diagonal) / 2;
+    
+    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  } 
+  else if (s.type === "conic") {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(startAngle, cx, cy);
+
+    const fixedStops = fixTransparentStops(s.stops);
+    fixedStops.forEach((cs) => {
+      grad.addColorStop(
+        clamp(cs.pos / 100, 0, 1),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
+// ========== DRAW GRADIENT FOR FULLSCREEN ==========
+function drawGradientForFullscreen(s, ctx, W, H, sizeScale) {
+  const cx = s.x * W;
+  const cy = s.y * H;
+  
+  if (s.type === 'radial') {
+    const scaledSize = s.size * sizeScale;
+    const solidEnd = 1 - (s.feather || 60) / 100;
+    
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+    const color = rgba(s.color, s.opacity / 100);
+    
+    grad.addColorStop(0, color);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, color);
+    }
+    grad.addColorStop(1, rgba(s.color, 0));
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === 'linear') {
+    const angleRad = ((s.angle - 90) * Math.PI) / 180;
+    const diagonal = Math.hypot(W, H);
+    const midX = W / 2;
+    const midY = H / 2;
+    const dx = (Math.cos(angleRad) * diagonal) / 2;
+    const dy = (Math.sin(angleRad) * diagonal) / 2;
+    
+    const grad = ctx.createLinearGradient(midX - dx, midY - dy, midX + dx, midY + dy);
+    
+    const stops = s.stops || [];
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  } 
+  else if (s.type === 'conic') {
+    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
+    const grad = ctx.createConicGradient(startAngle, cx, cy);
+    
+    const stops = s.stops || [];
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgba(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ========== RENDER GRADIENT - FIXED ==========
+function renderGradientFS(s, ctx, W, H, sizeScale) {
+  const cx = s.x * W;
+  const cy = s.y * H;
+  
+  ctx.save();
+  
+  if (s.type === 'radial') {
+    const scaledSize = s.size * sizeScale;
+    const solidEnd = 1 - (s.feather || 60) / 100;
+    
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+    const col = rgbaColor(s.color, s.opacity / 100);
+    
+    grad.addColorStop(0, col);
+    if (solidEnd > 0 && solidEnd < 1) {
+      grad.addColorStop(solidEnd, col);
+    }
+    grad.addColorStop(1, rgbaColor(s.color, 0));
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
+    ctx.fill();
+  } 
+  else if (s.type === 'linear') {
+    const angle = ((s.angle || 0) - 90) * Math.PI / 180;
+    const diagonal = Math.hypot(W, H);
+    const midX = W / 2;
+    const midY = H / 2;
+    const dx = Math.cos(angle) * diagonal / 2;
+    const dy = Math.sin(angle) * diagonal / 2;
+    
+    const grad = ctx.createLinearGradient(midX - dx, midY - dy, midX + dx, midY + dy);
+    
+    const stops = s.stops || [
+      { pos: 0, color: '#ff0000', opacity: 100 },
+      { pos: 100, color: '#0000ff', opacity: 100 }
+    ];
+    
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgbaColor(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  } 
+  else if (s.type === 'conic') {
+    const startAngle = ((s.startAngle || 0) - 90) * Math.PI / 180;
+    
+    const grad = ctx.createConicGradient(startAngle, cx, cy);
+    
+    const stops = s.stops || [
+      { pos: 0, color: '#ff0000', opacity: 100 },
+      { pos: 100, color: '#0000ff', opacity: 100 }
+    ];
+    
+    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
+      grad.addColorStop(
+        Math.max(0, Math.min(1, cs.pos / 100)),
+        rgbaColor(cs.color, cs.opacity / 100)
+      );
+    });
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+  
+  ctx.restore();
+}
+
+// ========== RGBA HELPER - LOCAL ==========
+function rgbaColor(hex, alpha) {
+  // اگر تابع rgba وجود داره ازش استفاده کن
+  if (typeof rgba === 'function') {
+    return rgba(hex, alpha);
+  }
+  
+  // fallback
+  hex = hex || '#000000';
+  hex = hex.replace('#', '');
+  
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+  
+  const r = parseInt(hex.substring(0, 2), 16) || 0;
+  const g = parseInt(hex.substring(2, 4), 16) || 0;
+  const b = parseInt(hex.substring(4, 6), 16) || 0;
+  
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// ========== ZOOM FUNCTIONS ==========
+function zoomFullscreen(factor, clientX, clientY) {
+  const container = document.getElementById('fsContainer');
+  if (!container || !fullscreenCanvas) return;
+  
+  const containerRect = container.getBoundingClientRect();
+  const canvasRect = fullscreenCanvas.getBoundingClientRect();
+  
+  const oldScale = fullscreenZoom.scale;
+  const newScale = Math.max(
+    fullscreenZoom.minScale,
+    Math.min(fullscreenZoom.maxScale, oldScale * factor)
+  );
+  
+  if (Math.abs(newScale - oldScale) < 0.001) return;
+  
+  // مرکز پیش‌فرض
+  if (clientX === null || clientY === null) {
+    clientX = containerRect.left + containerRect.width / 2;
+    clientY = containerRect.top + containerRect.height / 2;
+  }
+  
+  // مرکز canvas
+  const canvasCenterX = canvasRect.left + canvasRect.width / 2;
+  const canvasCenterY = canvasRect.top + canvasRect.height / 2;
+  
+  const scaleRatio = newScale / oldScale;
+  
+  fullscreenZoom.translateX = clientX - canvasCenterX - (clientX - canvasCenterX - fullscreenZoom.translateX) * scaleRatio;
+  fullscreenZoom.translateY = clientY - canvasCenterY - (clientY - canvasCenterY - fullscreenZoom.translateY) * scaleRatio;
+  fullscreenZoom.scale = newScale;
+  
+  applyFullscreenTransform();
+  updateFullscreenZoomUI();
+  setTimeout(() => constrainFullscreenPan(), 10);
+}
+
+function resetFullscreenView() {
+  fullscreenZoom.scale = 1;
+  fullscreenZoom.translateX = 0;
+  fullscreenZoom.translateY = 0;
+  
+  applyFullscreenTransform(true);
+  updateFullscreenZoomUI();
+  updateFullscreenCursor();
+}
+
+function applyFullscreenTransform(animate = false) {
+  if (!fullscreenCanvas) return;
+  
+  fullscreenCanvas.style.transition = animate ? 'transform 0.3s ease-out' : 'none';
+  fullscreenCanvas.style.transform = `translate(${fullscreenZoom.translateX}px, ${fullscreenZoom.translateY}px) scale(${fullscreenZoom.scale})`;
+  
+  if (animate) {
+    setTimeout(() => {
+      if (fullscreenCanvas) fullscreenCanvas.style.transition = 'none';
+    }, 300);
+  }
+}
+
+function constrainFullscreenPan() {
+  if (!fullscreenCanvas) return;
+  
+  const container = document.getElementById('fsContainer');
+  if (!container) return;
+  
+  const containerRect = container.getBoundingClientRect();
+  const canvasW = parseFloat(fullscreenCanvas.style.width) || 100;
+  const canvasH = parseFloat(fullscreenCanvas.style.height) || 100;
+  
+  const scaledW = canvasW * fullscreenZoom.scale;
+  const scaledH = canvasH * fullscreenZoom.scale;
+  
+  const maxX = Math.max(0, (scaledW - containerRect.width) / 2);
+  const maxY = Math.max(0, (scaledH - containerRect.height) / 2);
+  
+  let changed = false;
+  
+  if (scaledW <= containerRect.width) {
+    if (fullscreenZoom.translateX !== 0) { fullscreenZoom.translateX = 0; changed = true; }
+  } else {
+    const clamped = Math.max(-maxX, Math.min(maxX, fullscreenZoom.translateX));
+    if (clamped !== fullscreenZoom.translateX) { fullscreenZoom.translateX = clamped; changed = true; }
+  }
+  
+  if (scaledH <= containerRect.height) {
+    if (fullscreenZoom.translateY !== 0) { fullscreenZoom.translateY = 0; changed = true; }
+  } else {
+    const clamped = Math.max(-maxY, Math.min(maxY, fullscreenZoom.translateY));
+    if (clamped !== fullscreenZoom.translateY) { fullscreenZoom.translateY = clamped; changed = true; }
+  }
+  
+  if (changed) applyFullscreenTransform(true);
+  updateFullscreenCursor();
+}
+
+function updateFullscreenZoomUI() {
+  const el = document.getElementById('fsZoomValue');
+  if (el) el.textContent = Math.round(fullscreenZoom.scale * 100) + '%';
+  
+  const zoomOut = document.getElementById('fsZoomOut');
+  const zoomIn = document.getElementById('fsZoomIn');
+  if (zoomOut) zoomOut.disabled = fullscreenZoom.scale <= fullscreenZoom.minScale;
+  if (zoomIn) zoomIn.disabled = fullscreenZoom.scale >= fullscreenZoom.maxScale;
+}
+
+function updateFullscreenCursor() {
+  const container = document.getElementById('fsContainer');
+  if (!container) return;
+  
+  if (fullscreenZoom.isPanning) {
+    container.style.cursor = 'grabbing';
+  } else if (fullscreenZoom.scale > 1.01) {
+    container.style.cursor = 'grab';
+  } else {
+    container.style.cursor = 'default';
+  }
+}
+
+// ========== TOUCH ==========
+function handleFSTouchStart(e) {
+  const container = document.getElementById('fsContainer');
+  if (!container) return;
+  
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    fullscreenZoom.isPinching = true;
+    fullscreenZoom.isPanning = false;
+    fullscreenZoom.startDist = getPinchDistance(e.touches);
+    fullscreenZoom.startScale = fullscreenZoom.scale;
+    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+    
+    const center = getPinchCenter(e.touches);
+    fullscreenZoom.pinchCenterX = center.x;
+    fullscreenZoom.pinchCenterY = center.y;
+    
+  } else if (e.touches.length === 1) {
+    const touch = e.touches[0];
+    const now = Date.now();
+    
+    const dx = touch.clientX - fullscreenZoom.lastTapX;
+    const dy = touch.clientY - fullscreenZoom.lastTapY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (now - fullscreenZoom.lastTap < 300 && dist < 50) {
+      e.preventDefault();
+      handleFSDoubleTap(touch.clientX, touch.clientY);
+      fullscreenZoom.lastTap = 0;
+      return;
+    }
+    
+    fullscreenZoom.lastTap = now;
+    fullscreenZoom.lastTapX = touch.clientX;
+    fullscreenZoom.lastTapY = touch.clientY;
+    
+    e.preventDefault();
+    fullscreenZoom.isPanning = true;
+    fullscreenZoom.startX = touch.clientX;
+    fullscreenZoom.startY = touch.clientY;
+    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+    updateFullscreenCursor();
+  }
+}
+
+function handleFSTouchMove(e) {
+  if (fullscreenZoom.isPinching && e.touches.length === 2) {
+    e.preventDefault();
+    
+    const container = document.getElementById('fsContainer');
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    
+    const dist = getPinchDistance(e.touches);
+    const scaleFactor = dist / fullscreenZoom.startDist;
+    const newScale = Math.max(
+      fullscreenZoom.minScale,
+      Math.min(fullscreenZoom.maxScale, fullscreenZoom.startScale * scaleFactor)
+    );
+    
+    const center = getPinchCenter(e.touches);
+    const canvasCenterX = containerRect.left + containerRect.width / 2;
+    const canvasCenterY = containerRect.top + containerRect.height / 2;
+    
+    const panX = center.x - fullscreenZoom.pinchCenterX;
+    const panY = center.y - fullscreenZoom.pinchCenterY;
+    const scaleRatio = newScale / fullscreenZoom.startScale;
+    const pivotX = fullscreenZoom.pinchCenterX - canvasCenterX;
+    const pivotY = fullscreenZoom.pinchCenterY - canvasCenterY;
+    
+    fullscreenZoom.translateX = fullscreenZoom.startTranslateX - pivotX * (scaleRatio - 1) + panX;
+    fullscreenZoom.translateY = fullscreenZoom.startTranslateY - pivotY * (scaleRatio - 1) + panY;
+    fullscreenZoom.scale = newScale;
+    
+    applyFullscreenTransform();
+    updateFullscreenZoomUI();
+    
+  } else if (fullscreenZoom.isPanning && e.touches.length === 1) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    fullscreenZoom.translateX = fullscreenZoom.startTranslateX + (touch.clientX - fullscreenZoom.startX);
+    fullscreenZoom.translateY = fullscreenZoom.startTranslateY + (touch.clientY - fullscreenZoom.startY);
+    applyFullscreenTransform();
+  }
+}
+
+function handleFSTouchEnd(e) {
+  if (e.touches.length === 0) {
+    if (fullscreenZoom.isPinching || fullscreenZoom.isPanning) {
+      fullscreenZoom.isPinching = false;
+      fullscreenZoom.isPanning = false;
+      constrainFullscreenPan();
+    }
+  } else if (e.touches.length === 1 && fullscreenZoom.isPinching) {
+    fullscreenZoom.isPinching = false;
+    fullscreenZoom.isPanning = true;
+    const touch = e.touches[0];
+    fullscreenZoom.startX = touch.clientX;
+    fullscreenZoom.startY = touch.clientY;
+    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+  }
+  updateFullscreenCursor();
+}
+
+function handleFSDoubleTap(clientX, clientY) {
+  if (fullscreenZoom.scale > 1.1) {
+    resetFullscreenView();
+  } else {
+    zoomFullscreen(3, clientX, clientY);
+  }
+}
+
+// ========== MOUSE ==========
+function handleFSWheel(e) {
+  e.preventDefault();
+  zoomFullscreen(e.deltaY > 0 ? 0.85 : 1.18, e.clientX, e.clientY);
+}
+
+function handleFSMouseDown(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  fullscreenZoom.isPanning = true;
+  fullscreenZoom.startX = e.clientX;
+  fullscreenZoom.startY = e.clientY;
+  fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
+  fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
+  updateFullscreenCursor();
+}
+
+function handleFSMouseMove(e) {
+  if (!fullscreenZoom.isPanning) return;
+  fullscreenZoom.translateX = fullscreenZoom.startTranslateX + (e.clientX - fullscreenZoom.startX);
+  fullscreenZoom.translateY = fullscreenZoom.startTranslateY + (e.clientY - fullscreenZoom.startY);
+  applyFullscreenTransform();
+}
+
+function handleFSMouseUp() {
+  if (!fullscreenZoom.isPanning) return;
+  fullscreenZoom.isPanning = false;
+  constrainFullscreenPan();
+}
+
+function handleFSDoubleClick(e) {
+  e.preventDefault();
+  if (fullscreenZoom.scale > 1.1) {
+    resetFullscreenView();
+  } else {
+    zoomFullscreen(3, e.clientX, e.clientY);
+  }
+}
+
+// ========== RESIZE ==========
+async function handleFSResize() {
+  if (!fullscreenCanvas) return;
+  await renderFullscreenCanvas();
+  resetFullscreenView();
+}
+
+// ========== ROTATE ==========
+async function rotateFullscreen() {
+  fullscreenRotation = (fullscreenRotation + 90) % 360;
+  
+  fullscreenZoom.scale = 1;
+  fullscreenZoom.translateX = 0;
+  fullscreenZoom.translateY = 0;
+  
+  await renderFullscreenCanvas();
+  applyFullscreenTransform();
+  updateFullscreenZoomUI();
+  updateFullscreenCursor();
+  
+  const info = document.getElementById('fullscreenInfo');
+  if (info) {
+    const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
+    const w = isRotated ? state.canvasHeight : state.canvasWidth;
+    const h = isRotated ? state.canvasWidth : state.canvasHeight;
+    info.textContent = `${Math.round(w)} × ${Math.round(h)}`;
+  }
+}
+
+// ========== UTILS ==========
+function getPinchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
+function getPinchCenter(touches) {
+  return {
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  };
+}
+window.openFullscreenPreview = openFullscreenPreview;
+window.closeFullscreenPreview = closeFullscreenPreview;
+window.rotateFullscreen = rotateFullscreen;
+
+// ========== TOGGLE HANDLES ==========
+const toggleBtn = document.getElementById("toggleHandles");
+let lastToggleTime = 0;
+
+function handleToggleClick(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  }
+  
+  const now = Date.now();
+  if (now - lastToggleTime < 300) return;
+  lastToggleTime = now;
+
+  state.showHandles = !state.showHandles;
+
+  if (toggleBtn) {
+    toggleBtn.innerHTML = state.showHandles
+      ? '<img src="./icon/eye.svg" alt="show handel">'
+      : '<img src="./icon/eye-close.svg" alt="hide handel">';
+    toggleBtn.classList.toggle("handles-hidden", !state.showHandles);
+  }
   draw();
-  renderList();
-  renderInspector();
-  updateCSS();
-  updateBgPreview();
+}
+
+if (toggleBtn) {
+  toggleBtn.addEventListener("click", handleToggleClick);
+  
+  toggleBtn.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, { passive: false });
+  
+  toggleBtn.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleToggleClick(e);
+  }, { passive: false });
 }
 
 // ========== LOCK BUTTON ==========
@@ -2786,63 +3681,498 @@ if (btnLock) {
     handleLockClick(e);
   }, { passive: false });
 }
-// ========== NOISE SYSTEM ==========
-const noiseState = {
-  enabled: true,
-  opacity: 0,
-  frequency: 0.65,    // 0.01 - 1
-  blend: 'overlay',
-  canvas: null,
-  isGenerating: false,
-  lastW: 0,
-  lastH: 0,
-  lastFreq: 0
-};
 
-// ========== CSS Storage ==========
-let currentGradientCSS = "";
-let currentNoiseCSS = "";
-let currentSVGFilter = "";
+// ========== ZOOM SYSTEM ==========
+function calcDynamicMinZoom() {
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return 10;
 
-// ========== CREATE SVG NOISE ==========
-function generateSVGNoise(width, height, frequency) {
-  return new Promise((resolve) => {
-    const w = Math.max(100, width);
-    const h = Math.max(100, height);
-    
-    const svgContent = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-        <defs>
-          <filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="${frequency}" numOctaves="4" stitchTiles="stitch" result="noise"/>
-            <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise"/>
-          </filter>
-        </defs>
-        <rect width="100%" height="100%" fill="white" filter="url(#noiseFilter)"/>
-      </svg>
-    `;
-    
-    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(url);
-      resolve(canvas);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
-    };
-    img.src = url;
+  const rect = wrap.getBoundingClientRect();
+  const padding = zoomState.padding * 2;
+
+  const minScaleX = (rect.width - padding) / state.canvasWidth;
+  const minScaleY = (rect.height - padding) / state.canvasHeight;
+
+  let minZoom = Math.min(minScaleX, minScaleY) * 100;
+  minZoom = clamp(Math.floor(minZoom), 5, 30);
+
+  zoomState.dynamicMin = minZoom;
+  return minZoom;
+}
+
+function setZoom(zoom, center = null) {
+  const minZoom = calcDynamicMinZoom();
+  zoom = clamp(zoom, minZoom, zoomState.max);
+
+  if (zoom === zoomState.current) return;
+
+  zoomState.current = zoom;
+  const scale = zoom / 100;
+
+  canvas.style.width = state.canvasWidth * scale + "px";
+  canvas.style.height = state.canvasHeight * scale + "px";
+
+  if (center) centerCanvasAt(center, scale);
+
+  updateZoomUI();
+  showZoomIndicator(zoom);
+}
+
+function centerCanvasAt(point, scale) {
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
+
+  wrap.scrollLeft = point.x * scale - wrap.clientWidth / 2;
+  wrap.scrollTop = point.y * scale - wrap.clientHeight / 2;
+}
+
+function zoomIn() {
+  setZoom(zoomState.current + zoomState.step);
+}
+function zoomOut() {
+  setZoom(zoomState.current - zoomState.step);
+}
+function resetZoom() {
+  setZoom(100);
+}
+
+function fitToScreen() {
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
+
+  const rect = wrap.getBoundingClientRect();
+  const padding = zoomState.padding * 2;
+
+  const scaleX = (rect.width - padding) / state.canvasWidth;
+  const scaleY = (rect.height - padding) / state.canvasHeight;
+  let fitScale = Math.min(scaleX, scaleY);
+
+  fitScale = Math.min(fitScale, 1);
+
+  const minZoom = calcDynamicMinZoom();
+  let zoom = Math.round(fitScale * 100);
+  zoom = Math.max(zoom, minZoom);
+
+  setZoom(zoom);
+  centerCanvas();
+}
+
+function centerCanvas() {
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
+
+  requestAnimationFrame(() => {
+    const scrollX = (wrap.scrollWidth - wrap.clientWidth) / 2;
+    const scrollY = (wrap.scrollHeight - wrap.clientHeight) / 2;
+    wrap.scrollLeft = Math.max(0, scrollX);
+    wrap.scrollTop = Math.max(0, scrollY);
   });
 }
-// ========== FILTER STATE ==========
+
+function updateZoomUI() {
+  const slider = document.getElementById("zoomSlider");
+  const value = document.getElementById("zoomValue");
+  const minZoom = zoomState.dynamicMin;
+
+  if (slider) {
+    slider.min = minZoom;
+    slider.max = zoomState.max;
+    slider.value = zoomState.current;
+  }
+
+  if (value) {
+    value.textContent = zoomState.current + "%";
+  }
+
+  const zoomOutBtn = document.getElementById("zoomOut");
+  const zoomInBtn = document.getElementById("zoomIn");
+
+  if (zoomOutBtn) zoomOutBtn.disabled = zoomState.current <= minZoom;
+  if (zoomInBtn) zoomInBtn.disabled = zoomState.current >= zoomState.max;
+}
+
+let indicatorTimeout;
+function showZoomIndicator(zoom) {
+  const indicator = document.getElementById("zoomIndicator");
+  if (!indicator) return;
+
+  indicator.textContent = zoom + "%";
+  indicator.classList.add("show");
+
+  clearTimeout(indicatorTimeout);
+  indicatorTimeout = setTimeout(() => indicator.classList.remove("show"), 800);
+}
+
+function setupWheelZoom() {
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
+
+  wrap.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const center = {
+          x: (e.clientX - rect.left) / (zoomState.current / 100),
+          y: (e.clientY - rect.top) / (zoomState.current / 100),
+        };
+
+        const delta = e.deltaY > 0 ? -10 : 10;
+        setZoom(zoomState.current + delta, center);
+      }
+    },
+    { passive: false }
+  );
+}
+
+function setupTouchZoom() {
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
+
+  let initialPinchDist = 0;
+  let initialZoom = 100;
+
+  function getPinchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  function getPinchCenter(touches) {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }
+
+  wrap.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        initialPinchDist = getPinchDist(e.touches);
+        initialZoom = zoomState.current;
+      }
+    },
+    { passive: false }
+  );
+
+  wrap.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+
+        const currentDist = getPinchDist(e.touches);
+        const scale = currentDist / initialPinchDist;
+        const newZoom = Math.round(initialZoom * scale);
+
+        const center = getPinchCenter(e.touches);
+        const rect = canvas.getBoundingClientRect();
+        const canvasCenter = {
+          x: (center.x - rect.left) / (zoomState.current / 100),
+          y: (center.y - rect.top) / (zoomState.current / 100),
+        };
+
+        setZoom(newZoom, canvasCenter);
+      }
+    },
+    { passive: false }
+  );
+
+  wrap.addEventListener("touchend", () => {
+    initialPinchDist = 0;
+  });
+}
+
+function setupKeyboardZoom() {
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+
+    const isMod = e.ctrlKey || e.metaKey;
+
+    if (isMod) {
+      switch (e.key) {
+        case "+":
+        case "=":
+          e.preventDefault();
+          zoomIn();
+          break;
+        case "-":
+          e.preventDefault();
+          zoomOut();
+          break;
+        case "0":
+          e.preventDefault();
+          resetZoom();
+          break;
+      }
+    }
+
+    switch (e.key.toLowerCase()) {
+      case "f":
+        if (!isMod) {
+          e.preventDefault();
+          fitToScreen();
+        }
+        break;
+      case "h":
+        if (!isMod) {
+          handleToggleClick(e);
+        }
+        break;
+      case "x":
+        if (!isMod) {
+          e.preventDefault();
+          swapDimensions();
+        }
+        break;
+      case "l":
+        if (!isMod) {
+          e.preventDefault();
+          toggleAspectLock();
+        }
+        break;
+      case "delete":
+      case "backspace":
+        if (state.selected) {
+          e.preventDefault();
+          delStop(state.selected);
+        }
+        case "p":
+  if (!isMod) {
+    e.preventDefault();
+    openFullscreenPreview();
+  }
+  break;
+        break;
+      case "escape":
+        state.selected = null;
+        closePicker();
+        refresh();
+        break;
+    }
+  });
+}
+
+let isButtonInteraction = false; 
+
+function setupResizeObserver() {
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
+
+  let resizeTimeout = null;
+  let lastWidth = wrap.clientWidth;
+  let lastHeight = wrap.clientHeight;
+
+  const observer = new ResizeObserver((entries) => {
+    if (isButtonInteraction) return;
+    
+    const entry = entries[0];
+    const newWidth = entry.contentRect.width;
+    const newHeight = entry.contentRect.height;
+    
+    if (Math.abs(newWidth - lastWidth) < 10 && Math.abs(newHeight - lastHeight) < 10) {
+      return;
+    }
+    
+    lastWidth = newWidth;
+    lastHeight = newHeight;
+
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      const newMin = calcDynamicMinZoom();
+      if (zoomState.current < newMin) {
+        setZoom(newMin);
+      }
+      updateZoomUI();
+    }, 200); 
+  });
+
+  observer.observe(wrap);
+}
+
+function setupZoomSlider() {
+  const slider = document.getElementById("zoomSlider");
+  if (!slider) return;
+
+  slider.addEventListener("input", (e) => {
+    setZoom(parseInt(e.target.value));
+  });
+
+  slider.addEventListener("dblclick", () => {
+    resetZoom();
+  });
+}
+
+let lastCanvasW = 0;
+let lastCanvasH = 0;
+function checkAndFixZoom() {
+  if (state.canvasWidth === lastCanvasW && state.canvasHeight === lastCanvasH) {
+    return;
+  }
+  
+  lastCanvasW = state.canvasWidth;
+  lastCanvasH = state.canvasHeight;
+
+  const wrap = document.querySelector(".canvas-wrap");
+  if (!wrap) return;
+
+  const rect = wrap.getBoundingClientRect();
+  const padding = zoomState.padding * 2;
+  const scale = zoomState.current / 100;
+
+  const displayWidth = state.canvasWidth * scale;
+  const displayHeight = state.canvasHeight * scale;
+
+  const tooLarge =
+    displayWidth > rect.width - padding ||
+    displayHeight > rect.height - padding;
+
+  const tooSmall =
+    displayWidth < (rect.width - padding) * 0.93 &&
+    displayHeight < (rect.height - padding) * 0.3;
+
+  if (tooLarge || tooSmall) {
+    fitToScreen();
+  } else {
+    canvas.style.width = state.canvasWidth * scale + "px";
+    canvas.style.height = state.canvasHeight * scale + "px";
+    updateZoomUI();
+  }
+}
+
+function setCanvasSize(w, h) {
+  state.canvasWidth = Math.floor(
+    clamp(w, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth)
+  );
+  state.canvasHeight = Math.floor(
+    clamp(h, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight)
+  );
+  refresh();
+}
+
+function initZoom() {
+  calcDynamicMinZoom();
+
+  document.getElementById("zoomIn")?.addEventListener("click", zoomIn);
+  document.getElementById("zoomOut")?.addEventListener("click", zoomOut);
+  document.getElementById("zoomFit")?.addEventListener("click", fitToScreen);
+  document.getElementById("zoomReset")?.addEventListener("click", resetZoom);
+
+  setupZoomSlider();
+  setupWheelZoom();
+  setupTouchZoom();
+  setupKeyboardZoom();
+  setupResizeObserver();
+
+  setTimeout(() => {
+    fitToScreen();
+    centerCanvas();
+  }, 100);
+}
+
+
+function refreshUI() {
+  draw();
+  renderList();
+  renderInspector();
+  updateCSS();
+  updateBgPreview();
+}
+
+// ========== STOP CRUD ==========
+function getStop(id) {
+  return state.stops.find((s) => s.id === id);
+}
+
+function addStop(type) {
+  counter++;
+  const typeNames = { radial: "Radial", linear: "Linear", conic: "Conic" };
+  const s = {
+    id: uid(),
+    name: `${typeNames[type]} ${counter}`,
+    type,
+    visible: true,
+    x: 0.2 + Math.random() * 0.6,
+    y: state.lockVertical ? 0.5 : 0.2 + Math.random() * 0.6,
+    color: randColor(),
+    size: 80 + Math.random() * 100,
+    feather: 60,
+    opacity: 100,
+    angle: Math.floor(Math.random() * 180),
+    startAngle: 0,
+    blendMode: 'screen',  // ✅ اضافه شد - پیش‌فرض screen
+    stops: [
+      { pos: 0, color: randColor(), opacity: 100 },
+      { pos: 100, color: randColor(), opacity: 100 },
+    ],
+  };
+  state.stops.push(s);
+  state.selected = s.id;
+  refresh();
+}
+
+function delStop(id) {
+  state.stops = state.stops.filter((s) => s.id !== id);
+  if (state.selected === id) state.selected = null;
+  refresh();
+}
+
+function dupStop(id) {
+  const o = getStop(id);
+  if (!o) return;
+  counter++;
+  const c = JSON.parse(JSON.stringify(o));
+  c.id = uid();
+  c.name += " Copy";
+  c.x = clamp(c.x + 0.04, 0, 1);
+  c.y = clamp(c.y + 0.04, 0, 1);
+  state.stops.push(c);
+  state.selected = c.id;
+  refresh();
+}
+
+function toggleVis(id) {
+  const s = getStop(id);
+  if (s) {
+    s.visible = !s.visible;
+    refresh();
+  }
+}
+
+function addColorStop(s) {
+  const pos =
+    s.stops.length < 5
+      ? Math.round(100 / (s.stops.length + 1)) * s.stops.length
+      : 50;
+  s.stops.push({ pos, color: randColor(), opacity: 100 });
+  s.stops.sort((a, b) => a.pos - b.pos);
+  refresh();
+}
+
+function delColorStop(s, i) {
+  if (s.stops.length > 2) {
+    s.stops.splice(i, 1);
+    refresh();
+  }
+}
+
+function safeButtonAction(action) {
+  isButtonInteraction = true;
+  
+  try {
+    action();
+  } finally {
+    setTimeout(() => {
+      isButtonInteraction = false;
+    }, 100);
+  }
+}
+
+// ========== FILTER ==========
 const filterState = {
   enabled: true,
   brightness: 100,    // 0-200, default 100
@@ -2855,7 +4185,6 @@ const filterState = {
   invert: 0,          // 0-100, default 0
 };
 
-// Default values برای ریست
 const filterDefaults = {
   brightness: 100,
   contrast: 100,
@@ -2866,11 +4195,6 @@ const filterDefaults = {
   sepia: 0,
   invert: 0,
 };
-
-// CSS Storage اضافه کن
-let currentFilterCSS = "";
-
-// ========== FILTER FUNCTIONS ==========
 
 function getFilterString() {
   if (!filterState.enabled) return '';
@@ -3062,7 +4386,6 @@ function initFilterEvents() {
   document.getElementById('filtersResetBtn')?.addEventListener('click', resetFilters);
 }
 
-// ✅ تابع جداگانه برای ریست یک فیلتر
 function resetSingleFilter(name, row) {
   // ریست به مقدار پیش‌فرض
   filterState[name] = filterDefaults[name];
@@ -3079,8 +4402,6 @@ function resetSingleFilter(name, row) {
     }, 300);
   }
 }
-
-// ========== MANUAL FILTER APPLICATION ==========
 
 function applyFiltersToImageData(imageData) {
   const data = imageData.data;
@@ -3174,7 +4495,7 @@ function applyFiltersToImageData(imageData) {
   
   return imageData;
 }
-// ماتریس چرخش Hue
+
 function getHueRotationMatrix(degrees) {
   const rad = degrees * Math.PI / 180;
   const cos = Math.cos(rad);
@@ -3194,7 +4515,6 @@ function getHueRotationMatrix(degrees) {
   ];
 }
 
-// Blur جداگانه (چون پیکسلی سنگینه)
 function applyBlur(ctx, width, height, radius) {
   if (radius <= 0) return;
   
@@ -3212,95 +4532,199 @@ function applyBlur(ctx, width, height, radius) {
   ctx.drawImage(tempCanvas, 0, 0);
   ctx.filter = 'none';
 }
-// ========== GLOBALS ==========
 window.setFilter = setFilter;
 window.toggleFilters = toggleFilters;
 window.resetFilters = resetFilters;
-// ========== INIT NOISE ==========
-async function initNoiseTexture(force = false) {
-  if (noiseState.isGenerating) return;
-  
-  const needsRegenerate = force || 
-    !noiseState.canvas || 
-    noiseState.lastW !== W || 
-    noiseState.lastH !== H || 
-    noiseState.lastFreq !== noiseState.frequency;
-  
-  if (!needsRegenerate) return;
-  
-  noiseState.isGenerating = true;
-  noiseState.canvas = await generateSVGNoise(W, H, noiseState.frequency);
-  noiseState.lastW = W;
-  noiseState.lastH = H;
-  noiseState.lastFreq = noiseState.frequency;
-  noiseState.isGenerating = false;
-}
 
-// ========== DRAW NOISE ==========
-function drawNoise() {
-  if (!noiseState.enabled || noiseState.opacity <= 0 || !noiseState.canvas) return;
-  
-  ctx.save();
-  ctx.globalCompositeOperation = noiseState.blend;
-  ctx.globalAlpha = noiseState.opacity / 100;
-  ctx.drawImage(noiseState.canvas, 0, 0, W, H);
-  ctx.restore();
-}
 
-// ========== NOISE CONTROLS ==========
-let noiseUpdateTimeout = null;
-
-async function setNoiseOpacity(value) {
-  noiseState.opacity = clamp(parseFloat(value) || 0, 0, 100);
-  updateNoiseUI();
-  
-  if (noiseState.opacity > 0 && !noiseState.canvas) {
-    await initNoiseTexture(true);
-  }
-  
+// ========== BACKGROUND CONTROLS ==========
+function toggleBackground() {
+  state.bgEnabled = !state.bgEnabled;
+  updateBgUI();
   draw();
   updateCSS();
 }
 
-async function setNoiseFrequency(value) {
-  const newFreq = clamp(parseFloat(value) || 0.65, 0.01, 1);
+function setBgBlendMode(mode) {
+  state.bgBlendMode = mode;
+  draw();
+  updateCSS();
+}
+
+function updateBgUI() {
+  const toggleBtn = document.getElementById('bgToggleBtn');
+  const bgControls = document.querySelector('.bg-controls');
   
-  if (newFreq === noiseState.frequency) return;
-  
-  noiseState.frequency = newFreq;
-  updateNoiseUI();
-  
-  clearTimeout(noiseUpdateTimeout);
-  noiseUpdateTimeout = setTimeout(async () => {
-    if (noiseState.opacity > 0) {
-      noiseState.canvas = null;
-      noiseState.lastFreq = 0;
-      await initNoiseTexture(true);
-      draw();
+  if (toggleBtn) {
+    const img = toggleBtn.querySelector('img');
+    if (img) {
+      img.src = state.bgEnabled ? './icon/eye.svg' : './icon/eye-close.svg';
     }
-    updateCSS();
-  }, 150);
+    toggleBtn.classList.toggle('disabled', !state.bgEnabled);
+  }
+  
+  if (bgControls) {
+    bgControls.classList.toggle('disabled', !state.bgEnabled);
+  }
+  
+  const blendSelect = document.getElementById('bgBlendMode');
+  if (blendSelect) {
+    blendSelect.value = state.bgBlendMode;
+  }
+}
+
+function initBackgroundEvents() {
+  // Toggle button
+  document.getElementById('bgToggleBtn')?.addEventListener('click', toggleBackground);
+  
+  // Blend mode select
+  document.getElementById('bgBlendMode')?.addEventListener('change', (e) => {
+    setBgBlendMode(e.target.value);
+  });
+}
+window.toggleBackground = toggleBackground;
+window.setBgBlendMode = setBgBlendMode;
+
+// ========== SVG NOISE FILTER SYSTEM ==========
+const noiseState = {
+  enabled: true,
+  opacity: 0,          // 0 - 100
+  frequency: 0.65,    // 0.01 - 1
+  blend: 'overlay'
+};
+
+function getNoiseWrap() {
+  return document.querySelector('.canvas-wrap');
+}
+
+function applyNoiseFilter() {
+  const wrap = getNoiseWrap();
+  const turb = document.getElementById('noiseTurbulence');
+  if (!wrap || !turb) return;
+
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    wrap.style.setProperty('--noise-opacity', noiseState.opacity / 100);
+    wrap.style.setProperty('--noise-blend', noiseState.blend);
+    turb.setAttribute('baseFrequency', noiseState.frequency);
+    wrap.classList.add('noise-enabled');
+  } else {
+    wrap.style.setProperty('--noise-opacity', 0);
+    wrap.classList.remove('noise-enabled');
+  }
+}
+
+// ========== NOISE CONTROLS ==========
+function setNoiseOpacity(value) {
+  noiseState.opacity = clamp(parseFloat(value) || 0, 0, 100);
+  updateNoiseUI();
+  applyNoiseFilter();
+  updateCSS();
+}
+
+function setNoiseFrequency(value) {
+  noiseState.frequency = clamp(parseFloat(value) || 0.65, 0.01, 1);
+  updateNoiseUI();
+  applyNoiseFilter();
+  updateCSS();
 }
 
 function setNoiseBlend(value) {
   noiseState.blend = value;
-  draw();
+  updateNoiseUI();
+  applyNoiseFilter();
   updateCSS();
 }
 
 function toggleNoise() {
   noiseState.enabled = !noiseState.enabled;
   updateNoiseUI();
-  draw();
+  applyNoiseFilter();
   updateCSS();
 }
 
+const noiseCache = {
+  canvas: null,
+  width: 0,
+  height: 0,
+  frequency: null,
+};
+
+async function getNoiseCanvas(width, height, frequency) {
+  // اگر همون نویز قبلیه → همونو بده
+  if (
+    noiseCache.canvas &&
+    noiseCache.width === width &&
+    noiseCache.height === height &&
+    noiseCache.frequency === frequency
+  ) {
+    return noiseCache.canvas;
+  }
+
+  // ❌ پاک‌سازی نویز قبلی
+  if (noiseCache.canvas) {
+    noiseCache.canvas.width = 0;
+    noiseCache.canvas.height = 0;
+    noiseCache.canvas = null;
+  }
+
+  // ✅ ساخت نویز جدید
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="${width}" height="${height}"
+         viewBox="0 0 ${width} ${height}">
+      <filter id="n">
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="${frequency}"
+          numOctaves="4"
+          stitchTiles="stitch"/>
+        <feColorMatrix type="saturate" values="0"/>
+      </filter>
+      <rect width="100%" height="100%" filter="url(#n)"/>
+    </svg>
+  `;
+
+  const blob = new Blob([svg], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+
+  return new Promise((resolve) => {
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = width;
+      c.height = height;
+      c.getContext("2d").drawImage(img, 0, 0);
+
+      URL.revokeObjectURL(url);
+      img.src = "";
+
+      // 📌 ذخیره در cache
+      noiseCache.canvas = c;
+      noiseCache.width = width;
+      noiseCache.height = height;
+      noiseCache.frequency = frequency;
+
+      resolve(c);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      img.src = "";
+      resolve(null);
+    };
+
+    img.src = url;
+  });
+}
+
+
+// ========== UI SYNC ==========
 function updateNoiseUI() {
   const opacityInput = document.getElementById('noiseOpacity');
   const frequencyInput = document.getElementById('noiseFrequency');
   const blendSelect = document.getElementById('noiseBlend');
   const toggleBtn = document.getElementById('noiseToggleBtn');
-  
+
   if (opacityInput && opacityInput !== document.activeElement) {
     opacityInput.value = noiseState.opacity;
   }
@@ -3308,7 +4732,7 @@ function updateNoiseUI() {
     frequencyInput.value = noiseState.frequency;
   }
   if (blendSelect) blendSelect.value = noiseState.blend;
-  
+
   if (toggleBtn) {
     toggleBtn.classList.toggle('disabled', !noiseState.enabled);
     const img = toggleBtn.querySelector('img');
@@ -3318,6 +4742,7 @@ function updateNoiseUI() {
   }
 }
 
+// ========== EVENTS ==========
 function initNoiseEvents() {
   const opacityInput = document.getElementById('noiseOpacity');
   const frequencyInput = document.getElementById('noiseFrequency');
@@ -3325,17 +4750,17 @@ function initNoiseEvents() {
   const toggleBtn = document.getElementById('noiseToggleBtn');
 
   if (opacityInput) {
-    opacityInput.addEventListener('input', (e) => setNoiseOpacity(e.target.value));
-    opacityInput.addEventListener('change', (e) => setNoiseOpacity(e.target.value));
+    opacityInput.addEventListener('input', e => setNoiseOpacity(e.target.value));
+    opacityInput.addEventListener('change', e => setNoiseOpacity(e.target.value));
   }
 
   if (frequencyInput) {
-    frequencyInput.addEventListener('input', (e) => setNoiseFrequency(e.target.value));
-    frequencyInput.addEventListener('change', (e) => setNoiseFrequency(e.target.value));
+    frequencyInput.addEventListener('input', e => setNoiseFrequency(e.target.value));
+    frequencyInput.addEventListener('change', e => setNoiseFrequency(e.target.value));
   }
 
   if (blendSelect) {
-    blendSelect.addEventListener('change', (e) => setNoiseBlend(e.target.value));
+    blendSelect.addEventListener('change', e => setNoiseBlend(e.target.value));
   }
 
   if (toggleBtn) {
@@ -3343,446 +4768,12 @@ function initNoiseEvents() {
   }
 }
 
-// ========== UPDATE CSS - سه خروجی جداگانه ==========
+// ========== INIT ==========
+document.addEventListener('DOMContentLoaded', () => {
+  initNoiseEvents();
+  applyNoiseFilter();
+});
 
-
-// ========== GLOBALS ==========
-window.setNoiseOpacity = setNoiseOpacity;
-window.setNoiseFrequency = setNoiseFrequency;
-window.setNoiseBlend = setNoiseBlend;
-window.toggleNoise = toggleNoise;
-window.copyCSS = copyCSS;
-window.copyGradientCSS = copyGradientCSS;
-window.copyNoiseCSS = copyNoiseCSS;
-window.copySVGFilter = copySVGFilter;
-// ========== COLOR PICKER ==========
-const MAX_RECENT_COLORS = 10;
-let recentColors = [];
-
-try {
-  recentColors = JSON.parse(localStorage.getItem("recentColors") || "[]");
-} catch (e) {
-  recentColors = [];
-}
-
-function addToRecentColors(hex, alpha) {
-  const colorKey = `${hex}_${alpha}`;
-  recentColors = recentColors.filter((c) => `${c.hex}_${c.alpha}` !== colorKey);
-  recentColors.unshift({ hex, alpha });
-  if (recentColors.length > MAX_RECENT_COLORS) {
-    recentColors = recentColors.slice(0, MAX_RECENT_COLORS);
-  }
-  try {
-    localStorage.setItem("recentColors", JSON.stringify(recentColors));
-  } catch (e) {}
-  renderRecentColors();
-}
-
-function renderRecentColors() {
-  const container = document.getElementById("recentColorsList");
-  if (!container) return;
-
-  if (recentColors.length === 0) {
-    container.innerHTML =
-      '<span class="recent-colors-empty">No recent colors</span>';
-    return;
-  }
-
-  container.innerHTML = recentColors
-    .map(
-      (c, i) => `
-    <div class="recent-color-item" 
-         onclick="selectRecentColor(${i})" 
-         title="${c.hex} (${c.alpha}%)">
-      <div class="recent-color-inner" style="background: ${rgba(
-        c.hex,
-        c.alpha / 100
-      )}"></div>
-    </div>
-  `
-    )
-    .join("");
-}
-
-function selectRecentColor(index) {
-  const color = recentColors[index];
-  if (!color) return;
-
-  const rgb = hexToRgb(color.hex);
-  const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-
-  picker.h = hsv.h;
-  picker.s = hsv.s;
-  picker.v = hsv.v;
-  picker.a = color.alpha;
-
-  updatePicker();
-}
-
-function openPicker(hex, opacity, cb) {
-  picker.cb = cb;
-  const rgb = hexToRgb(hex);
-  const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-  picker.h = hsv.h;
-  picker.s = hsv.s;
-  picker.v = hsv.v;
-  picker.a = opacity;
-
-  pickerDragging = false;
-
-  updatePicker();
-  renderRecentColors();
-
-  const overlay = document.getElementById("pickerOverlay");
-  if (overlay) overlay.classList.add("show");
-}
-
-function closePicker() {
-  const rgb = hsvToRgb(picker.h, picker.s, picker.v);
-  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
-  addToRecentColors(hex, Math.round(picker.a));
-
-  const overlay = document.getElementById("pickerOverlay");
-  if (overlay) overlay.classList.remove("show");
-}
-
-function updatePicker() {
-  const { h, s, v, a, fmt } = picker;
-  const rgb = hsvToRgb(h, s, v);
-  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
-  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-
-  const sbBox = document.getElementById("sbBox");
-  const sbCursor = document.getElementById("sbCursor");
-  const hueThumb = document.getElementById("hueThumb");
-  const alphaThumb = document.getElementById("alphaThumb");
-  const alphaTrack = document.getElementById("alphaTrack");
-
-  if (sbBox) {
-    sbBox.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${h}, 100%, 50%))`;
-  }
-  if (sbCursor) {
-    sbCursor.style.cssText = `left: ${s}%; top: ${
-      100 - v
-    }%; background: ${hex}`;
-  }
-  if (hueThumb) {
-    hueThumb.style.left = (h / 360) * 100 + "%";
-  }
-  if (alphaThumb) {
-    alphaThumb.style.left = a + "%";
-  }
-  if (alphaTrack) {
-    alphaTrack.style.setProperty("--ac", hex);
-  }
-
-  document.querySelectorAll(".format-btn").forEach((b) => {
-    b.classList.toggle("selected", b.dataset.f === fmt);
-  });
-
-  const f = document.getElementById("fields");
-  if (f) {
-    if (fmt === "hex") {
-      f.innerHTML = `
-        <div class="picker-field" style="flex:2">
-          <label>HEX</label>
-          <input id="fHex" value="${hex}">
-        </div>
-        <div class="picker-field">
-          <label>A</label>
-          <input type="number" id="fA" min="0" max="100" value="${Math.round(
-            a
-          )}">
-        </div>`;
-    } else if (fmt === "rgb") {
-      f.innerHTML = `
-        <div class="picker-field"><label>R</label><input type="number" id="fR" min="0" max="255" value="${
-          rgb.r
-        }"></div>
-        <div class="picker-field"><label>G</label><input type="number" id="fG" min="0" max="255" value="${
-          rgb.g
-        }"></div>
-        <div class="picker-field"><label>B</label><input type="number" id="fB" min="0" max="255" value="${
-          rgb.b
-        }"></div>
-        <div class="picker-field"><label>A</label><input type="number" id="fA" min="0" max="100" value="${Math.round(
-          a
-        )}"></div>`;
-    } else {
-      f.innerHTML = `
-        <div class="picker-field"><label>H</label><input type="number" id="fH" min="0" max="360" value="${
-          hsl.h
-        }"></div>
-        <div class="picker-field"><label>S</label><input type="number" id="fS" min="0" max="100" value="${
-          hsl.s
-        }"></div>
-        <div class="picker-field"><label>L</label><input type="number" id="fL" min="0" max="100" value="${
-          hsl.l
-        }"></div>
-        <div class="picker-field"><label>A</label><input type="number" id="fA" min="0" max="100" value="${Math.round(
-          a
-        )}"></div>`;
-    }
-
-    bindInputs();
-  }
-
-  if (picker.cb) picker.cb(hex, Math.round(a));
-}
-
-function bindInputs() {
-  const fHex = document.getElementById("fHex");
-  const fA = document.getElementById("fA");
-  const fR = document.getElementById("fR");
-  const fG = document.getElementById("fG");
-  const fB = document.getElementById("fB");
-  const fH = document.getElementById("fH");
-  const fS = document.getElementById("fS");
-  const fL = document.getElementById("fL");
-
-  if (fHex) {
-    fHex.onchange = () => {
-      let v = fHex.value.trim();
-      if (!v.startsWith("#")) v = "#" + v;
-      if (/^#[0-9a-f]{6}$/i.test(v)) {
-        const rgb = hexToRgb(v);
-        const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-        picker.h = hsv.h;
-        picker.s = hsv.s;
-        picker.v = hsv.v;
-        updatePicker();
-      }
-    };
-  }
-
-  if (fA) {
-    fA.oninput = () => {
-      picker.a = clamp(+fA.value, 0, 100);
-      updatePicker();
-    };
-  }
-
-  if (fR && fG && fB) {
-    [fR, fG, fB].forEach((el) => {
-      el.oninput = () => {
-        const hsv = rgbToHsv(
-          clamp(+fR.value, 0, 255),
-          clamp(+fG.value, 0, 255),
-          clamp(+fB.value, 0, 255)
-        );
-        picker.h = hsv.h;
-        picker.s = hsv.s;
-        picker.v = hsv.v;
-        updatePicker();
-      };
-    });
-  }
-
-  if (fH && fS && fL) {
-    [fH, fS, fL].forEach((el) => {
-      el.oninput = () => {
-        const rgb = hslToRgb(
-          clamp(+fH.value, 0, 360),
-          clamp(+fS.value, 0, 100),
-          clamp(+fL.value, 0, 100)
-        );
-        const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-        picker.h = hsv.h;
-        picker.s = hsv.s;
-        picker.v = hsv.v;
-        updatePicker();
-      };
-    });
-  }
-}
-
-function getPickerPos(e, element) {
-  if (!element) return { x: 0, y: 0, width: 1, height: 1 };
-
-  const r = element.getBoundingClientRect();
-  let clientX, clientY;
-
-  if (e.touches && e.touches.length > 0) {
-    clientX = e.touches[0].clientX;
-    clientY = e.touches[0].clientY;
-  } else {
-    clientX = e.clientX;
-    clientY = e.clientY;
-  }
-
-  return {
-    x: clientX - r.left,
-    y: clientY - r.top,
-    width: r.width,
-    height: r.height,
-  };
-}
-
-function updSB(e) {
-  const sbBox = document.getElementById("sbBox");
-  if (!sbBox) return;
-
-  const pos = getPickerPos(e, sbBox);
-  picker.s = clamp((pos.x / pos.width) * 100, 0, 100);
-  picker.v = clamp(100 - (pos.y / pos.height) * 100, 0, 100);
-  updatePicker();
-}
-
-function updHue(e) {
-  const hueTrack = document.getElementById("hueTrack");
-  if (!hueTrack) return;
-
-  const pos = getPickerPos(e, hueTrack);
-  picker.h = clamp((pos.x / pos.width) * 360, 0, 360);
-  updatePicker();
-}
-
-function updAlpha(e) {
-  const alphaTrack = document.getElementById("alphaTrack");
-  if (!alphaTrack) return;
-
-  const pos = getPickerPos(e, alphaTrack);
-  picker.a = clamp((pos.x / pos.width) * 100, 0, 100);
-  updatePicker();
-}
-
-function initPickerEvents() {
-  const sbBox = document.getElementById("sbBox");
-  const hueTrack = document.getElementById("hueTrack");
-  const alphaTrack = document.getElementById("alphaTrack");
-  const pickerClose = document.getElementById("pickerClose");
-  const pickerOverlay = document.getElementById("pickerOverlay");
-  const pickerModal = document.querySelector(".picker-modal");
-
-  if (sbBox) {
-    sbBox.addEventListener("mousedown", (e) => {
-      e.stopPropagation();
-      sbDrag = true;
-      pickerDragging = true;
-      updSB(e);
-    });
-    sbBox.addEventListener(
-      "touchstart",
-      (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        sbDrag = true;
-        pickerDragging = true;
-        updSB(e);
-      },
-      { passive: false }
-    );
-  }
-
-  if (hueTrack) {
-    hueTrack.addEventListener("mousedown", (e) => {
-      e.stopPropagation();
-      hueDrag = true;
-      pickerDragging = true;
-      updHue(e);
-    });
-    hueTrack.addEventListener(
-      "touchstart",
-      (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        hueDrag = true;
-        pickerDragging = true;
-        updHue(e);
-      },
-      { passive: false }
-    );
-  }
-
-  if (alphaTrack) {
-    alphaTrack.addEventListener("mousedown", (e) => {
-      e.stopPropagation();
-      alphaDrag = true;
-      pickerDragging = true;
-      updAlpha(e);
-    });
-    alphaTrack.addEventListener(
-      "touchstart",
-      (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        alphaDrag = true;
-        pickerDragging = true;
-        updAlpha(e);
-      },
-      { passive: false }
-    );
-  }
-
-  document.addEventListener("mousemove", (e) => {
-    if (sbDrag) updSB(e);
-    if (hueDrag) updHue(e);
-    if (alphaDrag) updAlpha(e);
-  });
-
-  document.addEventListener(
-    "touchmove",
-    (e) => {
-      if (sbDrag) {
-        e.preventDefault();
-        updSB(e);
-      }
-      if (hueDrag) {
-        e.preventDefault();
-        updHue(e);
-      }
-      if (alphaDrag) {
-        e.preventDefault();
-        updAlpha(e);
-      }
-    },
-    { passive: false }
-  );
-
-  document.addEventListener("mouseup", () => {
-    sbDrag = hueDrag = alphaDrag = false;
-    setTimeout(() => {
-      pickerDragging = false;
-    }, 50);
-  });
-
-  document.addEventListener("touchend", () => {
-    sbDrag = hueDrag = alphaDrag = false;
-    setTimeout(() => {
-      pickerDragging = false;
-    }, 50);
-  });
-
-  document.querySelectorAll(".format-btn").forEach((b) => {
-    b.onclick = (e) => {
-      e.stopPropagation();
-      picker.fmt = b.dataset.f;
-      updatePicker();
-    };
-  });
-
-  if (pickerClose) {
-    pickerClose.onclick = (e) => {
-      e.stopPropagation();
-      closePicker();
-    };
-  }
-
-  if (pickerOverlay) {
-    pickerOverlay.addEventListener("click", (e) => {
-      if (e.target === pickerOverlay && !pickerDragging) {
-        closePicker();
-      }
-    });
-  }
-
-  if (pickerModal) {
-    pickerModal.addEventListener("mousedown", (e) => e.stopPropagation());
-    pickerModal.addEventListener("touchstart", (e) => e.stopPropagation(), {
-      passive: true,
-    });
-  }
-}
 
 // ========== ANGLE PICKER ==========
 function startAngleDrag(e, stopId) {
@@ -4466,8 +5457,6 @@ function updateInspectorPreview(stopId) {
   });
 }
 
-// ========== به‌روزرسانی توابع موجود ==========
-
 function updateStopOpacity(stopId, value) {
   const s = getStop(stopId);
   if (!s) return;
@@ -4685,8 +5674,6 @@ function setStopBlendMode(stopId, mode) {
     liveUpdate(stopId);
   }
 }
-
-// Add to globals
 window.setStopBlendMode = setStopBlendMode;
 
 // ========== به‌روزرسانی onPointerMove برای canvas drag ==========
@@ -4858,8 +5845,6 @@ function openStopColorPicker(stopId, isColorStop = false, colorStopIndex = 0) {
     });
   }
 }
-
-// ========== GLOBALS ==========
 window.liveUpdate = liveUpdate;
 window.updateStopItem = updateStopItem;
 window.updateAllStopItems = updateAllStopItems;
@@ -5131,8 +6116,6 @@ function copyToClipboard(text, btn = null) {
   });
 }
 
-
-
 // ========== EXPORT ==========
 document.getElementById("exportSelect")?.addEventListener("change", function (e) {
   const format = e.target.value;
@@ -5219,17 +6202,24 @@ async function exportAsImage(format = "png", quality = 0.92) {
     }
   }
 
-  // ========== 4. نویز ==========
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    const noiseCanvas = await generateSVGNoise(width, height, noiseState.frequency);
-    if (noiseCanvas) {
-      exportCtx.globalCompositeOperation = noiseState.blend;
-      exportCtx.globalAlpha = noiseState.opacity / 100;
-      exportCtx.drawImage(noiseCanvas, 0, 0, width, height);
-      exportCtx.globalAlpha = 1;
-      exportCtx.globalCompositeOperation = "source-over";
-    }
+// ========== 4. نویز ==========
+if (noiseState.enabled && noiseState.opacity > 0) {
+  const noiseCanvas = await getNoiseCanvas(
+    width,
+    height,
+    noiseState.frequency
+  );
+
+  if (noiseCanvas instanceof HTMLCanvasElement) {
+    exportCtx.save();
+    exportCtx.globalCompositeOperation = noiseState.blend;
+    exportCtx.globalAlpha = noiseState.opacity / 100;
+    exportCtx.drawImage(noiseCanvas, 0, 0, width, height);
+    exportCtx.restore();
   }
+}
+
+
 
   // ========== 5. دانلود ==========
   const mime = format === "jpg" ? "image/jpeg" : "image/png";
@@ -5350,97 +6340,6 @@ async function exportAsSVG() {
   document.body.removeChild(a);
   
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-// ========== رندر کامل صحنه - یکبار نوشته شده برای همه جا ==========
-async function renderSceneToContext(targetCtx, width, height) {
-  const visibleStops = state.stops.filter(s => s.visible);
-  const reversedStops = [...visibleStops].reverse();
-  
-  // ========== Canvas موقت برای فیلترها ==========
-  const needsFilter = hasActiveFilters();
-  let workCanvas = document.createElement('canvas');
-  workCanvas.width = width;
-  workCanvas.height = height;
-  let workCtx = workCanvas.getContext('2d');
-  
-  // ========== 1. پس‌زمینه ==========
-  if (state.bgEnabled) {
-    workCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-    workCtx.fillRect(0, 0, width, height);
-  }
-  
-  // ========== 2. گرادینت‌ها ==========
-  if (reversedStops.length > 0) {
-    const needsBgBlend = state.bgEnabled && 
-                         state.bgBlendMode && 
-                         state.bgBlendMode !== 'normal';
-    
-    if (needsBgBlend) {
-      // Canvas جداگانه برای گرادینت‌ها
-      const gradCanvas = document.createElement('canvas');
-      gradCanvas.width = width;
-      gradCanvas.height = height;
-      const gradCtx = gradCanvas.getContext('2d');
-      
-      // رسم همه گرادینت‌ها
-      reversedStops.forEach(s => {
-        gradCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
-        renderGradient(s, gradCtx, width, height);
-      });
-      gradCtx.globalCompositeOperation = 'source-over';
-      
-      // ترکیب با background blend mode
-      workCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
-      workCtx.drawImage(gradCanvas, 0, 0);
-      workCtx.globalCompositeOperation = 'source-over';
-      
-    } else {
-      // بدون background blend - مستقیم رسم کن
-      reversedStops.forEach(s => {
-        workCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
-        renderGradient(s, workCtx, width, height);
-      });
-      workCtx.globalCompositeOperation = 'source-over';
-    }
-  }
-  
-  // ========== 3. فیلترها ==========
-  if (needsFilter) {
-    // Blur
-    if (filterState.blur > 0) {
-      const blurCanvas = document.createElement('canvas');
-      blurCanvas.width = width;
-      blurCanvas.height = height;
-      const blurCtx = blurCanvas.getContext('2d');
-      blurCtx.filter = `blur(${filterState.blur}px)`;
-      blurCtx.drawImage(workCanvas, 0, 0);
-      workCanvas = blurCanvas;
-      workCtx = blurCanvas.getContext('2d');
-    }
-    
-    // سایر فیلترها
-    if (hasNonBlurFilters()) {
-      const imageData = workCtx.getImageData(0, 0, width, height);
-      applyFiltersToImageData(imageData);
-      workCtx.putImageData(imageData, 0, 0);
-    }
-  }
-  
-  // ========== 4. نویز ==========
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    const noiseCanvas = await generateSVGNoise(width, height, noiseState.frequency);
-    if (noiseCanvas) {
-      workCtx.globalCompositeOperation = noiseState.blend;
-      workCtx.globalAlpha = noiseState.opacity / 100;
-      workCtx.drawImage(noiseCanvas, 0, 0, width, height);
-      workCtx.globalAlpha = 1;
-      workCtx.globalCompositeOperation = 'source-over';
-    }
-  }
-  
-  // ========== 5. کپی به context هدف ==========
-  targetCtx.drawImage(workCanvas, 0, 0);
 }
 
 // ========== رندر یک گرادینت ==========
@@ -5891,1465 +6790,6 @@ function hasNonBlurFilters() {
   );
 }
 
-// ========== ZOOM SYSTEM ==========
-function calcDynamicMinZoom() {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return 10;
-
-  const rect = wrap.getBoundingClientRect();
-  const padding = zoomState.padding * 2;
-
-  const minScaleX = (rect.width - padding) / state.canvasWidth;
-  const minScaleY = (rect.height - padding) / state.canvasHeight;
-
-  let minZoom = Math.min(minScaleX, minScaleY) * 100;
-  minZoom = clamp(Math.floor(minZoom), 5, 30);
-
-  zoomState.dynamicMin = minZoom;
-  return minZoom;
-}
-
-function setZoom(zoom, center = null) {
-  const minZoom = calcDynamicMinZoom();
-  zoom = clamp(zoom, minZoom, zoomState.max);
-
-  if (zoom === zoomState.current) return;
-
-  zoomState.current = zoom;
-  const scale = zoom / 100;
-
-  canvas.style.width = state.canvasWidth * scale + "px";
-  canvas.style.height = state.canvasHeight * scale + "px";
-
-  if (center) centerCanvasAt(center, scale);
-
-  updateZoomUI();
-  showZoomIndicator(zoom);
-}
-
-function centerCanvasAt(point, scale) {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
-
-  wrap.scrollLeft = point.x * scale - wrap.clientWidth / 2;
-  wrap.scrollTop = point.y * scale - wrap.clientHeight / 2;
-}
-
-function zoomIn() {
-  setZoom(zoomState.current + zoomState.step);
-}
-function zoomOut() {
-  setZoom(zoomState.current - zoomState.step);
-}
-function resetZoom() {
-  setZoom(100);
-}
-
-function fitToScreen() {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
-
-  const rect = wrap.getBoundingClientRect();
-  const padding = zoomState.padding * 2;
-
-  const scaleX = (rect.width - padding) / state.canvasWidth;
-  const scaleY = (rect.height - padding) / state.canvasHeight;
-  let fitScale = Math.min(scaleX, scaleY);
-
-  fitScale = Math.min(fitScale, 1);
-
-  const minZoom = calcDynamicMinZoom();
-  let zoom = Math.round(fitScale * 100);
-  zoom = Math.max(zoom, minZoom);
-
-  setZoom(zoom);
-  centerCanvas();
-}
-
-function centerCanvas() {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
-
-  requestAnimationFrame(() => {
-    const scrollX = (wrap.scrollWidth - wrap.clientWidth) / 2;
-    const scrollY = (wrap.scrollHeight - wrap.clientHeight) / 2;
-    wrap.scrollLeft = Math.max(0, scrollX);
-    wrap.scrollTop = Math.max(0, scrollY);
-  });
-}
-
-function updateZoomUI() {
-  const slider = document.getElementById("zoomSlider");
-  const value = document.getElementById("zoomValue");
-  const minZoom = zoomState.dynamicMin;
-
-  if (slider) {
-    slider.min = minZoom;
-    slider.max = zoomState.max;
-    slider.value = zoomState.current;
-  }
-
-  if (value) {
-    value.textContent = zoomState.current + "%";
-  }
-
-  const zoomOutBtn = document.getElementById("zoomOut");
-  const zoomInBtn = document.getElementById("zoomIn");
-
-  if (zoomOutBtn) zoomOutBtn.disabled = zoomState.current <= minZoom;
-  if (zoomInBtn) zoomInBtn.disabled = zoomState.current >= zoomState.max;
-}
-
-let indicatorTimeout;
-function showZoomIndicator(zoom) {
-  const indicator = document.getElementById("zoomIndicator");
-  if (!indicator) return;
-
-  indicator.textContent = zoom + "%";
-  indicator.classList.add("show");
-
-  clearTimeout(indicatorTimeout);
-  indicatorTimeout = setTimeout(() => indicator.classList.remove("show"), 800);
-}
-
-function setupWheelZoom() {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
-
-  wrap.addEventListener(
-    "wheel",
-    (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-
-        const rect = canvas.getBoundingClientRect();
-        const center = {
-          x: (e.clientX - rect.left) / (zoomState.current / 100),
-          y: (e.clientY - rect.top) / (zoomState.current / 100),
-        };
-
-        const delta = e.deltaY > 0 ? -10 : 10;
-        setZoom(zoomState.current + delta, center);
-      }
-    },
-    { passive: false }
-  );
-}
-
-function setupTouchZoom() {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
-
-  let initialPinchDist = 0;
-  let initialZoom = 100;
-
-  function getPinchDist(touches) {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.hypot(dx, dy);
-  }
-
-  function getPinchCenter(touches) {
-    return {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-  }
-
-  wrap.addEventListener(
-    "touchstart",
-    (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        initialPinchDist = getPinchDist(e.touches);
-        initialZoom = zoomState.current;
-      }
-    },
-    { passive: false }
-  );
-
-  wrap.addEventListener(
-    "touchmove",
-    (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-
-        const currentDist = getPinchDist(e.touches);
-        const scale = currentDist / initialPinchDist;
-        const newZoom = Math.round(initialZoom * scale);
-
-        const center = getPinchCenter(e.touches);
-        const rect = canvas.getBoundingClientRect();
-        const canvasCenter = {
-          x: (center.x - rect.left) / (zoomState.current / 100),
-          y: (center.y - rect.top) / (zoomState.current / 100),
-        };
-
-        setZoom(newZoom, canvasCenter);
-      }
-    },
-    { passive: false }
-  );
-
-  wrap.addEventListener("touchend", () => {
-    initialPinchDist = 0;
-  });
-}
-
-const toolbar = document.querySelector('.tool-bar');
-const zoomControls = document.querySelector('.zoom-controls');
-const canvasWrap = document.querySelector('.canvas-wrap');
-
-canvasWrap.addEventListener('scroll', () => {
-  const x = canvasWrap.scrollLeft;
-  const y = canvasWrap.scrollTop;
-  toolbar.style.transform = `translate(${x}px, ${y}px)`;
-  zoomControls.style.transform = `translate(${x}px, ${y}px)`;
-});
-
-
-
-function setupKeyboardZoom() {
-  document.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-
-    const isMod = e.ctrlKey || e.metaKey;
-
-    if (isMod) {
-      switch (e.key) {
-        case "+":
-        case "=":
-          e.preventDefault();
-          zoomIn();
-          break;
-        case "-":
-          e.preventDefault();
-          zoomOut();
-          break;
-        case "0":
-          e.preventDefault();
-          resetZoom();
-          break;
-      }
-    }
-
-    switch (e.key.toLowerCase()) {
-      case "f":
-        if (!isMod) {
-          e.preventDefault();
-          fitToScreen();
-        }
-        break;
-      case "h":
-        if (!isMod) {
-          handleToggleClick(e);
-        }
-        break;
-      case "x":
-        if (!isMod) {
-          e.preventDefault();
-          swapDimensions();
-        }
-        break;
-      case "l":
-        if (!isMod) {
-          e.preventDefault();
-          toggleAspectLock();
-        }
-        break;
-      case "delete":
-      case "backspace":
-        if (state.selected) {
-          e.preventDefault();
-          delStop(state.selected);
-        }
-        case "p":
-  if (!isMod) {
-    e.preventDefault();
-    openFullscreenPreview();
-  }
-  break;
-        break;
-      case "escape":
-        state.selected = null;
-        closePicker();
-        refresh();
-        break;
-    }
-  });
-}
-
-let isButtonInteraction = false; 
-
-function setupResizeObserver() {
-  const wrap = document.querySelector(".canvas-wrap");
-  if (!wrap) return;
-
-  let resizeTimeout = null;
-  let lastWidth = wrap.clientWidth;
-  let lastHeight = wrap.clientHeight;
-
-  const observer = new ResizeObserver((entries) => {
-    if (isButtonInteraction) return;
-    
-    const entry = entries[0];
-    const newWidth = entry.contentRect.width;
-    const newHeight = entry.contentRect.height;
-    
-    if (Math.abs(newWidth - lastWidth) < 10 && Math.abs(newHeight - lastHeight) < 10) {
-      return;
-    }
-    
-    lastWidth = newWidth;
-    lastHeight = newHeight;
-
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      const newMin = calcDynamicMinZoom();
-      if (zoomState.current < newMin) {
-        setZoom(newMin);
-      }
-      updateZoomUI();
-    }, 200); 
-  });
-
-  observer.observe(wrap);
-}
-
-function setupZoomSlider() {
-  const slider = document.getElementById("zoomSlider");
-  if (!slider) return;
-
-  slider.addEventListener("input", (e) => {
-    setZoom(parseInt(e.target.value));
-  });
-
-  slider.addEventListener("dblclick", () => {
-    resetZoom();
-  });
-}
-
-function initZoom() {
-  calcDynamicMinZoom();
-
-  document.getElementById("zoomIn")?.addEventListener("click", zoomIn);
-  document.getElementById("zoomOut")?.addEventListener("click", zoomOut);
-  document.getElementById("zoomFit")?.addEventListener("click", fitToScreen);
-  document.getElementById("zoomReset")?.addEventListener("click", resetZoom);
-
-  setupZoomSlider();
-  setupWheelZoom();
-  setupTouchZoom();
-  setupKeyboardZoom();
-  setupResizeObserver();
-
-  setTimeout(() => {
-    fitToScreen();
-    centerCanvas();
-  }, 100);
-}
-
-// ========== RESIZE HANDLES ==========
-const widthHandle = document.querySelector(".resize-h");
-const heightHandle = document.querySelector(".resize-w");
-
-function startResizeW(e) {
-  resizingW = true;
-  startY = e.clientY || e.touches?.[0]?.clientY || 0;
-  startH = state.canvasHeight;
-  document.body.classList.add("no-touch-scroll");
-  e.preventDefault();
-}
-
-function startResizeH(e) {
-  resizingH = true;
-  startX = e.clientX || e.touches?.[0]?.clientX || 0;
-  startW = state.canvasWidth;
-  document.body.classList.add("no-touch-scroll");
-  e.preventDefault();
-}
-
-if (widthHandle) {
-  widthHandle.addEventListener("mousedown", startResizeW);
-  widthHandle.addEventListener("touchstart", startResizeW, { passive: false });
-}
-
-if (heightHandle) {
-  heightHandle.addEventListener("mousedown", startResizeH);
-  heightHandle.addEventListener("touchstart", startResizeH, { passive: false });
-}
-
-document.addEventListener("mousemove", (e) => {
-  if (!resizingW && !resizingH) return;
-
-  if (resizingW) {
-    let newH = startH + (e.clientY - startY);
-    let newW = state.canvasWidth;
-
-    if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-      newW = Math.round(newH * dimensionState.aspectRatio);
-      
-      if (newW < CONFIG.canvas.minWidth) {
-        newW = CONFIG.canvas.minWidth;
-        newH = Math.round(newW / dimensionState.aspectRatio);
-      } else if (newW > CONFIG.canvas.maxWidth) {
-        newW = CONFIG.canvas.maxWidth;
-        newH = Math.round(newW / dimensionState.aspectRatio);
-      }
-      
-      if (newH < CONFIG.canvas.minHeight) {
-        newH = CONFIG.canvas.minHeight;
-        newW = Math.round(newH * dimensionState.aspectRatio);
-        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-      } else if (newH > CONFIG.canvas.maxHeight) {
-        newH = CONFIG.canvas.maxHeight;
-        newW = Math.round(newH * dimensionState.aspectRatio);
-        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-      }
-    } else {
-      newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-    }
-
-    if (newH !== lastH) {
-      lastH = newH;
-      state.canvasHeight = newH;
-      state.canvasWidth = newW;
-      
-      if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
-      if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
-      clearResolutionPreset();
-      refresh();
-    }
-  }
-
-  if (resizingH) {
-    let newW = startW + (e.clientX - startX);
-    let newH = state.canvasHeight;
-
-    if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-      newH = Math.round(newW / dimensionState.aspectRatio);
-      
-      if (newH < CONFIG.canvas.minHeight) {
-        newH = CONFIG.canvas.minHeight;
-        newW = Math.round(newH * dimensionState.aspectRatio);
-      } else if (newH > CONFIG.canvas.maxHeight) {
-        newH = CONFIG.canvas.maxHeight;
-        newW = Math.round(newH * dimensionState.aspectRatio);
-      }
-      
-      if (newW < CONFIG.canvas.minWidth) {
-        newW = CONFIG.canvas.minWidth;
-        newH = Math.round(newW / dimensionState.aspectRatio);
-        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-      } else if (newW > CONFIG.canvas.maxWidth) {
-        newW = CONFIG.canvas.maxWidth;
-        newH = Math.round(newW / dimensionState.aspectRatio);
-        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-      }
-    } else {
-      newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-    }
-
-    if (newW !== lastW) {
-      lastW = newW;
-      state.canvasWidth = newW;
-      state.canvasHeight = newH;
-      
-      if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
-      if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
-      clearResolutionPreset();
-      refresh();
-    }
-  }
-});
-
-document.addEventListener(
-  "touchmove",
-  (e) => {
-    if (!resizingW && !resizingH) return;
-    e.preventDefault();
-
-    const clientX = e.touches[0].clientX;
-    const clientY = e.touches[0].clientY;
-
-    if (resizingW) {
-      let newH = startH + (clientY - startY);
-      let newW = state.canvasWidth;
-
-      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-        newW = Math.round(newH * dimensionState.aspectRatio);
-        
-        if (newW < CONFIG.canvas.minWidth) {
-          newW = CONFIG.canvas.minWidth;
-          newH = Math.round(newW / dimensionState.aspectRatio);
-        } else if (newW > CONFIG.canvas.maxWidth) {
-          newW = CONFIG.canvas.maxWidth;
-          newH = Math.round(newW / dimensionState.aspectRatio);
-        }
-        
-        if (newH < CONFIG.canvas.minHeight) {
-          newH = CONFIG.canvas.minHeight;
-          newW = Math.round(newH * dimensionState.aspectRatio);
-          newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-        } else if (newH > CONFIG.canvas.maxHeight) {
-          newH = CONFIG.canvas.maxHeight;
-          newW = Math.round(newH * dimensionState.aspectRatio);
-          newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-        }
-      } else {
-        newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-      }
-
-      if (newH !== lastH) {
-        lastH = newH;
-        state.canvasHeight = newH;
-        state.canvasWidth = newW;
-        
-        if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
-        if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
-        clearResolutionPreset();
-        refresh();
-      }
-    }
-
-    if (resizingH) {
-      let newW = startW + (clientX - startX);
-      let newH = state.canvasHeight;
-
-      if (dimensionState.aspectLocked && dimensionState.aspectRatio) {
-        newH = Math.round(newW / dimensionState.aspectRatio);
-        
-        if (newH < CONFIG.canvas.minHeight) {
-          newH = CONFIG.canvas.minHeight;
-          newW = Math.round(newH * dimensionState.aspectRatio);
-        } else if (newH > CONFIG.canvas.maxHeight) {
-          newH = CONFIG.canvas.maxHeight;
-          newW = Math.round(newH * dimensionState.aspectRatio);
-        }
-        
-        if (newW < CONFIG.canvas.minWidth) {
-          newW = CONFIG.canvas.minWidth;
-          newH = Math.round(newW / dimensionState.aspectRatio);
-          newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-        } else if (newW > CONFIG.canvas.maxWidth) {
-          newW = CONFIG.canvas.maxWidth;
-          newH = Math.round(newW / dimensionState.aspectRatio);
-          newH = clamp(newH, CONFIG.canvas.minHeight, CONFIG.canvas.maxHeight);
-        }
-      } else {
-        newW = clamp(newW, CONFIG.canvas.minWidth, CONFIG.canvas.maxWidth);
-      }
-
-      if (newW !== lastW) {
-        lastW = newW;
-        state.canvasWidth = newW;
-        state.canvasHeight = newH;
-        
-        if (canvasWidth) canvasWidth.value = Math.floor(state.canvasWidth);
-        if (canvasHeight) canvasHeight.value = Math.floor(state.canvasHeight);
-        clearResolutionPreset();
-        refresh();
-      }
-    }
-  },
-  { passive: false }
-);
-
-document.addEventListener("mouseup", () => {
-  resizingW = false;
-  resizingH = false;
-  document.body.classList.remove("no-touch-scroll");
-});
-
-document.addEventListener("touchend", () => {
-  resizingW = false;
-  resizingH = false;
-  document.body.classList.remove("no-touch-scroll");
-});
-// ========== FULLSCREEN PREVIEW - COMPLETE FIXED ==========
-let fullscreenOverlay = null;
-let fullscreenCanvas = null;
-let fullscreenCtx = null;
-let fullscreenRotation = 0;
-
-// ========== Zoom & Pan State ==========
-const fullscreenZoom = {
-  scale: 1,
-  minScale: 0.5,
-  maxScale: 10,
-  translateX: 0,
-  translateY: 0,
-  
-  isPinching: false,
-  isPanning: false,
-  startDist: 0,
-  startScale: 1,
-  startX: 0,
-  startY: 0,
-  startTranslateX: 0,
-  startTranslateY: 0,
-  pinchCenterX: 0,
-  pinchCenterY: 0,
-  lastTap: 0,
-  lastTapX: 0,
-  lastTapY: 0,
-};
-
-// ========== OPEN ==========
-async function openFullscreenPreview() {
-  // ریست
-  fullscreenRotation = 0;
-  Object.assign(fullscreenZoom, {
-    scale: 1,
-    translateX: 0,
-    translateY: 0,
-    isPinching: false,
-    isPanning: false,
-  });
-  
-  // History برای Back
-  history.pushState({ fullscreen: true }, '', '');
-  
-  // ساخت overlay
-  fullscreenOverlay = document.createElement('div');
-  fullscreenOverlay.className = 'fullscreen-overlay';
-  fullscreenOverlay.innerHTML = `
-    <div class="fullscreen-canvas-container" id="fsContainer">
-      <canvas id="fullscreenCanvas"></canvas>
-    </div>
-    <div class="fullscreen-controls">
-      <button class="fullscreen-btn" id="fsZoomOut" title="Zoom Out">
-      <img src="./icon/minus.svg" alt="zoom out">
-      </button>
-      <span class="fullscreen-zoom-value" id="fsZoomValue">100%</span>
-      <button class="fullscreen-btn" id="fsZoomIn" title="Zoom In">
-      <img src="./icon/plus.svg" alt="zoom in">
-      </button>
-      <div class="fullscreen-divider"></div>
-      <button class="fullscreen-btn" id="fsRotate" title="Rotate (R)">
-<img src="./icon/reset.svg" alt="rotate">
-      </button>
-      <button class="fullscreen-btn" id="fsReset" title="Reset (0)">
-<img src="./icon/fit.svg" alt="fit">
-      </button>
-      <button class="fullscreen-btn" id="fsClose" title="Close (ESC)">
-<img src="./icon/full-screen-exit.svg" alt="fullscreen exit">
-        </svg>
-      </button>
-    </div>
-    <div class="fullscreen-info" id="fullscreenInfo">
-      ${Math.round(state.canvasWidth)} × ${Math.round(state.canvasHeight)}
-    </div>
-  `;
-  
-  document.body.appendChild(fullscreenOverlay);
-  document.body.style.overflow = 'hidden';
-  
-  fullscreenCanvas = document.getElementById('fullscreenCanvas');
-  fullscreenCtx = fullscreenCanvas.getContext('2d');
-  
-  const container = document.getElementById('fsContainer');
-  
-  // ✅ رندر و منتظر بمون
-  await renderFullscreenCanvas();
-  
-  // Event Listeners
-  fullscreenOverlay.addEventListener('click', (e) => {
-    if (e.target === fullscreenOverlay) history.back();
-  });
-  
-  document.getElementById('fsClose').addEventListener('click', () => history.back());
-  document.getElementById('fsRotate').addEventListener('click', rotateFullscreen);
-  document.getElementById('fsReset').addEventListener('click', resetFullscreenView);
-  document.getElementById('fsZoomIn').addEventListener('click', () => zoomFullscreen(1.5, null, null));
-  document.getElementById('fsZoomOut').addEventListener('click', () => zoomFullscreen(0.67, null, null));
-  
-  document.addEventListener('keydown', handleFullscreenKeys);
-  window.addEventListener('popstate', handleFullscreenPopState);
-  
-  container.addEventListener('touchstart', handleFSTouchStart, { passive: false });
-  container.addEventListener('touchmove', handleFSTouchMove, { passive: false });
-  container.addEventListener('touchend', handleFSTouchEnd, { passive: false });
-  container.addEventListener('touchcancel', handleFSTouchEnd, { passive: false });
-  
-  container.addEventListener('wheel', handleFSWheel, { passive: false });
-  container.addEventListener('mousedown', handleFSMouseDown);
-  container.addEventListener('dblclick', handleFSDoubleClick);
-  document.addEventListener('mousemove', handleFSMouseMove);
-  document.addEventListener('mouseup', handleFSMouseUp);
-  
-  window.addEventListener('resize', handleFSResize);
-  
-  // انیمیشن
-  requestAnimationFrame(() => {
-    fullscreenOverlay.classList.add('show');
-    setTimeout(() => {
-      const hint = document.getElementById('fullscreenHint');
-      if (hint) hint.classList.add('hide');
-    }, 3000);
-  });
-}
-
-// ========== CLOSE ==========
-function closeFullscreenPreview() {
-  if (!fullscreenOverlay) return;
-  
-  document.removeEventListener('keydown', handleFullscreenKeys);
-  window.removeEventListener('popstate', handleFullscreenPopState);
-  window.removeEventListener('resize', handleFSResize);
-  document.removeEventListener('mousemove', handleFSMouseMove);
-  document.removeEventListener('mouseup', handleFSMouseUp);
-  
-  fullscreenOverlay.classList.remove('show');
-  
-  setTimeout(() => {
-    if (fullscreenOverlay?.parentNode) {
-      fullscreenOverlay.parentNode.removeChild(fullscreenOverlay);
-    }
-    fullscreenOverlay = null;
-    fullscreenCanvas = null;
-    fullscreenCtx = null;
-    fullscreenRotation = 0;
-  }, 300);
-  
-  document.body.style.overflow = '';
-}
-
-function handleFullscreenPopState() {
-  if (fullscreenOverlay) closeFullscreenPreview();
-}
-
-function handleFullscreenKeys(e) {
-  if (!fullscreenOverlay) return;
-  
-  switch(e.key) {
-    case 'Escape': e.preventDefault(); history.back(); break;
-    case 'r': case 'R': e.preventDefault(); rotateFullscreen(); break;
-    case '+': case '=': e.preventDefault(); zoomFullscreen(1.25, null, null); break;
-    case '-': case '_': e.preventDefault(); zoomFullscreen(0.8, null, null); break;
-    case '0': e.preventDefault(); resetFullscreenView(); break;
-  }
-}
-
-// ========== FULLSCREEN PREVIEW - FIXED TO MATCH CANVAS ==========
-
-async function renderFullscreenCanvas() {
-  if (!fullscreenCanvas) return;
-  
-  const originalW = state.canvasWidth;
-  const originalH = state.canvasHeight;
-  
-  // ========== محاسبه ابعاد نمایش ==========
-  const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
-  const sourceW = isRotated ? originalH : originalW;
-  const sourceH = isRotated ? originalW : originalH;
-  
-  const vpW = window.innerWidth;
-  const vpH = window.innerHeight;
-  const scaleX = vpW / sourceW;
-  const scaleY = vpH / sourceH;
-  const fitScale = Math.min(scaleX, scaleY, 1); // حداکثر 100%
-  
-  const dispW = sourceW * fitScale;
-  const dispH = sourceH * fitScale;
-  
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  
-  // ========== تنظیم سایز canvas نمایش ==========
-  fullscreenCanvas.width = dispW * dpr;
-  fullscreenCanvas.height = dispH * dpr;
-  fullscreenCanvas.style.width = dispW + 'px';
-  fullscreenCanvas.style.height = dispH + 'px';
-  
-  // ========== رندر در ابعاد اصلی (بدون چرخش) ==========
-  const workCanvas = document.createElement('canvas');
-  workCanvas.width = originalW;
-  workCanvas.height = originalH;
-  const workCtx = workCanvas.getContext('2d');
-  
-  // ✅ استفاده از همان منطق draw()
-  await renderSceneToContext(workCtx, originalW, originalH);
-  
-  // ========== انتقال به canvas نمایش با چرخش ==========
-  const ctx = fullscreenCanvas.getContext('2d');
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, fullscreenCanvas.width, fullscreenCanvas.height);
-  
-  ctx.save();
-  
-  // چرخش و مقیاس
-  if (fullscreenRotation === 0) {
-    ctx.scale(dispW / originalW * dpr, dispH / originalH * dpr);
-    ctx.drawImage(workCanvas, 0, 0);
-  } 
-  else if (fullscreenRotation === 90) {
-    ctx.translate(dispW * dpr, 0);
-    ctx.rotate(Math.PI / 2);
-    ctx.scale(dispH / originalW * dpr, dispW / originalH * dpr);
-    ctx.drawImage(workCanvas, 0, 0);
-  } 
-  else if (fullscreenRotation === 180) {
-    ctx.translate(dispW * dpr, dispH * dpr);
-    ctx.rotate(Math.PI);
-    ctx.scale(dispW / originalW * dpr, dispH / originalH * dpr);
-    ctx.drawImage(workCanvas, 0, 0);
-  } 
-  else if (fullscreenRotation === 270) {
-    ctx.translate(0, dispH * dpr);
-    ctx.rotate(-Math.PI / 2);
-    ctx.scale(dispH / originalW * dpr, dispW / originalH * dpr);
-    ctx.drawImage(workCanvas, 0, 0);
-  }
-  
-  ctx.restore();
-}
-
-// ========== تابع اصلی رندر - مشترک بین canvas و fullscreen ==========
-async function renderSceneToContext(targetCtx, width, height) {
-  // ذخیره W و H اصلی
-  const savedW = W;
-  const savedH = H;
-  
-  // تنظیم موقت برای رندر
-  W = width;
-  H = height;
-  
-  targetCtx.clearRect(0, 0, width, height);
-  
-  const visibleStops = state.stops.filter(s => s.visible);
-  const needsFilter = hasActiveFilters();
-  
-  let renderCtx = targetCtx;
-  let tempCanvas = null;
-  
-  // اگر فیلتر داریم، روی canvas موقت رندر کن
-  if (needsFilter) {
-    tempCanvas = document.createElement('canvas');
-    tempCanvas.width = width;
-    tempCanvas.height = height;
-    renderCtx = tempCanvas.getContext('2d');
-  }
-  
-  // ========== 1. پس‌زمینه ==========
-  if (state.bgEnabled) {
-    renderCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-    renderCtx.fillRect(0, 0, width, height);
-  }
-  
-  // ========== 2. خط قفل عمودی ==========
-  if (state.lockVertical) {
-    const scale = Math.max(width, height) / 800;
-    renderCtx.strokeStyle = "rgba(255,255,255,0.5)";
-    renderCtx.lineWidth = 2 * scale;
-    renderCtx.setLineDash([10 * scale, 5 * scale]);
-    renderCtx.beginPath();
-    renderCtx.moveTo(0, height / 2);
-    renderCtx.lineTo(width, height / 2);
-    renderCtx.stroke();
-    renderCtx.setLineDash([]);
-  }
-  
-  // ========== 3. گرادینت‌ها (ترتیب معکوس) ==========
-  if (visibleStops.length > 0) {
-    const reversedStops = [...visibleStops].reverse();
-    
-    reversedStops.forEach(s => {
-      renderCtx.globalCompositeOperation = s.blendMode || 'screen';
-      drawGradToCtxGeneric(s, renderCtx, width, height);
-    });
-    
-    renderCtx.globalCompositeOperation = 'source-over';
-  }
-  
-  // ========== 4. فیلترها ==========
-  if (needsFilter && tempCanvas) {
-    // Blur
-    if (filterState.blur > 0) {
-      const blurCanvas = document.createElement('canvas');
-      blurCanvas.width = width;
-      blurCanvas.height = height;
-      const blurCtx = blurCanvas.getContext('2d');
-      blurCtx.filter = `blur(${filterState.blur}px)`;
-      blurCtx.drawImage(tempCanvas, 0, 0);
-      tempCanvas = blurCanvas;
-      renderCtx = blurCanvas.getContext('2d');
-    }
-    
-    // سایر فیلترها
-    if (hasNonBlurFilters()) {
-      const imageData = renderCtx.getImageData(0, 0, width, height);
-      applyFiltersToImageData(imageData);
-      renderCtx.putImageData(imageData, 0, 0);
-    }
-    
-    // کپی به context اصلی
-    targetCtx.drawImage(tempCanvas, 0, 0);
-  }
-  
-  // ========== 5. نویز ==========
-  if (noiseState.enabled && noiseState.opacity > 0) {
-    let noiseCanvas = noiseState.canvas;
-    
-    // اگر سایز متفاوته، نویز جدید بساز
-    if (!noiseCanvas || noiseState.lastW !== width || noiseState.lastH !== height) {
-      noiseCanvas = await generateSVGNoise(width, height, noiseState.frequency);
-    }
-    
-    if (noiseCanvas) {
-      targetCtx.globalCompositeOperation = noiseState.blend;
-      targetCtx.globalAlpha = noiseState.opacity / 100;
-      targetCtx.drawImage(noiseCanvas, 0, 0, width, height);
-      targetCtx.globalAlpha = 1;
-      targetCtx.globalCompositeOperation = 'source-over';
-    }
-  }
-  
-  // برگرداندن W و H
-  W = savedW;
-  H = savedH;
-}
-
-// ========== رسم گرادینت روی هر context با ابعاد دلخواه ==========
-function drawGradToCtxGeneric(s, ctx, width, height) {
-  const cx = s.x * width;
-  const cy = s.y * height;
-
-  if (s.type === "radial") {
-    // مقیاس‌بندی سایز بر اساس نسبت ابعاد
-    const sizeScale = Math.max(width, height) / Math.max(W || 800, H || 600);
-    const scaledSize = s.size * sizeScale;
-    
-    const solidEnd = 1 - s.feather / 100;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
-    const color = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
-    ctx.fill();
-  } 
-  else if (s.type === "linear") {
-    const angleRad = ((s.angle - 90) * Math.PI) / 180;
-    const diagonal = Math.hypot(width, height);
-    const mx = width / 2;
-    const my = height / 2;
-    const dx = (Math.cos(angleRad) * diagonal) / 2;
-    const dy = (Math.sin(angleRad) * diagonal) / 2;
-    
-    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-  } 
-  else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = ctx.createConicGradient(startAngle, cx, cy);
-
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-  }
-}
-
-// ========== DRAW GRADIENT FOR FULLSCREEN ==========
-function drawGradientForFullscreen(s, ctx, W, H, sizeScale) {
-  const cx = s.x * W;
-  const cy = s.y * H;
-  
-  if (s.type === 'radial') {
-    const scaledSize = s.size * sizeScale;
-    const solidEnd = 1 - (s.feather || 60) / 100;
-    
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
-    const color = rgba(s.color, s.opacity / 100);
-    
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-    
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
-    ctx.fill();
-  } 
-  else if (s.type === 'linear') {
-    const angleRad = ((s.angle - 90) * Math.PI) / 180;
-    const diagonal = Math.hypot(W, H);
-    const midX = W / 2;
-    const midY = H / 2;
-    const dx = (Math.cos(angleRad) * diagonal) / 2;
-    const dy = (Math.sin(angleRad) * diagonal) / 2;
-    
-    const grad = ctx.createLinearGradient(midX - dx, midY - dy, midX + dx, midY + dy);
-    
-    const stops = s.stops || [];
-    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-      grad.addColorStop(
-        Math.max(0, Math.min(1, cs.pos / 100)),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-    
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-  } 
-  else if (s.type === 'conic') {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = ctx.createConicGradient(startAngle, cx, cy);
-    
-    const stops = s.stops || [];
-    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-      grad.addColorStop(
-        Math.max(0, Math.min(1, cs.pos / 100)),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-    
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-  }
-}
-
-// ========== RENDER GRADIENT - FIXED ==========
-function renderGradientFS(s, ctx, W, H, sizeScale) {
-  const cx = s.x * W;
-  const cy = s.y * H;
-  
-  ctx.save();
-  
-  if (s.type === 'radial') {
-    const scaledSize = s.size * sizeScale;
-    const solidEnd = 1 - (s.feather || 60) / 100;
-    
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
-    const col = rgbaColor(s.color, s.opacity / 100);
-    
-    grad.addColorStop(0, col);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, col);
-    }
-    grad.addColorStop(1, rgbaColor(s.color, 0));
-    
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
-    ctx.fill();
-  } 
-  else if (s.type === 'linear') {
-    const angle = ((s.angle || 0) - 90) * Math.PI / 180;
-    const diagonal = Math.hypot(W, H);
-    const midX = W / 2;
-    const midY = H / 2;
-    const dx = Math.cos(angle) * diagonal / 2;
-    const dy = Math.sin(angle) * diagonal / 2;
-    
-    const grad = ctx.createLinearGradient(midX - dx, midY - dy, midX + dx, midY + dy);
-    
-    const stops = s.stops || [
-      { pos: 0, color: '#ff0000', opacity: 100 },
-      { pos: 100, color: '#0000ff', opacity: 100 }
-    ];
-    
-    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-      grad.addColorStop(
-        Math.max(0, Math.min(1, cs.pos / 100)),
-        rgbaColor(cs.color, cs.opacity / 100)
-      );
-    });
-    
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-  } 
-  else if (s.type === 'conic') {
-    const startAngle = ((s.startAngle || 0) - 90) * Math.PI / 180;
-    
-    const grad = ctx.createConicGradient(startAngle, cx, cy);
-    
-    const stops = s.stops || [
-      { pos: 0, color: '#ff0000', opacity: 100 },
-      { pos: 100, color: '#0000ff', opacity: 100 }
-    ];
-    
-    [...stops].sort((a, b) => a.pos - b.pos).forEach(cs => {
-      grad.addColorStop(
-        Math.max(0, Math.min(1, cs.pos / 100)),
-        rgbaColor(cs.color, cs.opacity / 100)
-      );
-    });
-    
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-  }
-  
-  ctx.restore();
-}
-
-// ========== RGBA HELPER - LOCAL ==========
-function rgbaColor(hex, alpha) {
-  // اگر تابع rgba وجود داره ازش استفاده کن
-  if (typeof rgba === 'function') {
-    return rgba(hex, alpha);
-  }
-  
-  // fallback
-  hex = hex || '#000000';
-  hex = hex.replace('#', '');
-  
-  if (hex.length === 3) {
-    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-  }
-  
-  const r = parseInt(hex.substring(0, 2), 16) || 0;
-  const g = parseInt(hex.substring(2, 4), 16) || 0;
-  const b = parseInt(hex.substring(4, 6), 16) || 0;
-  
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-// ========== ZOOM FUNCTIONS ==========
-function zoomFullscreen(factor, clientX, clientY) {
-  const container = document.getElementById('fsContainer');
-  if (!container || !fullscreenCanvas) return;
-  
-  const containerRect = container.getBoundingClientRect();
-  const canvasRect = fullscreenCanvas.getBoundingClientRect();
-  
-  const oldScale = fullscreenZoom.scale;
-  const newScale = Math.max(
-    fullscreenZoom.minScale,
-    Math.min(fullscreenZoom.maxScale, oldScale * factor)
-  );
-  
-  if (Math.abs(newScale - oldScale) < 0.001) return;
-  
-  // مرکز پیش‌فرض
-  if (clientX === null || clientY === null) {
-    clientX = containerRect.left + containerRect.width / 2;
-    clientY = containerRect.top + containerRect.height / 2;
-  }
-  
-  // مرکز canvas
-  const canvasCenterX = canvasRect.left + canvasRect.width / 2;
-  const canvasCenterY = canvasRect.top + canvasRect.height / 2;
-  
-  const scaleRatio = newScale / oldScale;
-  
-  fullscreenZoom.translateX = clientX - canvasCenterX - (clientX - canvasCenterX - fullscreenZoom.translateX) * scaleRatio;
-  fullscreenZoom.translateY = clientY - canvasCenterY - (clientY - canvasCenterY - fullscreenZoom.translateY) * scaleRatio;
-  fullscreenZoom.scale = newScale;
-  
-  applyFullscreenTransform();
-  updateFullscreenZoomUI();
-  setTimeout(() => constrainFullscreenPan(), 10);
-}
-
-function resetFullscreenView() {
-  fullscreenZoom.scale = 1;
-  fullscreenZoom.translateX = 0;
-  fullscreenZoom.translateY = 0;
-  
-  applyFullscreenTransform(true);
-  updateFullscreenZoomUI();
-  updateFullscreenCursor();
-}
-
-function applyFullscreenTransform(animate = false) {
-  if (!fullscreenCanvas) return;
-  
-  fullscreenCanvas.style.transition = animate ? 'transform 0.3s ease-out' : 'none';
-  fullscreenCanvas.style.transform = `translate(${fullscreenZoom.translateX}px, ${fullscreenZoom.translateY}px) scale(${fullscreenZoom.scale})`;
-  
-  if (animate) {
-    setTimeout(() => {
-      if (fullscreenCanvas) fullscreenCanvas.style.transition = 'none';
-    }, 300);
-  }
-}
-
-function constrainFullscreenPan() {
-  if (!fullscreenCanvas) return;
-  
-  const container = document.getElementById('fsContainer');
-  if (!container) return;
-  
-  const containerRect = container.getBoundingClientRect();
-  const canvasW = parseFloat(fullscreenCanvas.style.width) || 100;
-  const canvasH = parseFloat(fullscreenCanvas.style.height) || 100;
-  
-  const scaledW = canvasW * fullscreenZoom.scale;
-  const scaledH = canvasH * fullscreenZoom.scale;
-  
-  const maxX = Math.max(0, (scaledW - containerRect.width) / 2);
-  const maxY = Math.max(0, (scaledH - containerRect.height) / 2);
-  
-  let changed = false;
-  
-  if (scaledW <= containerRect.width) {
-    if (fullscreenZoom.translateX !== 0) { fullscreenZoom.translateX = 0; changed = true; }
-  } else {
-    const clamped = Math.max(-maxX, Math.min(maxX, fullscreenZoom.translateX));
-    if (clamped !== fullscreenZoom.translateX) { fullscreenZoom.translateX = clamped; changed = true; }
-  }
-  
-  if (scaledH <= containerRect.height) {
-    if (fullscreenZoom.translateY !== 0) { fullscreenZoom.translateY = 0; changed = true; }
-  } else {
-    const clamped = Math.max(-maxY, Math.min(maxY, fullscreenZoom.translateY));
-    if (clamped !== fullscreenZoom.translateY) { fullscreenZoom.translateY = clamped; changed = true; }
-  }
-  
-  if (changed) applyFullscreenTransform(true);
-  updateFullscreenCursor();
-}
-
-function updateFullscreenZoomUI() {
-  const el = document.getElementById('fsZoomValue');
-  if (el) el.textContent = Math.round(fullscreenZoom.scale * 100) + '%';
-  
-  const zoomOut = document.getElementById('fsZoomOut');
-  const zoomIn = document.getElementById('fsZoomIn');
-  if (zoomOut) zoomOut.disabled = fullscreenZoom.scale <= fullscreenZoom.minScale;
-  if (zoomIn) zoomIn.disabled = fullscreenZoom.scale >= fullscreenZoom.maxScale;
-}
-
-function updateFullscreenCursor() {
-  const container = document.getElementById('fsContainer');
-  if (!container) return;
-  
-  if (fullscreenZoom.isPanning) {
-    container.style.cursor = 'grabbing';
-  } else if (fullscreenZoom.scale > 1.01) {
-    container.style.cursor = 'grab';
-  } else {
-    container.style.cursor = 'default';
-  }
-}
-
-// ========== TOUCH ==========
-function handleFSTouchStart(e) {
-  const container = document.getElementById('fsContainer');
-  if (!container) return;
-  
-  if (e.touches.length === 2) {
-    e.preventDefault();
-    fullscreenZoom.isPinching = true;
-    fullscreenZoom.isPanning = false;
-    fullscreenZoom.startDist = getPinchDistance(e.touches);
-    fullscreenZoom.startScale = fullscreenZoom.scale;
-    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
-    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
-    
-    const center = getPinchCenter(e.touches);
-    fullscreenZoom.pinchCenterX = center.x;
-    fullscreenZoom.pinchCenterY = center.y;
-    
-  } else if (e.touches.length === 1) {
-    const touch = e.touches[0];
-    const now = Date.now();
-    
-    const dx = touch.clientX - fullscreenZoom.lastTapX;
-    const dy = touch.clientY - fullscreenZoom.lastTapY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (now - fullscreenZoom.lastTap < 300 && dist < 50) {
-      e.preventDefault();
-      handleFSDoubleTap(touch.clientX, touch.clientY);
-      fullscreenZoom.lastTap = 0;
-      return;
-    }
-    
-    fullscreenZoom.lastTap = now;
-    fullscreenZoom.lastTapX = touch.clientX;
-    fullscreenZoom.lastTapY = touch.clientY;
-    
-    e.preventDefault();
-    fullscreenZoom.isPanning = true;
-    fullscreenZoom.startX = touch.clientX;
-    fullscreenZoom.startY = touch.clientY;
-    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
-    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
-    updateFullscreenCursor();
-  }
-}
-
-function handleFSTouchMove(e) {
-  if (fullscreenZoom.isPinching && e.touches.length === 2) {
-    e.preventDefault();
-    
-    const container = document.getElementById('fsContainer');
-    if (!container) return;
-    
-    const containerRect = container.getBoundingClientRect();
-    
-    const dist = getPinchDistance(e.touches);
-    const scaleFactor = dist / fullscreenZoom.startDist;
-    const newScale = Math.max(
-      fullscreenZoom.minScale,
-      Math.min(fullscreenZoom.maxScale, fullscreenZoom.startScale * scaleFactor)
-    );
-    
-    const center = getPinchCenter(e.touches);
-    const canvasCenterX = containerRect.left + containerRect.width / 2;
-    const canvasCenterY = containerRect.top + containerRect.height / 2;
-    
-    const panX = center.x - fullscreenZoom.pinchCenterX;
-    const panY = center.y - fullscreenZoom.pinchCenterY;
-    const scaleRatio = newScale / fullscreenZoom.startScale;
-    const pivotX = fullscreenZoom.pinchCenterX - canvasCenterX;
-    const pivotY = fullscreenZoom.pinchCenterY - canvasCenterY;
-    
-    fullscreenZoom.translateX = fullscreenZoom.startTranslateX - pivotX * (scaleRatio - 1) + panX;
-    fullscreenZoom.translateY = fullscreenZoom.startTranslateY - pivotY * (scaleRatio - 1) + panY;
-    fullscreenZoom.scale = newScale;
-    
-    applyFullscreenTransform();
-    updateFullscreenZoomUI();
-    
-  } else if (fullscreenZoom.isPanning && e.touches.length === 1) {
-    e.preventDefault();
-    const touch = e.touches[0];
-    fullscreenZoom.translateX = fullscreenZoom.startTranslateX + (touch.clientX - fullscreenZoom.startX);
-    fullscreenZoom.translateY = fullscreenZoom.startTranslateY + (touch.clientY - fullscreenZoom.startY);
-    applyFullscreenTransform();
-  }
-}
-
-function handleFSTouchEnd(e) {
-  if (e.touches.length === 0) {
-    if (fullscreenZoom.isPinching || fullscreenZoom.isPanning) {
-      fullscreenZoom.isPinching = false;
-      fullscreenZoom.isPanning = false;
-      constrainFullscreenPan();
-    }
-  } else if (e.touches.length === 1 && fullscreenZoom.isPinching) {
-    fullscreenZoom.isPinching = false;
-    fullscreenZoom.isPanning = true;
-    const touch = e.touches[0];
-    fullscreenZoom.startX = touch.clientX;
-    fullscreenZoom.startY = touch.clientY;
-    fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
-    fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
-  }
-  updateFullscreenCursor();
-}
-
-function handleFSDoubleTap(clientX, clientY) {
-  if (fullscreenZoom.scale > 1.1) {
-    resetFullscreenView();
-  } else {
-    zoomFullscreen(3, clientX, clientY);
-  }
-}
-
-// ========== MOUSE ==========
-function handleFSWheel(e) {
-  e.preventDefault();
-  zoomFullscreen(e.deltaY > 0 ? 0.85 : 1.18, e.clientX, e.clientY);
-}
-
-function handleFSMouseDown(e) {
-  if (e.button !== 0) return;
-  e.preventDefault();
-  fullscreenZoom.isPanning = true;
-  fullscreenZoom.startX = e.clientX;
-  fullscreenZoom.startY = e.clientY;
-  fullscreenZoom.startTranslateX = fullscreenZoom.translateX;
-  fullscreenZoom.startTranslateY = fullscreenZoom.translateY;
-  updateFullscreenCursor();
-}
-
-function handleFSMouseMove(e) {
-  if (!fullscreenZoom.isPanning) return;
-  fullscreenZoom.translateX = fullscreenZoom.startTranslateX + (e.clientX - fullscreenZoom.startX);
-  fullscreenZoom.translateY = fullscreenZoom.startTranslateY + (e.clientY - fullscreenZoom.startY);
-  applyFullscreenTransform();
-}
-
-function handleFSMouseUp() {
-  if (!fullscreenZoom.isPanning) return;
-  fullscreenZoom.isPanning = false;
-  constrainFullscreenPan();
-}
-
-function handleFSDoubleClick(e) {
-  e.preventDefault();
-  if (fullscreenZoom.scale > 1.1) {
-    resetFullscreenView();
-  } else {
-    zoomFullscreen(3, e.clientX, e.clientY);
-  }
-}
-
-// ========== RESIZE ==========
-async function handleFSResize() {
-  if (!fullscreenCanvas) return;
-  await renderFullscreenCanvas();
-  resetFullscreenView();
-}
-
-// ========== ROTATE ==========
-async function rotateFullscreen() {
-  fullscreenRotation = (fullscreenRotation + 90) % 360;
-  
-  fullscreenZoom.scale = 1;
-  fullscreenZoom.translateX = 0;
-  fullscreenZoom.translateY = 0;
-  
-  await renderFullscreenCanvas();
-  applyFullscreenTransform();
-  updateFullscreenZoomUI();
-  updateFullscreenCursor();
-  
-  const info = document.getElementById('fullscreenInfo');
-  if (info) {
-    const isRotated = fullscreenRotation === 90 || fullscreenRotation === 270;
-    const w = isRotated ? state.canvasHeight : state.canvasWidth;
-    const h = isRotated ? state.canvasWidth : state.canvasHeight;
-    info.textContent = `${Math.round(w)} × ${Math.round(h)}`;
-  }
-}
-
-// ========== UTILS ==========
-function getPinchDistance(touches) {
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.hypot(dx, dy);
-}
-
-function getPinchCenter(touches) {
-  return {
-    x: (touches[0].clientX + touches[1].clientX) / 2,
-    y: (touches[0].clientY + touches[1].clientY) / 2,
-  };
-}
-
-// ========== GLOBALS ==========
-window.openFullscreenPreview = openFullscreenPreview;
-window.closeFullscreenPreview = closeFullscreenPreview;
-window.rotateFullscreen = rotateFullscreen;
 // ========== DIMENSION EVENT LISTENERS ==========
 function initDimensionEvents() {
   // Aspect ratio buttons
@@ -7463,7 +6903,444 @@ function initDimensionEvents() {
   }
 }
 
+// ========== COLOR PICKER ==========
+const MAX_RECENT_COLORS = 10;
+let recentColors = [];
+
+try {
+  recentColors = JSON.parse(localStorage.getItem("recentColors") || "[]");
+} catch (e) {
+  recentColors = [];
+}
+
+function addToRecentColors(hex, alpha) {
+  const colorKey = `${hex}_${alpha}`;
+  recentColors = recentColors.filter((c) => `${c.hex}_${c.alpha}` !== colorKey);
+  recentColors.unshift({ hex, alpha });
+  if (recentColors.length > MAX_RECENT_COLORS) {
+    recentColors = recentColors.slice(0, MAX_RECENT_COLORS);
+  }
+  try {
+    localStorage.setItem("recentColors", JSON.stringify(recentColors));
+  } catch (e) {}
+  renderRecentColors();
+}
+
+function renderRecentColors() {
+  const container = document.getElementById("recentColorsList");
+  if (!container) return;
+
+  if (recentColors.length === 0) {
+    container.innerHTML =
+      '<span class="recent-colors-empty">No recent colors</span>';
+    return;
+  }
+
+  container.innerHTML = recentColors
+    .map(
+      (c, i) => `
+    <div class="recent-color-item" 
+         onclick="selectRecentColor(${i})" 
+         title="${c.hex} (${c.alpha}%)">
+      <div class="recent-color-inner" style="background: ${rgba(
+        c.hex,
+        c.alpha / 100
+      )}"></div>
+    </div>
+  `
+    )
+    .join("");
+}
+
+function selectRecentColor(index) {
+  const color = recentColors[index];
+  if (!color) return;
+
+  const rgb = hexToRgb(color.hex);
+  const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+
+  picker.h = hsv.h;
+  picker.s = hsv.s;
+  picker.v = hsv.v;
+  picker.a = color.alpha;
+
+  updatePicker();
+}
+
+function openPicker(hex, opacity, cb) {
+  picker.cb = cb;
+  const rgb = hexToRgb(hex);
+  const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+  picker.h = hsv.h;
+  picker.s = hsv.s;
+  picker.v = hsv.v;
+  picker.a = opacity;
+
+  pickerDragging = false;
+
+  updatePicker();
+  renderRecentColors();
+
+  const overlay = document.getElementById("pickerOverlay");
+  if (overlay) overlay.classList.add("show");
+}
+
+function closePicker() {
+  const rgb = hsvToRgb(picker.h, picker.s, picker.v);
+  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+  addToRecentColors(hex, Math.round(picker.a));
+
+  const overlay = document.getElementById("pickerOverlay");
+  if (overlay) overlay.classList.remove("show");
+}
+
+function updatePicker() {
+  const { h, s, v, a, fmt } = picker;
+  const rgb = hsvToRgb(h, s, v);
+  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+
+  const sbBox = document.getElementById("sbBox");
+  const sbCursor = document.getElementById("sbCursor");
+  const hueThumb = document.getElementById("hueThumb");
+  const alphaThumb = document.getElementById("alphaThumb");
+  const alphaTrack = document.getElementById("alphaTrack");
+
+  if (sbBox) {
+    sbBox.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${h}, 100%, 50%))`;
+  }
+  if (sbCursor) {
+    sbCursor.style.cssText = `left: ${s}%; top: ${
+      100 - v
+    }%; background: ${hex}`;
+  }
+  if (hueThumb) {
+    hueThumb.style.left = (h / 360) * 100 + "%";
+  }
+  if (alphaThumb) {
+    alphaThumb.style.left = a + "%";
+  }
+  if (alphaTrack) {
+    alphaTrack.style.setProperty("--ac", hex);
+  }
+
+  document.querySelectorAll(".format-btn").forEach((b) => {
+    b.classList.toggle("selected", b.dataset.f === fmt);
+  });
+
+  const f = document.getElementById("fields");
+  if (f) {
+    if (fmt === "hex") {
+      f.innerHTML = `
+        <div class="picker-field" style="flex:2">
+          <label>HEX</label>
+          <input id="fHex" value="${hex}">
+        </div>
+        <div class="picker-field">
+          <label>A</label>
+          <input type="number" id="fA" min="0" max="100" value="${Math.round(
+            a
+          )}">
+        </div>`;
+    } else if (fmt === "rgb") {
+      f.innerHTML = `
+        <div class="picker-field"><label>R</label><input type="number" id="fR" min="0" max="255" value="${
+          rgb.r
+        }"></div>
+        <div class="picker-field"><label>G</label><input type="number" id="fG" min="0" max="255" value="${
+          rgb.g
+        }"></div>
+        <div class="picker-field"><label>B</label><input type="number" id="fB" min="0" max="255" value="${
+          rgb.b
+        }"></div>
+        <div class="picker-field"><label>A</label><input type="number" id="fA" min="0" max="100" value="${Math.round(
+          a
+        )}"></div>`;
+    } else {
+      f.innerHTML = `
+        <div class="picker-field"><label>H</label><input type="number" id="fH" min="0" max="360" value="${
+          hsl.h
+        }"></div>
+        <div class="picker-field"><label>S</label><input type="number" id="fS" min="0" max="100" value="${
+          hsl.s
+        }"></div>
+        <div class="picker-field"><label>L</label><input type="number" id="fL" min="0" max="100" value="${
+          hsl.l
+        }"></div>
+        <div class="picker-field"><label>A</label><input type="number" id="fA" min="0" max="100" value="${Math.round(
+          a
+        )}"></div>`;
+    }
+
+    bindInputs();
+  }
+
+  if (picker.cb) picker.cb(hex, Math.round(a));
+}
+
+function bindInputs() {
+  const fHex = document.getElementById("fHex");
+  const fA = document.getElementById("fA");
+  const fR = document.getElementById("fR");
+  const fG = document.getElementById("fG");
+  const fB = document.getElementById("fB");
+  const fH = document.getElementById("fH");
+  const fS = document.getElementById("fS");
+  const fL = document.getElementById("fL");
+
+  if (fHex) {
+    fHex.onchange = () => {
+      let v = fHex.value.trim();
+      if (!v.startsWith("#")) v = "#" + v;
+      if (/^#[0-9a-f]{6}$/i.test(v)) {
+        const rgb = hexToRgb(v);
+        const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+        picker.h = hsv.h;
+        picker.s = hsv.s;
+        picker.v = hsv.v;
+        updatePicker();
+      }
+    };
+  }
+
+  if (fA) {
+    fA.oninput = () => {
+      picker.a = clamp(+fA.value, 0, 100);
+      updatePicker();
+    };
+  }
+
+  if (fR && fG && fB) {
+    [fR, fG, fB].forEach((el) => {
+      el.oninput = () => {
+        const hsv = rgbToHsv(
+          clamp(+fR.value, 0, 255),
+          clamp(+fG.value, 0, 255),
+          clamp(+fB.value, 0, 255)
+        );
+        picker.h = hsv.h;
+        picker.s = hsv.s;
+        picker.v = hsv.v;
+        updatePicker();
+      };
+    });
+  }
+
+  if (fH && fS && fL) {
+    [fH, fS, fL].forEach((el) => {
+      el.oninput = () => {
+        const rgb = hslToRgb(
+          clamp(+fH.value, 0, 360),
+          clamp(+fS.value, 0, 100),
+          clamp(+fL.value, 0, 100)
+        );
+        const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+        picker.h = hsv.h;
+        picker.s = hsv.s;
+        picker.v = hsv.v;
+        updatePicker();
+      };
+    });
+  }
+}
+
+function getPickerPos(e, element) {
+  if (!element) return { x: 0, y: 0, width: 1, height: 1 };
+
+  const r = element.getBoundingClientRect();
+  let clientX, clientY;
+
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+
+  return {
+    x: clientX - r.left,
+    y: clientY - r.top,
+    width: r.width,
+    height: r.height,
+  };
+}
+
+function updSB(e) {
+  const sbBox = document.getElementById("sbBox");
+  if (!sbBox) return;
+
+  const pos = getPickerPos(e, sbBox);
+  picker.s = clamp((pos.x / pos.width) * 100, 0, 100);
+  picker.v = clamp(100 - (pos.y / pos.height) * 100, 0, 100);
+  updatePicker();
+}
+
+function updHue(e) {
+  const hueTrack = document.getElementById("hueTrack");
+  if (!hueTrack) return;
+
+  const pos = getPickerPos(e, hueTrack);
+  picker.h = clamp((pos.x / pos.width) * 360, 0, 360);
+  updatePicker();
+}
+
+function updAlpha(e) {
+  const alphaTrack = document.getElementById("alphaTrack");
+  if (!alphaTrack) return;
+
+  const pos = getPickerPos(e, alphaTrack);
+  picker.a = clamp((pos.x / pos.width) * 100, 0, 100);
+  updatePicker();
+}
+
+function initPickerEvents() {
+  const sbBox = document.getElementById("sbBox");
+  const hueTrack = document.getElementById("hueTrack");
+  const alphaTrack = document.getElementById("alphaTrack");
+  const pickerClose = document.getElementById("pickerClose");
+  const pickerOverlay = document.getElementById("pickerOverlay");
+  const pickerModal = document.querySelector(".picker-modal");
+
+  if (sbBox) {
+    sbBox.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      sbDrag = true;
+      pickerDragging = true;
+      updSB(e);
+    });
+    sbBox.addEventListener(
+      "touchstart",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        sbDrag = true;
+        pickerDragging = true;
+        updSB(e);
+      },
+      { passive: false }
+    );
+  }
+
+  if (hueTrack) {
+    hueTrack.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      hueDrag = true;
+      pickerDragging = true;
+      updHue(e);
+    });
+    hueTrack.addEventListener(
+      "touchstart",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        hueDrag = true;
+        pickerDragging = true;
+        updHue(e);
+      },
+      { passive: false }
+    );
+  }
+
+  if (alphaTrack) {
+    alphaTrack.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      alphaDrag = true;
+      pickerDragging = true;
+      updAlpha(e);
+    });
+    alphaTrack.addEventListener(
+      "touchstart",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        alphaDrag = true;
+        pickerDragging = true;
+        updAlpha(e);
+      },
+      { passive: false }
+    );
+  }
+
+  document.addEventListener("mousemove", (e) => {
+    if (sbDrag) updSB(e);
+    if (hueDrag) updHue(e);
+    if (alphaDrag) updAlpha(e);
+  });
+
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (sbDrag) {
+        e.preventDefault();
+        updSB(e);
+      }
+      if (hueDrag) {
+        e.preventDefault();
+        updHue(e);
+      }
+      if (alphaDrag) {
+        e.preventDefault();
+        updAlpha(e);
+      }
+    },
+    { passive: false }
+  );
+
+  document.addEventListener("mouseup", () => {
+    sbDrag = hueDrag = alphaDrag = false;
+    setTimeout(() => {
+      pickerDragging = false;
+    }, 50);
+  });
+
+  document.addEventListener("touchend", () => {
+    sbDrag = hueDrag = alphaDrag = false;
+    setTimeout(() => {
+      pickerDragging = false;
+    }, 50);
+  });
+
+  document.querySelectorAll(".format-btn").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      picker.fmt = b.dataset.f;
+      updatePicker();
+    };
+  });
+
+  if (pickerClose) {
+    pickerClose.onclick = (e) => {
+      e.stopPropagation();
+      closePicker();
+    };
+  }
+
+  if (pickerOverlay) {
+    pickerOverlay.addEventListener("click", (e) => {
+      if (e.target === pickerOverlay && !pickerDragging) {
+        closePicker();
+      }
+    });
+  }
+
+  if (pickerModal) {
+    pickerModal.addEventListener("mousedown", (e) => e.stopPropagation());
+    pickerModal.addEventListener("touchstart", (e) => e.stopPropagation(), {
+      passive: true,
+    });
+  }
+}
+
 // ========== GLOBALS ==========
+window.setNoiseOpacity = setNoiseOpacity;
+window.setNoiseFrequency = setNoiseFrequency;
+window.setNoiseBlend = setNoiseBlend;
+window.toggleNoise = toggleNoise;
+window.copyCSS = copyCSS;
+window.copyGradientCSS = copyGradientCSS;
+window.copyNoiseCSS = copyNoiseCSS;
+window.copySVGFilter = copySVGFilter;
 window.getStop = getStop;
 window.delStop = delStop;
 window.dupStop = dupStop;
