@@ -2,6 +2,7 @@
   --bg: #1c1c1c;
   --sec-bg: #2b2b2b;
   --TransParent-bg: #1c1c1c66;
+  --button-bg: rgba(255, 255, 255, 0.05);
   --Zoom-ui-color:#e1e9e533;
   --text-primary: #e8eef4;
   --text-contrast: #000000;
@@ -29,9 +30,10 @@
   --text-primary: #111827; 
   --text-muted: #6b7280;
   --border: rgba(0, 0, 0, 0.1); 
+  --sec-border: rgba(0, 0, 0, 0.4);
   --handel: #000;
   --svg: invert(1) brightness(0);
-  
+  --shadow: rgba(255, 255, 255, 0.4);
 }
 
 [data-theme="dep-dark"] {
@@ -53,7 +55,7 @@
   --text-muted: #94a3b8; 
   --text-titel: #bec8d6;    
   --border: rgba(148, 163, 184, 0.15); 
-  --text-contrast: #ffffff;
+  --sec-border: rgba(148, 163, 184, 0.5);
 }
 @font-face {
   font-family: "SF Pro";
@@ -112,6 +114,7 @@ body {
   grid-template-rows: 10rem 10rem auto;
   transition: background-color var(--btn-transition),
     color var(--btn-transition);
+    min-width: 372px;
 }
 
 /* ========================================
@@ -136,6 +139,7 @@ body {
    select
 ======================================== */
 select {
+  
   background: none;
   border: 1px solid var(--border);
   color: inherit;
@@ -232,7 +236,7 @@ button {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: var(--bg);
+  background: var(--button-bg);
   border: 1px solid var(--border);
   color: inherit;
   padding: 6px 12px;
@@ -252,6 +256,13 @@ button img {
   filter: var(--svg);
 }
 
+button.run{
+  animation: blur  600ms ease ;
+}
+
+@keyframes blur {
+  50%   {  filter: blur(2px);}
+}
 /* ========================================
    HEADER
 ======================================== */
@@ -782,6 +793,7 @@ header h1 {
 }
 
 .Handle-btn {
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -789,10 +801,11 @@ header h1 {
   right: -6px;
   top: -60px;
   padding: 8px;
-  z-index: 1;
-  border-radius: 999;
-  overflow: hidden;
+  background: var(--TransParent-bg);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 20px var(--shadow);
   border: 1px solid var(--border);
+  z-index: 1000;
 }
 
 .Handle-btn::before {
@@ -829,7 +842,7 @@ header h1 {
   background: var(--TransParent-bg);
   backdrop-filter: blur(4px);
   padding: 6px;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 20px var(--shadow);
   border: 1px solid var(--border);
   z-index: 1000;
 }
@@ -885,7 +898,7 @@ header h1 {
   backdrop-filter: blur(4px);
   padding: 8px 10px;
   border-radius: 30px;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 20px var(--shadow);
   border: 1px solid var(--border);
   z-index: 1000;
 }
@@ -914,6 +927,7 @@ header h1 {
 #fullscreenCanvas {
   display: block;
   transition: transform 0.3s ease;
+  border-radius: 8px;
 }
 
 .fullscreen-controls {
@@ -931,7 +945,7 @@ header h1 {
   backdrop-filter: blur(4px);
   padding: 8px 10px;
   border-radius: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px var(--shadow);
   border: 1px solid var(--border);
   cursor: pointer;
   display: flex;
@@ -961,7 +975,7 @@ header h1 {
   backdrop-filter: blur(4px);
   padding: 8px 10px;
   border-radius: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px var(--shadow);
   border: 1px solid var(--border);
   color: var(--text-primary);
   font-size: 12px;
@@ -975,6 +989,24 @@ header h1 {
   opacity: 1;
 }
 
+.fullscreen-zoom-value{
+  width: 65px;
+  height: 40px;
+  background: var(--TransParent-bg);
+  backdrop-filter: blur(4px);
+  padding: 8px 10px;
+  border-radius: 30px;
+  box-shadow: 0 2px 8px var(--shadow);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: #fff;
+  font-size: 12px;
+  opacity: 0.6;
+}
 /* ========================================
    ZOOM CONTROLS
 ======================================== */
@@ -988,7 +1020,7 @@ header h1 {
   backdrop-filter: blur(4px);
   padding: 8px 10px;
   border-radius: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px var(--shadow);
   border: 1px solid var(--border);
   z-index: 1000;
 }
@@ -1204,11 +1236,19 @@ grid-column: 2/3;
     margin-right: 10px;
 }
 
-/* استایل label */
 .filter-row label {
   cursor: pointer;
   user-select: none;
 }
+
+#filtersResetBtn.run img{
+  animation: rotate  600ms ease ;
+}
+
+@keyframes rotate {
+  100% { transform: rotate(360deg); }
+}
+
 /* ========================================
   backgraod
 ======================================== */
@@ -1234,12 +1274,11 @@ grid-column: 2/3;
   gap: 8px;
   padding-inline: 1.1rem;
   width: max-content;
-  border: 1px solid transparent;
 }
 
 .gradient-btn:hover {
   transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 30px var(--shadow);
   background: var(--accent);
   color: var(--text-contrast);
 }
@@ -1255,6 +1294,7 @@ grid-column: 2/3;
   border-radius: 6px;
   padding: 8px;
   margin-bottom: 6px;
+  gap: 8px;
 }
 
 .form-group-title {
@@ -1272,8 +1312,13 @@ grid-column: 2/3;
 .form-row {
   display: flex;
   align-items: center;
-  justify-content: start;
-  gap: 5px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form-Opacity{
+  margin-left: auto;
 }
 
 .form-row label {
@@ -1329,6 +1374,8 @@ button.sm {
 }
 
 .sm:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 12px 30px var(--shadow);
   background: var(--accent);
   color: var(--text-contrast);
 }
@@ -1715,7 +1762,7 @@ display: none;
   position: absolute;
   top: -2px;
   transform: translateX(-50%);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 3px var(--shadow);
   pointer-events: none;
 }
 
@@ -1862,7 +1909,7 @@ display: none;
   margin-block: .5rem .8rem;
 }
 
-.output-header span{
+.output-header>span{
   color: var(--text-muted);
   font-size: 13px;
 
@@ -1888,44 +1935,104 @@ display: none;
 
 #cssFormat {
   background: none;
-  border-radius: 8px;
 }
 
 #exportSelect {
   background: var(--accent);
   font-weight: 600;
-  border-radius: 8px;
-  color: #000;
+  color: var(--text-contrast);
 }
 
 .copy-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 6px;
+  padding: 5px 6px;
   border-radius: 8px;
+margin-right: .4rem;
   cursor: pointer;
-  font-size: 11px;
-  background: none;
-  width: max-content;
+  transition:
+    transform 0.15s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 100;
 }
 
-.copy-btn:active{
-  background: var(--accent);
-  color: var(--text-contrast);
+.copy-btn img {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.25s ease;
 }
-.copy-btn:active .copy-svg{
-  filter: invert(1) brightness(0);
+
+/* Hover (Desktop) */
+@media (hover: hover) {
+  .copy-btn:hover {
+    background: rgba(255,255,255,0.12);
+    box-shadow: 0 6px 18px var(--shadow);
+  }
+
+  .copy-btn:hover img {
+    transform: scale(1.15) rotate(-6deg);
+  }
 }
+
+/* Tap / Active (Mobile-first) */
+.copy-btn:active {
+  transform: scale(0.94);
+}
+
+/* Copied state (از JS تو فعال میشه) */
 .copy-btn.copied {
-  background: rgba(26, 77, 46, 0.6);
-  border-color: #2d7a4d;
-  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.6);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.25);
+  color: rgba(74, 222, 128, 0.6);
 }
 
-.copy-btn img , .copy-svg{
-  width: 18px;
-  height: 18px;
+/* subtle pulse */
+.copy-btn.copied {
+  animation: copiedPulse 0.6s ease;
+}
+
+@keyframes copiedPulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.copy-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+/* bounce + glow */
+.copy-btn.copied {
+  animation: copyBounce 0.45s cubic-bezier(.34,1.56,.64,1);
+}
+
+@keyframes copyBounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.08); }
+  70%  { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+/* ring wave */
+.copy-btn.copied::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 rgba(74,222,128,.6);
+  animation: copyRing 0.6s ease-out;
+  pointer-events: none;
+}
+
+@keyframes copyRing {
+  to {
+    box-shadow: 0 0 0 10px rgba(74,222,128,0);
+  }
 }
 
 /* ========================================
@@ -2044,6 +2151,7 @@ display: none;
     width: 100%;
   }
 
-  .zoom-controls{
+  .canvas-wrap{
+    height: 45rem !important;
   }
 }

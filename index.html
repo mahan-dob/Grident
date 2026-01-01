@@ -17,7 +17,8 @@
     <div style="flex: 1;"></div>
     <div class="theme-select">
       <select id="themeSelect">
-        <option value="dark" selected >Dark</option>
+        <option value="auto">Auto</option>
+        <option value="dark">Dark</option>
         <option value="light">Light</option>
         <option value="dep-dark">DepDark</option>
         <option value="midnight">MidNight</option>
@@ -126,7 +127,7 @@
   </div>
 
   <aside class="panel">
-<div class="section">
+<div class="section" data-id="Noise">
   <div class="section-header">
     <div class="section-title">Noise / Grain</div>
     <button id="noiseToggleBtn" class="control-btn" title="Toggle noise">
@@ -166,7 +167,7 @@
   </div>
 </div>
 <!-- Filters Section -->
-<div class="section">
+<div class="section" data-id="Filters">
   <div class="section-header">
     <div class="section-title">Filters</div>
     <button id="filtersResetBtn" class="control-btn" title="Reset filters">
@@ -243,7 +244,7 @@
     </div>
   </div>
 </div>
-<div class="section">
+<div class="section" data-id="Background">
   <div class="section-header">
     <div class="section-title">Background</div>
     <button id="bgToggleBtn" class="control-btn" title="Toggle background">
@@ -284,7 +285,7 @@
     </div> -->
   </div>
 </div>
-<div class="section">
+<div class="section" data-id="Layers">
       <div class="section-header">
         <div class="section-title">Layers</div>
         <div class="gradient-btn-bar">
@@ -296,13 +297,13 @@
       </div>
       <div class="section-content" id="list"></div>
 </div>
-<div class="section">
+<div class="section" data-id="Properties">
   <div class="section-header">
     <div class="section-title">Properties</div>
   </div>
 <div class="section-content" id="inspector"></div>
 </div>
-<div class="section">
+<div class="section" data-id="Output">
   <div class="section-header">
     <div class="section-title">Output</div>
     <div class="export-btns">
@@ -310,7 +311,7 @@
         <option value="">Export As...</option>
         <option value="png">PNG</option>
         <option value="jpg">JPG</option>
-        <option value="svg">SVG</option>
+        <option value="svg">SVG beta</option>
       </select>
     </div>
     <div class="Format">
@@ -320,7 +321,7 @@
         <option value="hsla">HSLA</option>
       </select>
     </div>
-    <button id="copyBtn" class="copy-btn" onclick="copyCSS()">
+    <button id="copyBtn" class="copy-btn" onclick="copyCSS(this)">
       <img class="copy-svg" src="./icon/copy.svg" alt="copy">
       <span>Copy All</span>
     </button>
@@ -330,7 +331,7 @@
   <div class="output-block">
     <div class="output-header">
       <span>Gradient</span>
-      <button class="copy-btn" onclick="copyGradientCSS()">
+      <button class="copy-btn" onclick="copyGradientCSS(this)">
         <img class="copy-svg" src="./icon/copy.svg" alt="copy">Copy
       </button>
     </div>
@@ -340,7 +341,7 @@
   <div class="output-block" id="noiseOutputBlock" style="display:none;">
     <div class="output-header">
       <span>Fillter Noise</span>
-      <button class="copy-btn" onclick="copyNoiseCSS()">
+      <button class="copy-btn" onclick="copyNoiseCSS(this)">
         <img class="copy-svg" src="./icon/copy.svg" alt="copy">Copy
       </button>
     </div>
@@ -350,7 +351,7 @@
   <div class="output-block" id="svgOutputBlock" style="display:none;">
     <div class="output-header">
       <span>Noise SVG</span>
-      <button class="copy-btn" onclick="copySVGFilter()">
+      <button class="copy-btn" onclick="copySVGFilter(this)">
         <img class="copy-svg" src="./icon/copy.svg" alt="copy">Copy
       </button>
     </div>
