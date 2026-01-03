@@ -5787,6 +5787,13 @@ function updateAllStopItems() {
 
 // ========== LAYER DRAG & DROP - TOUCH + MOUSE ==========
 (function() {
+  // ========== CONFIG ==========
+  const DRAG_CONFIG = {
+    delay: 200,
+    scrollThreshold: 12,
+    throttleMs: 16,
+  };
+
   // ========== STATE ==========
   const layerDrag = {
     active: false,
@@ -5801,13 +5808,9 @@ function updateAllStopItems() {
     delayTimer: null,
     initialRect: null,
     listRect: null,
-    moveHandler: null,
-  };
-
-  // ========== CONFIG ==========
-  const DRAG_CONFIG = {
-    delay: 300,
-    scrollThreshold: 12,
+    scrollCancelled: false,
+    rafId: null,
+    lastMoveTime: 0,
   };
 
   // ========== INIT ==========
@@ -5815,249 +5818,121 @@ function updateAllStopItems() {
     const list = document.getElementById("list");
     if (!list) return;
 
+    // حذف listener های قبلی
+    list.removeEventListener('mousedown', onMouseDown);
+    list.removeEventListener('touchstart', onTouchStart);
+
     list.addEventListener('mousedown', onMouseDown);
     list.addEventListener('touchstart', onTouchStart, { passive: true });
   }
 
-  // ========== TOUCH START ==========
-  function onTouchStart(e) {
+  // ========== MOUSE ==========
+  function onMouseDown(e) {
+    if (e.button !== 0) return;
+    if (layerDrag.active || layerDrag.pending) return;
+
     const stopItem = e.target.closest(".stop-item");
     if (!stopItem) return;
-    if (e.touches.length !== 1) return;
     if (!isValidDragTarget(e.target)) return;
 
-    const touch = e.touches[0];
+    e.preventDefault();
+    startPending(stopItem, e.clientX, e.clientY);
+  }
+
+  // ========== TOUCH ==========
+  function onTouchStart(e) {
+    if (e.touches.length !== 1) return;
+    if (layerDrag.active || layerDrag.pending) return;
+
+    const stopItem = e.target.closest(".stop-item");
+    if (!stopItem) return;
+    if (!isValidDragTarget(e.target)) return;
+
+    startPending(stopItem, e.touches[0].clientX, e.touches[0].clientY);
+  }
+
+  // ========== START PENDING ==========
+  function startPending(stopItem, clientX, clientY) {
     const rect = stopItem.getBoundingClientRect();
     const list = document.getElementById("list");
 
-    // ذخیره اطلاعات اولیه
-    layerDrag.pending = true;
-    layerDrag.stopId = stopItem.dataset.id;
-    layerDrag.element = stopItem;
-    layerDrag.startX = touch.clientX;
-    layerDrag.startY = touch.clientY;
-    layerDrag.offsetY = touch.clientY - rect.top;
-    layerDrag.initialRect = rect;
-    layerDrag.listRect = list.getBoundingClientRect();
+    Object.assign(layerDrag, {
+      pending: true,
+      element: stopItem,
+      stopId: stopItem.dataset.id,
+      startX: clientX,
+      startY: clientY,
+      offsetY: clientY - rect.top,
+      initialRect: rect,
+      listRect: list.getBoundingClientRect(),
+      scrollCancelled: false,
+    });
 
-    // ✅ تایمر: اگر ۳۰۰ms نگه داشت = drag
     layerDrag.delayTimer = setTimeout(() => {
-      if (layerDrag.pending) {
-        activateDrag();
+      if (layerDrag.pending && !layerDrag.scrollCancelled) {
+        startActualDrag();
       }
     }, DRAG_CONFIG.delay);
 
-    // ✅ فقط touchend برای کنسل کردن اگر زود برداشت
-    document.addEventListener('touchend', onTouchEndEarly, { passive: true });
-    document.addEventListener('touchcancel', onTouchEndEarly, { passive: true });
-    
-    // ✅ touchmove با passive برای تشخیص اسکرول
-    document.addEventListener('touchmove', onTouchMoveCheck, { passive: true });
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
   }
 
-  // ========== CHECK SCROLL ==========
-  function onTouchMoveCheck(e) {
-    if (!layerDrag.pending || layerDrag.active) return;
+  // ========== ON MOVE ==========
+  function onMove(e) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    const touch = e.touches[0];
-    const dy = Math.abs(touch.clientY - layerDrag.startY);
-    const dx = Math.abs(touch.clientX - layerDrag.startX);
-
-    // ✅ کاربر داره اسکرول می‌کنه - کنسل کن
-    if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
-      cancelPending();
-    }
-  }
-
-  // ========== EARLY TOUCH END ==========
-  function onTouchEndEarly() {
+    // در حالت pending
     if (layerDrag.pending && !layerDrag.active) {
-      cancelPending();
-    }
-  }
+      const dx = Math.abs(clientX - layerDrag.startX);
+      const dy = Math.abs(clientY - layerDrag.startY);
 
-  // ========== CANCEL PENDING ==========
-  function cancelPending() {
-    clearTimeout(layerDrag.delayTimer);
-    
-    document.removeEventListener('touchmove', onTouchMoveCheck);
-    document.removeEventListener('touchend', onTouchEndEarly);
-    document.removeEventListener('touchcancel', onTouchEndEarly);
+      // اگر حرکت زیاد بود، لغو کن (برای اسکرول)
+      if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
+        clearTimeout(layerDrag.delayTimer);
+        layerDrag.scrollCancelled = true;
+        layerDrag.pending = false;
+        cleanup();
+        return;
+      }
 
-    layerDrag.pending = false;
-    layerDrag.element = null;
-    layerDrag.stopId = null;
-  }
-
-  // ========== ACTIVATE DRAG ==========
-  function activateDrag() {
-    if (layerDrag.active || !layerDrag.element) return;
-
-    // حذف listener های قبلی
-    document.removeEventListener('touchmove', onTouchMoveCheck);
-    document.removeEventListener('touchend', onTouchEndEarly);
-    document.removeEventListener('touchcancel', onTouchEndEarly);
-
-    layerDrag.pending = false;
-    layerDrag.active = true;
-
-    const stopItem = layerDrag.element;
-    const rect = layerDrag.initialRect;
-
-    // ✅ ایجاد clone
-    layerDrag.clone = stopItem.cloneNode(true);
-    layerDrag.clone.classList.add('drag-clone');
-    layerDrag.clone.style.cssText = `
-      position: fixed;
-      left: ${rect.left}px;
-      top: ${rect.top}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      z-index: 10000;
-      pointer-events: none;
-      opacity: 0.95;
-      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-      transform: scale(1.03);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      border-radius: 8px;
-      background: var(--TransParent-bg, rgba(30,30,30,0.95));
-      backdrop-filter: blur(6px);
-      border: 2px solid var(--border, #444);
-    `;
-    document.body.appendChild(layerDrag.clone);
-
-    // ✅ ایجاد placeholder
-    layerDrag.placeholder = document.createElement('div');
-    layerDrag.placeholder.className = 'drag-placeholder';
-    layerDrag.placeholder.style.cssText = `
-      height: ${rect.height}px;
-      margin: 4px 0;
-      border: 2px dashed var(--border, #444);
-      border-radius: 8px;
-      background: var(--accent);
-      opacity: 0.3;
-      transition: height 0.2s ease;
-    `;
-
-    // مخفی کردن اصلی
-    stopItem.classList.add('drag-original');
-    stopItem.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
-    stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
-
-    // بلاک کردن اسکرول
-    document.body.style.userSelect = 'none';
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-
-    // ✅ حالا listener های drag اضافه کن
-    document.addEventListener('touchmove', onDragMove, { passive: false });
-    document.addEventListener('touchend', onDragEnd);
-    document.addEventListener('touchcancel', onDragEnd);
-
-    // فیدبک هپتیک
-    if (navigator.vibrate) {
-      navigator.vibrate(50);
-    }
-  }
-
-  // ========== DRAG MOVE ==========
-  function onDragMove(e) {
-    if (!layerDrag.active || !layerDrag.clone) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const touch = e.touches[0];
-    const newTop = touch.clientY - layerDrag.offsetY;
-    layerDrag.clone.style.top = newTop + 'px';
-
-    updatePlaceholderPosition(touch.clientY);
-  }
-
-  // ========== DRAG END ==========
-  function onDragEnd() {
-    document.removeEventListener('touchmove', onDragMove);
-    document.removeEventListener('touchend', onDragEnd);
-    document.removeEventListener('touchcancel', onDragEnd);
-
-    if (!layerDrag.active) {
-      cleanup();
+      // اگر کمی حرکت کرد، فوراً شروع کن
+      if (dy > 5 || dx > 5) {
+        clearTimeout(layerDrag.delayTimer);
+        startActualDrag();
+      }
       return;
     }
 
-    // انیمیشن برگشت
-    if (layerDrag.clone && layerDrag.placeholder) {
-      const placeholderRect = layerDrag.placeholder.getBoundingClientRect();
-
-      layerDrag.clone.style.transition = 'all 0.25s ease';
-      layerDrag.clone.style.top = placeholderRect.top + 'px';
-      layerDrag.clone.style.left = placeholderRect.left + 'px';
-      layerDrag.clone.style.transform = 'scale(1)';
-      layerDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-
-      setTimeout(finalizeDrag, 250);
-    } else {
-      finalizeDrag();
-    }
-  }
-
-  // ========== MOUSE HANDLERS ==========
-  function onMouseDown(e) {
-    if (e.button !== 0) return;
-    
-    const stopItem = e.target.closest(".stop-item");
-    if (!stopItem) return;
-    if (!isValidDragTarget(e.target)) return;
-
+    if (!layerDrag.active || !layerDrag.clone) return;
     e.preventDefault();
 
-    const rect = stopItem.getBoundingClientRect();
-    const list = document.getElementById("list");
+    // 🚀 Throttle + RAF
+    const now = Date.now();
+    if (now - layerDrag.lastMoveTime < DRAG_CONFIG.throttleMs) return;
+    layerDrag.lastMoveTime = now;
 
-    layerDrag.pending = true;
-    layerDrag.stopId = stopItem.dataset.id;
-    layerDrag.element = stopItem;
-    layerDrag.startX = e.clientX;
-    layerDrag.startY = e.clientY;
-    layerDrag.offsetY = e.clientY - rect.top;
-    layerDrag.initialRect = rect;
-    layerDrag.listRect = list.getBoundingClientRect();
-
-    layerDrag.delayTimer = setTimeout(() => {
-      if (layerDrag.pending) {
-        activateDragMouse();
-      }
-    }, DRAG_CONFIG.delay);
-
-    document.addEventListener('mousemove', onMouseMoveCheck);
-    document.addEventListener('mouseup', onMouseUpEarly);
-  }
-
-  function onMouseMoveCheck(e) {
-    if (!layerDrag.pending) return;
-
-    const dx = Math.abs(e.clientX - layerDrag.startX);
-    const dy = Math.abs(e.clientY - layerDrag.startY);
-
-    // اگر حرکت کرد، زودتر شروع کن
-    if (dx > 5 || dy > 5) {
-      clearTimeout(layerDrag.delayTimer);
-      document.removeEventListener('mousemove', onMouseMoveCheck);
-      document.removeEventListener('mouseup', onMouseUpEarly);
-      activateDragMouse();
+    if (layerDrag.rafId) {
+      cancelAnimationFrame(layerDrag.rafId);
     }
+
+    layerDrag.rafId = requestAnimationFrame(() => {
+      if (!layerDrag.clone) return;
+
+      const newTop = clientY - layerDrag.offsetY;
+      layerDrag.clone.style.transform = `translateY(${newTop - layerDrag.initialRect.top}px) scale(1.03)`;
+
+      updatePlaceholderPosition(clientY);
+    });
   }
 
-  function onMouseUpEarly() {
-    clearTimeout(layerDrag.delayTimer);
-    document.removeEventListener('mousemove', onMouseMoveCheck);
-    document.removeEventListener('mouseup', onMouseUpEarly);
-    layerDrag.pending = false;
-  }
-
-  function activateDragMouse() {
-    document.removeEventListener('mousemove', onMouseMoveCheck);
-    document.removeEventListener('mouseup', onMouseUpEarly);
+  // ========== START ACTUAL DRAG ==========
+  function startActualDrag() {
+    if (layerDrag.active || !layerDrag.element) return;
 
     layerDrag.pending = false;
     layerDrag.active = true;
@@ -6068,165 +5943,197 @@ function updateAllStopItems() {
     // Clone
     layerDrag.clone = stopItem.cloneNode(true);
     layerDrag.clone.classList.add('drag-clone');
-    layerDrag.clone.style.cssText = `
-      position: fixed;
-      left: ${rect.left}px;
-      top: ${rect.top}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      z-index: 10000;
-      pointer-events: none;
-      opacity: 0.95;
-      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-      transform: scale(1.03);
-      border-radius: 8px;
-      background: var(--TransParent-bg, rgba(30,30,30,0.95));
-      backdrop-filter: blur(6px);
-      border: 2px solid var(--border, #444);
-    `;
+    Object.assign(layerDrag.clone.style, {
+      position: 'fixed',
+      left: rect.left + 'px',
+      top: rect.top + 'px',
+      width: rect.width + 'px',
+      height: rect.height + 'px',
+      zIndex: '10000',
+      pointerEvents: 'none',
+      opacity: '0.95',
+      boxShadow: '0 15px 50px rgba(0,0,0,0.5)',
+      borderRadius: '8px',
+      background: 'var(--TransParent-bg, rgba(30,30,30,0.95))',
+      backdropFilter: 'blur(6px)',
+      border: '2px solid var(--border, #444)',
+      willChange: 'transform',
+      transform: 'scale(1.03)',
+    });
     document.body.appendChild(layerDrag.clone);
 
     // Placeholder
     layerDrag.placeholder = document.createElement('div');
     layerDrag.placeholder.className = 'drag-placeholder';
-    layerDrag.placeholder.style.cssText = `
-      height: ${rect.height}px;
-      margin: 4px 0;
-      border: 2px dashed var(--border, #444);
-      border-radius: 8px;
-      background: var(--accent);
-      opacity: 0.3;
-    `;
+    Object.assign(layerDrag.placeholder.style, {
+      height: rect.height + 'px',
+      margin: '4px 0',
+      border: '2px dashed var(--border, #444)',
+      borderRadius: '8px',
+      background: 'var(--accent)',
+      opacity: '0.3',
+      transition: 'height 0.15s ease',
+    });
 
+    // مخفی کردن اصلی
     stopItem.classList.add('drag-original');
-    stopItem.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
+    Object.assign(stopItem.style, {
+      opacity: '0',
+      height: '0',
+      margin: '0',
+      padding: '0',
+      overflow: 'hidden',
+      pointerEvents: 'none',
+    });
+
     stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
 
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'grabbing';
+    Object.assign(document.body.style, {
+      userSelect: 'none',
+      cursor: 'grabbing',
+      overflow: 'hidden',
+      touchAction: 'none',
+    });
 
-    document.addEventListener('mousemove', onMouseDragMove);
-    document.addEventListener('mouseup', onMouseDragEnd);
+    if (navigator.vibrate) navigator.vibrate(30);
   }
 
-  function onMouseDragMove(e) {
-    if (!layerDrag.active || !layerDrag.clone) return;
+  // ========== UPDATE PLACEHOLDER (اصلاح شده) ==========
+  function updatePlaceholderPosition(clientY) {
+    const list = document.getElementById("list");
+    if (!list || !layerDrag.placeholder) return;
 
-    const newTop = e.clientY - layerDrag.offsetY;
-    layerDrag.clone.style.top = newTop + 'px';
+    const items = [...list.querySelectorAll(".stop-item:not(.drag-original)")];
+    
+    if (items.length === 0) return;
 
-    updatePlaceholderPosition(e.clientY);
+    const placeholder = layerDrag.placeholder;
+    let inserted = false;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (clientY < midY) {
+        if (placeholder.nextElementSibling !== item) {
+          list.insertBefore(placeholder, item);
+        }
+        inserted = true;
+        break;
+      }
+    }
+
+    // اگر پایین‌تر از همه آیتم‌ها بود، به آخر ببر
+    if (!inserted) {
+      const lastVisibleItem = items[items.length - 1];
+      
+      // پیدا کردن نقطه درج بعد از آخرین آیتم
+      let insertPoint = lastVisibleItem.nextElementSibling;
+      
+      // از روی drag-original رد شو
+      while (insertPoint && insertPoint === layerDrag.element) {
+        insertPoint = insertPoint.nextElementSibling;
+      }
+      
+      if (insertPoint) {
+        if (insertPoint !== placeholder) {
+          list.insertBefore(placeholder, insertPoint);
+        }
+      } else {
+        if (list.lastElementChild !== placeholder) {
+          list.appendChild(placeholder);
+        }
+      }
+    }
   }
 
-  function onMouseDragEnd() {
-    document.removeEventListener('mousemove', onMouseDragMove);
-    document.removeEventListener('mouseup', onMouseDragEnd);
+  // ========== ON END ==========
+  function onEnd() {
+    clearTimeout(layerDrag.delayTimer);
+    if (layerDrag.rafId) cancelAnimationFrame(layerDrag.rafId);
 
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    document.removeEventListener('touchcancel', onEnd);
+
+    if (!layerDrag.active) {
+      cleanup();
+      return;
+    }
+
+    // انیمیشن بازگشت
     if (layerDrag.clone && layerDrag.placeholder) {
       const placeholderRect = layerDrag.placeholder.getBoundingClientRect();
 
-      layerDrag.clone.style.transition = 'all 0.25s ease';
-      layerDrag.clone.style.top = placeholderRect.top + 'px';
-      layerDrag.clone.style.left = placeholderRect.left + 'px';
-      layerDrag.clone.style.transform = 'scale(1)';
+      Object.assign(layerDrag.clone.style, {
+        transition: 'all 0.2s ease-out',
+        transform: 'scale(1)',
+        top: placeholderRect.top + 'px',
+        left: placeholderRect.left + 'px',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+      });
 
-      setTimeout(finalizeDrag, 250);
+      setTimeout(finalizeDrag, 200);
     } else {
       finalizeDrag();
     }
   }
 
-  // ========== SHARED FUNCTIONS ==========
-  function isValidDragTarget(target) {
-    if (target.closest(".control-btn, button, input, select")) return false;
-    const handle = target.closest(".drag-handle");
-    const preview = target.closest(".stop-preview");
-    const info = target.closest(".stop-info");
-    return handle || preview || info;
-  }
-
-  function updatePlaceholderPosition(clientY) {
-    const list = document.getElementById("list");
-    const items = [...list.querySelectorAll(".stop-item:not(.drag-original)")];
-
-    let targetItem = null;
-    let insertBefore = true;
-
-    for (const item of items) {
-      const rect = item.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-
-      if (clientY < midY) {
-        targetItem = item;
-        insertBefore = true;
-        break;
-      } else {
-        targetItem = item;
-        insertBefore = false;
-      }
-    }
-
-    if (targetItem && layerDrag.placeholder) {
-      if (insertBefore) {
-        if (layerDrag.placeholder.nextElementSibling !== targetItem) {
-          list.insertBefore(layerDrag.placeholder, targetItem);
-        }
-      } else {
-        const next = targetItem.nextElementSibling;
-        if (next === layerDrag.placeholder) {
-          // OK
-        } else if (next === layerDrag.element) {
-          list.insertBefore(layerDrag.placeholder, layerDrag.element);
-        } else if (next) {
-          list.insertBefore(layerDrag.placeholder, next);
-        } else {
-          list.appendChild(layerDrag.placeholder);
-        }
-      }
-    }
-  }
-
+  // ========== FINALIZE (اصلاح شده) ==========
   function finalizeDrag() {
     const list = document.getElementById("list");
-    const children = [...list.children];
 
-    let newIndex = 0;
-    for (const child of children) {
-      if (child === layerDrag.placeholder) break;
-      if (child.classList.contains("stop-item") && !child.classList.contains("drag-original")) {
-        newIndex++;
+    if (list && layerDrag.placeholder) {
+      // شمارش ساده آیتم‌های قبل از placeholder
+      const allChildren = [...list.children];
+      let newIndex = 0;
+
+      for (const child of allChildren) {
+        if (child === layerDrag.placeholder) break;
+        if (child === layerDrag.element) continue; // skip hidden
+        if (child.classList.contains("stop-item")) {
+          newIndex++;
+        }
+      }
+
+      const oldIndex = state.stops.findIndex(s => s.id === layerDrag.stopId);
+
+      console.log(`Layer: Moving from ${oldIndex} to ${newIndex}`);
+
+      if (oldIndex !== -1 && oldIndex !== newIndex) {
+        History.saveState();
+        const [removed] = state.stops.splice(oldIndex, 1);
+        state.stops.splice(newIndex, 0, removed);
       }
     }
 
-    const oldIndex = state.stops.findIndex(s => s.id === layerDrag.stopId);
-
-    if (oldIndex !== -1 && oldIndex !== newIndex) {
-      const [removed] = state.stops.splice(oldIndex, 1);
-      state.stops.splice(newIndex, 0, removed);
-    }
-
+    const wasActive = layerDrag.active;
     cleanup();
-    refresh();
+
+    if (wasActive) {
+      refresh();
+    }
   }
 
+  // ========== CLEANUP ==========
   function cleanup() {
-    if (layerDrag.clone?.parentNode) {
-      layerDrag.clone.remove();
-    }
-
-    if (layerDrag.placeholder?.parentNode) {
-      layerDrag.placeholder.remove();
-    }
+    layerDrag.clone?.remove();
+    layerDrag.placeholder?.remove();
 
     if (layerDrag.element) {
       layerDrag.element.classList.remove('drag-original');
       layerDrag.element.style.cssText = '';
     }
 
-    document.body.style.overflow = '';
-    document.body.style.touchAction = '';
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
+    Object.assign(document.body.style, {
+      overflow: '',
+      touchAction: '',
+      userSelect: '',
+      cursor: '',
+    });
 
     Object.assign(layerDrag, {
       active: false,
@@ -6238,7 +6145,19 @@ function updateAllStopItems() {
       delayTimer: null,
       initialRect: null,
       listRect: null,
+      scrollCancelled: false,
+      rafId: null,
+      lastMoveTime: 0,
     });
+  }
+
+  // ========== HELPER ==========
+  function isValidDragTarget(target) {
+    if (target.closest(".control-btn, button, input, select")) return false;
+    const handle = target.closest(".drag-handle");
+    const preview = target.closest(".stop-preview");
+    const info = target.closest(".stop-info");
+    return handle || preview || info;
   }
 
   window.initLayerDragDrop = initLayerDragDrop;
@@ -6384,6 +6303,185 @@ function updateConicAngleFromInput(id, val) {
   }
 }
 
+// ========== تابع تنظیم Blend Mode ==========
+function setStopBlendMode(stopId, mode) {
+  const s = getStop(stopId);
+  if (s) {
+    s.blendMode = mode;
+    liveUpdate(stopId);
+  }
+}
+window.setStopBlendMode = setStopBlendMode;
+
+// ========== به‌روزرسانی onPointerMove برای canvas drag ==========
+function onPointerMove(e) {
+  if (!drag) return;
+  e.preventDefault();
+
+  const pos = getEventPos(e);
+  const mx = pos.x;
+  const my = pos.y;
+  const cx = drag.s.x * W;
+  const cy = drag.s.y * H;
+
+  switch (drag.t) {
+    case "move":
+      drag.s.x = clamp(mx / W, 0, 1);
+      if (!state.lockVertical) {
+        drag.s.y = clamp(my / H, 0, 1);
+      }
+      break;
+
+    case "cs":
+      const { x1, y1, x2, y2 } = drag;
+      const dx = x2 - x1, dy = y2 - y1;
+      const len2 = dx * dx + dy * dy;
+      const t = clamp(((mx - x1) * dx + (my - y1) * dy) / len2, 0, 1);
+      drag.s.stops[drag.i].pos = Math.round(t * 100);
+      break;
+
+    case "angle":
+      let newAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
+      if (newAngle < 0) newAngle += 360;
+      drag.s.angle = Math.round(newAngle) % 360;
+      break;
+
+    case "conic-angle":
+      let conicAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
+      if (conicAngle < 0) conicAngle += 360;
+      drag.s.startAngle = Math.round(conicAngle) % 360;
+      break;
+
+    case "conic-cs":
+      const startAngleRad = ((drag.s.startAngle - 90) * Math.PI) / 180;
+      let relAngle = Math.atan2(my - cy, mx - cx) - startAngleRad;
+      if (relAngle < 0) relAngle += Math.PI * 2;
+      drag.s.stops[drag.i].pos = clamp(Math.round((relAngle / (Math.PI * 2)) * 100), 0, 100);
+      break;
+  }
+
+  throttledDraw();
+  updateStopItem(drag.s.id);
+}
+
+// ========== به‌روزرسانی angle drag ==========
+function handleAngleMove(e) {
+  if (!activeAnglePicker) return;
+  e.preventDefault();
+
+  const stopId = activeAnglePicker;
+  const handle = document.getElementById(`angleHandle_${stopId}`);
+  const pickerEl = handle?.closest(".angle-picker");
+  if (!pickerEl) return;
+
+  const rect = pickerEl.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+
+  let clientX, clientY;
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+
+  let angle = Math.atan2(clientX - centerX, centerY - clientY) * (180 / Math.PI);
+  angle = Math.round((angle + 360) % 360);
+
+  const stop = getStop(stopId);
+  if (stop) {
+    stop.angle = angle;
+    handle.style.transform = `rotate(${angle}deg)`;
+    document.getElementById(`angleCenter_${stopId}`).textContent = `${angle}°`;
+    document.getElementById(`angleNum_${stopId}`).value = angle;
+    
+    draw();
+    updateCSS();
+    updateStopItem(stopId);
+  }
+}
+
+// ==========conic angle drag ==========
+function startConicAngleDrag(e, id) {
+  e.preventDefault();
+
+  function move(ev) {
+    ev.preventDefault();
+    const center = document.querySelector(`#conicAngleCenter_${id}`);
+    const handle = document.querySelector(`#conicAngleHandle_${id}`);
+    if (!center || !handle) return;
+
+    const rect = center.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    let clientX, clientY;
+    if (ev.touches && ev.touches.length > 0) {
+      clientX = ev.touches[0].clientX;
+      clientY = ev.touches[0].clientY;
+    } else {
+      clientX = ev.clientX;
+      clientY = ev.clientY;
+    }
+
+    let ang = (Math.atan2(clientY - cy, clientX - cx) * 180) / Math.PI;
+    ang = (ang + 360) % 360;
+
+    const stop = getStop(id);
+    if (stop) {
+      stop.startAngle = Math.round(ang);
+      handle.style.transform = `rotate(${ang}deg)`;
+      center.textContent = stop.startAngle + "°";
+      document.getElementById(`conicAngleNum_${id}`).value = stop.startAngle;
+      
+      draw();
+      updateCSS();
+      updateStopItem(id);
+    }
+  }
+
+  function up() {
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("mouseup", up);
+    document.removeEventListener("touchmove", move);
+    document.removeEventListener("touchend", up);
+  }
+
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+  document.addEventListener("touchmove", move, { passive: false });
+  document.addEventListener("touchend", up);
+}
+
+// ========== picker callback ==========
+function openStopColorPicker(stopId, isColorStop = false, colorStopIndex = 0) {
+  const s = getStop(stopId);
+  if (!s) return;
+
+  if (isColorStop) {
+    const cs = s.stops[colorStopIndex];
+    if (!cs) return;
+    openPicker(cs.color, cs.opacity, (c, a) => {
+      const stop = getStop(stopId);
+      if (stop && stop.stops[colorStopIndex]) {
+        stop.stops[colorStopIndex].color = c;
+        stop.stops[colorStopIndex].opacity = a;
+        liveUpdate(stopId);
+      }
+    });
+  } else {
+    openPicker(s.color, s.opacity, (c, a) => {
+      const stop = getStop(stopId);
+      if (stop) {
+        stop.color = c;
+        stop.opacity = a;
+        liveUpdate(stopId);
+      }
+    });
+  }
+}
 // ========== به‌روزرسانی renderInspector ==========
 function renderInspector() {
   const el = document.getElementById("inspector");
@@ -6585,27 +6683,32 @@ function renderInspector() {
 
 // ================= COLOR STOP DRAG =================
 
-// ================= COLOR STOP DRAG =================
-
 (function () {
+  // ========== CONFIG ==========
+  const DRAG_CONFIG = {
+    delay: 200,
+    scrollThreshold: 12,
+    throttleMs: 16,
+  };
+
   // ========== STATE ==========
   const drag = {
     active: false,
     pending: false,
     stopId: null,
     fromIndex: null,
-    el: null,
+    element: null,
     clone: null,
     placeholder: null,
+    startX: 0,
     startY: 0,
     offsetY: 0,
     delayTimer: null,
-    rect: null,
-  };
-
-  const CONFIG = {
-    delay: 300,
-    scrollThreshold: 12,
+    initialRect: null,
+    scrollCancelled: false,
+    rafId: null,
+    lastMoveTime: 0,
+    list: null,
   };
 
   // ========== INIT ==========
@@ -6613,225 +6716,290 @@ function renderInspector() {
     const list = document.querySelector(".color-stop-list");
     if (!list) return;
 
-    // حذف listener های قبلی برای جلوگیری از تکرار
     list.removeEventListener("mousedown", onMouseDown);
     list.removeEventListener("touchstart", onTouchStart);
-    
+
     list.addEventListener("mousedown", onMouseDown);
-    list.addEventListener("touchstart", onTouchStart, { passive: false });
-  }
+    list.addEventListener("touchstart", onTouchStart, { passive: true });
 
-  // ========== TOUCH ==========
-  function onTouchStart(e) {
-    if (drag.active || drag.pending) return;
-    
-    const row = e.target.closest(".color-stop-row.stop-item");
-    if (!row || e.touches.length !== 1) return;
-    if (!isValidTarget(e.target)) return;
-
-    e.preventDefault();
-    const touch = e.touches[0];
-    const rect = row.getBoundingClientRect();
-
-    drag.pending = true;
-    drag.el = row;
-    drag.stopId = row.dataset.stopId;
-    drag.fromIndex = +row.dataset.colorIndex;
-    drag.startY = touch.clientY;
-    drag.offsetY = touch.clientY - rect.top;
-    drag.rect = rect;
-
-    drag.delayTimer = setTimeout(() => {
-      if (drag.pending) activate();
-    }, CONFIG.delay);
-
-    document.addEventListener("touchmove", onTouchMoveCheck, { passive: false });
-    document.addEventListener("touchend", cancelPending);
-    document.addEventListener("touchcancel", cancelPending);
-  }
-
-  function onTouchMoveCheck(e) {
-    if (!drag.pending) return;
-    const dy = Math.abs(e.touches[0].clientY - drag.startY);
-    if (dy > CONFIG.scrollThreshold) {
-      cancelPending();
-    }
+    drag.list = list;
   }
 
   // ========== MOUSE ==========
   function onMouseDown(e) {
-    if (drag.active || drag.pending) return;
     if (e.button !== 0) return;
-    
+    if (drag.active || drag.pending) return;
+
     const row = e.target.closest(".color-stop-row.stop-item");
-    if (!row || !isValidTarget(e.target)) return;
+    if (!row) return;
+    if (!isValidTarget(e.target)) return;
 
     e.preventDefault();
+    startPending(row, e.clientX, e.clientY);
+  }
+
+  // ========== TOUCH ==========
+  function onTouchStart(e) {
+    if (e.touches.length !== 1) return;
+    if (drag.active || drag.pending) return;
+
+    const row = e.target.closest(".color-stop-row.stop-item");
+    if (!row) return;
+    if (!isValidTarget(e.target)) return;
+
+    startPending(row, e.touches[0].clientX, e.touches[0].clientY);
+  }
+
+  // ========== START PENDING ==========
+  function startPending(row, clientX, clientY) {
     const rect = row.getBoundingClientRect();
 
-    drag.pending = true;
-    drag.el = row;
-    drag.stopId = row.dataset.stopId;
-    drag.fromIndex = +row.dataset.colorIndex;
-    drag.startY = e.clientY;
-    drag.offsetY = e.clientY - rect.top;
-    drag.rect = rect;
+    Object.assign(drag, {
+      pending: true,
+      element: row,
+      stopId: row.dataset.stopId,
+      fromIndex: +row.dataset.colorIndex,
+      startX: clientX,
+      startY: clientY,
+      offsetY: clientY - rect.top,
+      initialRect: rect,
+      scrollCancelled: false,
+    });
 
     drag.delayTimer = setTimeout(() => {
-      if (drag.pending) activate();
-    }, CONFIG.delay);
+      if (drag.pending && !drag.scrollCancelled) {
+        startActualDrag();
+      }
+    }, DRAG_CONFIG.delay);
 
-    document.addEventListener("mousemove", onMouseMoveCheck);
-    document.addEventListener("mouseup", cancelPending);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onEnd);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onEnd);
   }
 
-  function onMouseMoveCheck(e) {
-    if (!drag.pending) return;
-    if (Math.abs(e.clientY - drag.startY) > 5) {
-      clearTimeout(drag.delayTimer);
-      activate();
+  // ========== ON MOVE ==========
+  function onMove(e) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    if (drag.pending && !drag.active) {
+      const dx = Math.abs(clientX - drag.startX);
+      const dy = Math.abs(clientY - drag.startY);
+
+      if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
+        clearTimeout(drag.delayTimer);
+        drag.scrollCancelled = true;
+        drag.pending = false;
+        cleanup();
+        return;
+      }
+
+      if (dy > 5 || dx > 5) {
+        clearTimeout(drag.delayTimer);
+        startActualDrag();
+      }
+      return;
     }
-  }
 
-  function cancelPending() {
-    clearTimeout(drag.delayTimer);
-    drag.pending = false;
-    removePendingListeners();
-  }
-
-  function removePendingListeners() {
-    document.removeEventListener("touchmove", onTouchMoveCheck);
-    document.removeEventListener("touchend", cancelPending);
-    document.removeEventListener("touchcancel", cancelPending);
-    document.removeEventListener("mousemove", onMouseMoveCheck);
-    document.removeEventListener("mouseup", cancelPending);
-  }
-
-  // ========== ACTIVATE ==========
-  function activate() {
-    if (drag.active) return;
-    drag.pending = false;
-    drag.active = true;
-
-    // حذف listener های pending
-    removePendingListeners();
-
-    const { el, rect } = drag;
-
-    // CLONE
-    drag.clone = el.cloneNode(true);
-    drag.clone.classList.add("drag-clone");
-    drag.clone.style.cssText = `
-      position: fixed;
-      left: ${rect.left}px;
-      top: ${rect.top}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      z-index: 10000;
-      pointer-events: none;
-      opacity: 0.95;
-      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-      transform: scale(1.03);
-      border-radius: 8px;
-      background: var(--TransParent-bg, rgba(30,30,30,0.95));
-      backdrop-filter: blur(6px);
-      border: 2px solid var(--border, #444);
-    `;
-    document.body.appendChild(drag.clone);
-
-    // PLACEHOLDER
-    drag.placeholder = document.createElement("div");
-    drag.placeholder.className = "color-stop-placeholder";
-    drag.placeholder.style.height = el.offsetHeight + "px";
-
-    // مخفی کردن آیتم اصلی
-    el.classList.add("drag-original");
-    el.style.cssText = "opacity:0 !important; height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; pointer-events:none !important;";
-    
-    // placeholder را قبل از آیتم اصلی قرار بده
-    el.parentNode.insertBefore(drag.placeholder, el);
-
-    document.body.style.userSelect = "none";
-    document.body.style.overflow = "hidden";
-
-    // اضافه کردن listener های drag
-    document.addEventListener("touchmove", onDragMove, { passive: false });
-    document.addEventListener("touchend", onDragEnd);
-    document.addEventListener("touchcancel", onDragEnd);
-    document.addEventListener("mousemove", onMouseDragMove);
-    document.addEventListener("mouseup", onDragEnd);
-  }
-
-  // ========== MOVE ==========
-  function onDragMove(e) {
     if (!drag.active || !drag.clone) return;
     e.preventDefault();
-    
-    const touch = e.touches[0];
-    const y = touch.clientY - drag.offsetY;
-    drag.clone.style.top = y + "px";
-    updatePlaceholder(touch.clientY);
+
+    const now = Date.now();
+    if (now - drag.lastMoveTime < DRAG_CONFIG.throttleMs) return;
+    drag.lastMoveTime = now;
+
+    if (drag.rafId) {
+      cancelAnimationFrame(drag.rafId);
+    }
+
+    drag.rafId = requestAnimationFrame(() => {
+      if (!drag.clone) return;
+
+      const newTop = clientY - drag.offsetY;
+      drag.clone.style.transform = `translateY(${newTop - drag.initialRect.top}px) scale(1.03)`;
+
+      updatePlaceholderPosition(clientY);
+    });
   }
 
-  function onMouseDragMove(e) {
-    if (!drag.active || !drag.clone) return;
-    
-    const y = e.clientY - drag.offsetY;
-    drag.clone.style.top = y + "px";
-    updatePlaceholder(e.clientY);
-  }
-
-  function updatePlaceholder(clientY) {
+  // ========== UPDATE PLACEHOLDER (اصلاح شده) ==========
+  function updatePlaceholderPosition(clientY) {
     const list = drag.placeholder?.parentNode;
     if (!list) return;
 
-    // فقط آیتم‌های قابل مشاهده (بدون drag-original)
+    // فقط آیتم‌های قابل مشاهده (بدون drag-original و placeholder)
     const items = [...list.querySelectorAll(".color-stop-row.stop-item:not(.drag-original)")];
+    
+    if (items.length === 0) return;
 
-    for (const item of items) {
+    const placeholder = drag.placeholder;
+    let inserted = false;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       const rect = item.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
-      
+
       if (clientY < midY) {
-        list.insertBefore(drag.placeholder, item);
-        return;
+        // قبل از این آیتم قرار بده
+        if (placeholder.nextElementSibling !== item) {
+          list.insertBefore(placeholder, item);
+        }
+        inserted = true;
+        break;
       }
     }
-    
-    // اگر پایین‌تر از همه بود، به آخر اضافه کن
-    // placeholder را بعد از آخرین آیتم قرار بده
-    const lastItem = items[items.length - 1];
-    if (lastItem && lastItem.nextSibling !== drag.placeholder) {
-      list.insertBefore(drag.placeholder, lastItem.nextSibling);
+
+    // اگر پایین‌تر از همه آیتم‌ها بود، به آخر ببر
+    if (!inserted) {
+      // پیدا کردن آخرین آیتم واقعی (بدون drag-original)
+      const lastVisibleItem = items[items.length - 1];
+      
+      // placeholder را بعد از آخرین آیتم قابل مشاهده قرار بده
+      let insertPoint = lastVisibleItem.nextElementSibling;
+      
+      // از روی drag-original رد شو
+      while (insertPoint && insertPoint === drag.element) {
+        insertPoint = insertPoint.nextElementSibling;
+      }
+      
+      if (insertPoint) {
+        if (insertPoint !== placeholder) {
+          list.insertBefore(placeholder, insertPoint);
+        }
+      } else {
+        // واقعاً آخر لیست
+        if (list.lastElementChild !== placeholder) {
+          list.appendChild(placeholder);
+        }
+      }
     }
   }
 
-  // ========== END ==========
-  function onDragEnd() {
+  // ========== START ACTUAL DRAG ==========
+  function startActualDrag() {
+    if (drag.active || !drag.element) return;
+
+    const row = drag.element;
+    const rect = drag.initialRect;
+
+    drag.pending = false;
+    drag.active = true;
+
+    drag.clone = row.cloneNode(true);
+    drag.clone.classList.add("drag-clone");
+    Object.assign(drag.clone.style, {
+      position: "fixed",
+      left: rect.left + "px",
+      top: rect.top + "px",
+      width: rect.width + "px",
+      height: rect.height + "px",
+      zIndex: "10000",
+      pointerEvents: "none",
+      opacity: "0.95",
+      boxShadow: "0 15px 50px rgba(0,0,0,0.5)",
+      borderRadius: "8px",
+      background: "var(--TransParent-bg, rgba(30,30,30,0.95))",
+      backdropFilter: "blur(6px)",
+      border: "2px solid var(--border, #444)",
+      willChange: "transform",
+      transform: "scale(1.03)",
+    });
+    document.body.appendChild(drag.clone);
+
+    drag.placeholder = document.createElement("div");
+    drag.placeholder.className = "color-stop-placeholder";
+    Object.assign(drag.placeholder.style, {
+      height: rect.height + "px",
+      margin: "4px 0",
+      border: "2px dashed var(--border, #444)",
+      borderRadius: "8px",
+      background: "var(--accent)",
+      transition: "height 0.15s ease",
+      opacity: "0.3",
+    });
+
+    row.classList.add("drag-original");
+    Object.assign(row.style, {
+      opacity: "0",
+      height: "0",
+      margin: "0",
+      padding: "0",
+      overflow: "hidden",
+      pointerEvents: "none",
+    });
+
+    // placeholder را دقیقاً جای آیتم اصلی قرار بده
+    row.parentNode.insertBefore(drag.placeholder, row);
+
+    Object.assign(document.body.style, {
+      userSelect: "none",
+      cursor: "grabbing",
+      overflow: "hidden",
+      touchAction: "none",
+    });
+
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
+
+  // ========== ON END ==========
+  function onEnd() {
+    clearTimeout(drag.delayTimer);
+    if (drag.rafId) cancelAnimationFrame(drag.rafId);
+
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onEnd);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", onEnd);
+    document.removeEventListener("touchcancel", onEnd);
+
     if (!drag.active) {
-      cancelPending();
+      cleanup();
       return;
     }
-    finalize();
+
+    if (drag.clone && drag.placeholder) {
+      const placeholderRect = drag.placeholder.getBoundingClientRect();
+
+      Object.assign(drag.clone.style, {
+        transition: "all 0.2s ease-out",
+        transform: "scale(1)",
+        top: placeholderRect.top + "px",
+        left: placeholderRect.left + "px",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
+      });
+
+      setTimeout(finalizeDrag, 200);
+    } else {
+      finalizeDrag();
+    }
   }
 
-  function finalize() {
+  // ========== FINALIZE (اصلاح شده) ==========
+  function finalizeDrag() {
     const list = drag.placeholder?.parentNode;
-    
-    if (list) {
-      // محاسبه ایندکس جدید: شمارش موقعیت placeholder بین آیتم‌های قابل مشاهده
-      const visibleItems = [...list.querySelectorAll(".color-stop-row.stop-item:not(.drag-original)")];
+
+    if (list && drag.element) {
+      // روش ساده و مطمئن: شمارش آیتم‌های قبل از placeholder
+      const allChildren = [...list.children];
       let toIndex = 0;
-      
-      for (let i = 0; i < visibleItems.length; i++) {
-        const item = visibleItems[i];
-        // اگر placeholder قبل از این آیتم است
-        if (drag.placeholder.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING) {
-          toIndex = i;
-          break;
+
+      for (const child of allChildren) {
+        // وقتی به placeholder رسیدیم، متوقف شو
+        if (child === drag.placeholder) break;
+        
+        // drag-original را نشمار
+        if (child === drag.element) continue;
+        
+        // فقط آیتم‌های واقعی را بشمار
+        if (child.classList.contains("stop-item")) {
+          toIndex++;
         }
-        toIndex = i + 1;
       }
+
+      console.log(`Moving from ${drag.fromIndex} to ${toIndex}`);
 
       const stop = getStop(drag.stopId);
       if (stop && stop.stops && toIndex !== drag.fromIndex) {
@@ -6841,240 +7009,57 @@ function renderInspector() {
       }
     }
 
+    const wasActive = drag.active;
     cleanup();
-    renderInspector();
-    refresh();
+
+    if (wasActive) {
+      renderInspector();
+      refresh();
+    }
   }
 
+  // ========== CLEANUP ==========
   function cleanup() {
-    // حذف المان‌های موقت
-    if (drag.clone) {
-      drag.clone.remove();
-    }
-    if (drag.placeholder) {
-      drag.placeholder.remove();
-    }
+    drag.clone?.remove();
+    drag.placeholder?.remove();
 
-    // برگرداندن آیتم اصلی
-    if (drag.el) {
-      drag.el.style.cssText = "";
-      drag.el.classList.remove("drag-original");
+    if (drag.element) {
+      drag.element.classList.remove("drag-original");
+      drag.element.style.cssText = "";
     }
 
-    // برگرداندن استایل body
-    document.body.style.userSelect = "";
-    document.body.style.overflow = "";
+    Object.assign(document.body.style, {
+      overflow: "",
+      touchAction: "",
+      userSelect: "",
+      cursor: "",
+    });
 
-    // حذف همه listener ها
-    removePendingListeners();
-    document.removeEventListener("touchmove", onDragMove);
-    document.removeEventListener("touchend", onDragEnd);
-    document.removeEventListener("touchcancel", onDragEnd);
-    document.removeEventListener("mousemove", onMouseDragMove);
-    document.removeEventListener("mouseup", onDragEnd);
-
-    // ریست کردن state
     Object.assign(drag, {
       active: false,
       pending: false,
-      el: null,
+      element: null,
       clone: null,
       placeholder: null,
       stopId: null,
       fromIndex: null,
-      rect: null,
+      delayTimer: null,
+      initialRect: null,
+      scrollCancelled: false,
+      rafId: null,
+      lastMoveTime: 0,
     });
   }
 
+  // ========== HELPER ==========
   function isValidTarget(target) {
-    // فقط با drag-handle کار کند
-    if (target.closest("input, button, .color-swatch")) return false;
+    if (target.closest("input, button, .color-swatch, select")) return false;
     return !!target.closest(".drag-handle");
   }
 
-  // Export
   window.initColorStopDrag = initColorStopDrag;
 })();
 
-// ========== تابع تنظیم Blend Mode ==========
-function setStopBlendMode(stopId, mode) {
-  const s = getStop(stopId);
-  if (s) {
-    s.blendMode = mode;
-    liveUpdate(stopId);
-  }
-}
-window.setStopBlendMode = setStopBlendMode;
-
-// ========== به‌روزرسانی onPointerMove برای canvas drag ==========
-function onPointerMove(e) {
-  if (!drag) return;
-  e.preventDefault();
-
-  const pos = getEventPos(e);
-  const mx = pos.x;
-  const my = pos.y;
-  const cx = drag.s.x * W;
-  const cy = drag.s.y * H;
-
-  switch (drag.t) {
-    case "move":
-      drag.s.x = clamp(mx / W, 0, 1);
-      if (!state.lockVertical) {
-        drag.s.y = clamp(my / H, 0, 1);
-      }
-      break;
-
-    case "cs":
-      const { x1, y1, x2, y2 } = drag;
-      const dx = x2 - x1, dy = y2 - y1;
-      const len2 = dx * dx + dy * dy;
-      const t = clamp(((mx - x1) * dx + (my - y1) * dy) / len2, 0, 1);
-      drag.s.stops[drag.i].pos = Math.round(t * 100);
-      break;
-
-    case "angle":
-      let newAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
-      if (newAngle < 0) newAngle += 360;
-      drag.s.angle = Math.round(newAngle) % 360;
-      break;
-
-    case "conic-angle":
-      let conicAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
-      if (conicAngle < 0) conicAngle += 360;
-      drag.s.startAngle = Math.round(conicAngle) % 360;
-      break;
-
-    case "conic-cs":
-      const startAngleRad = ((drag.s.startAngle - 90) * Math.PI) / 180;
-      let relAngle = Math.atan2(my - cy, mx - cx) - startAngleRad;
-      if (relAngle < 0) relAngle += Math.PI * 2;
-      drag.s.stops[drag.i].pos = clamp(Math.round((relAngle / (Math.PI * 2)) * 100), 0, 100);
-      break;
-  }
-
-  throttledDraw();
-  updateStopItem(drag.s.id);
-}
-
-// ========== به‌روزرسانی angle drag ==========
-function handleAngleMove(e) {
-  if (!activeAnglePicker) return;
-  e.preventDefault();
-
-  const stopId = activeAnglePicker;
-  const handle = document.getElementById(`angleHandle_${stopId}`);
-  const pickerEl = handle?.closest(".angle-picker");
-  if (!pickerEl) return;
-
-  const rect = pickerEl.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
-
-  let clientX, clientY;
-  if (e.touches && e.touches.length > 0) {
-    clientX = e.touches[0].clientX;
-    clientY = e.touches[0].clientY;
-  } else {
-    clientX = e.clientX;
-    clientY = e.clientY;
-  }
-
-  let angle = Math.atan2(clientX - centerX, centerY - clientY) * (180 / Math.PI);
-  angle = Math.round((angle + 360) % 360);
-
-  const stop = getStop(stopId);
-  if (stop) {
-    stop.angle = angle;
-    handle.style.transform = `rotate(${angle}deg)`;
-    document.getElementById(`angleCenter_${stopId}`).textContent = `${angle}°`;
-    document.getElementById(`angleNum_${stopId}`).value = angle;
-    
-    draw();
-    updateCSS();
-    updateStopItem(stopId);
-  }
-}
-
-// ==========conic angle drag ==========
-function startConicAngleDrag(e, id) {
-  e.preventDefault();
-
-  function move(ev) {
-    ev.preventDefault();
-    const center = document.querySelector(`#conicAngleCenter_${id}`);
-    const handle = document.querySelector(`#conicAngleHandle_${id}`);
-    if (!center || !handle) return;
-
-    const rect = center.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-
-    let clientX, clientY;
-    if (ev.touches && ev.touches.length > 0) {
-      clientX = ev.touches[0].clientX;
-      clientY = ev.touches[0].clientY;
-    } else {
-      clientX = ev.clientX;
-      clientY = ev.clientY;
-    }
-
-    let ang = (Math.atan2(clientY - cy, clientX - cx) * 180) / Math.PI;
-    ang = (ang + 360) % 360;
-
-    const stop = getStop(id);
-    if (stop) {
-      stop.startAngle = Math.round(ang);
-      handle.style.transform = `rotate(${ang}deg)`;
-      center.textContent = stop.startAngle + "°";
-      document.getElementById(`conicAngleNum_${id}`).value = stop.startAngle;
-      
-      draw();
-      updateCSS();
-      updateStopItem(id);
-    }
-  }
-
-  function up() {
-    document.removeEventListener("mousemove", move);
-    document.removeEventListener("mouseup", up);
-    document.removeEventListener("touchmove", move);
-    document.removeEventListener("touchend", up);
-  }
-
-  document.addEventListener("mousemove", move);
-  document.addEventListener("mouseup", up);
-  document.addEventListener("touchmove", move, { passive: false });
-  document.addEventListener("touchend", up);
-}
-
-// ========== picker callback ==========
-function openStopColorPicker(stopId, isColorStop = false, colorStopIndex = 0) {
-  const s = getStop(stopId);
-  if (!s) return;
-
-  if (isColorStop) {
-    const cs = s.stops[colorStopIndex];
-    if (!cs) return;
-    openPicker(cs.color, cs.opacity, (c, a) => {
-      const stop = getStop(stopId);
-      if (stop && stop.stops[colorStopIndex]) {
-        stop.stops[colorStopIndex].color = c;
-        stop.stops[colorStopIndex].opacity = a;
-        liveUpdate(stopId);
-      }
-    });
-  } else {
-    openPicker(s.color, s.opacity, (c, a) => {
-      const stop = getStop(stopId);
-      if (stop) {
-        stop.color = c;
-        stop.opacity = a;
-        liveUpdate(stopId);
-      }
-    });
-  }
-}
 window.liveUpdate = liveUpdate;
 window.updateStopItem = updateStopItem;
 window.updateAllStopItems = updateAllStopItems;
