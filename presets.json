@@ -1,0 +1,562 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "sunset",
+      "name": "Sunset",
+      "category": "warm",
+      "tags": ["warm", "orange", "popular"],
+      "data": {
+        "bgColor": "#1a0a1e",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Sun",
+            "type": "radial",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.7,
+            "color": "#ff6b35",
+            "size": 300,
+            "feather": 80,
+            "opacity": 100,
+            "blendMode": "screen"
+          },
+          {
+            "name": "Glow",
+            "type": "radial",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "color": "#ff9f1c",
+            "size": 400,
+            "feather": 90,
+            "opacity": 60,
+            "blendMode": "screen"
+          },
+          {
+            "name": "Sky",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 180,
+            "blendMode": "multiply",
+            "stops": [
+              { "pos": 0, "color": "#2d1b69", "opacity": 100 },
+              { "pos": 50, "color": "#ff6b6b", "opacity": 80 },
+              { "pos": 100, "color": "#ffd93d", "opacity": 60 }
+            ]
+          }
+        ],
+        "filterState": {
+          "enabled": true,
+          "brightness": 100,
+          "contrast": 100,
+          "saturate": 100,
+          "hue": 0,
+          "blur": 0,
+          "grayscale": 0,
+          "sepia": 0,
+          "invert": 0
+        },
+        "noiseState": {
+          "enabled": false,
+          "opacity": 0,
+          "frequency": 0.65,
+          "blend": "overlay"
+        }
+      }
+    },
+    {
+      "id": "ocean",
+      "name": "Ocean Deep",
+      "category": "cool",
+      "tags": ["cool", "blue", "calm"],
+      "data": {
+        "bgColor": "#001220",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Deep",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 180,
+            "blendMode": "normal",
+            "stops": [
+              { "pos": 0, "color": "#001830", "opacity": 100 },
+              { "pos": 100, "color": "#006994", "opacity": 100 }
+            ]
+          },
+          {
+            "name": "Light",
+            "type": "radial",
+            "visible": true,
+            "x": 0.3,
+            "y": 0.2,
+            "color": "#00d4ff",
+            "size": 350,
+            "feather": 85,
+            "opacity": 50,
+            "blendMode": "screen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "aurora",
+      "name": "Aurora",
+      "category": "nature",
+      "tags": ["nature", "colorful", "popular"],
+      "data": {
+        "bgColor": "#0a0a1a",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Aurora",
+            "type": "conic",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "startAngle": 0,
+            "blendMode": "screen",
+            "stops": [
+              { "pos": 0, "color": "#00ff87", "opacity": 60 },
+              { "pos": 25, "color": "#60efff", "opacity": 50 },
+              { "pos": 50, "color": "#ff00ea", "opacity": 40 },
+              { "pos": 75, "color": "#60efff", "opacity": 50 },
+              { "pos": 100, "color": "#00ff87", "opacity": 60 }
+            ]
+          },
+          {
+            "name": "Glow",
+            "type": "radial",
+            "visible": true,
+            "x": 0.3,
+            "y": 0.4,
+            "color": "#00ff87",
+            "size": 300,
+            "feather": 85,
+            "opacity": 50,
+            "blendMode": "screen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "galaxy",
+      "name": "Galaxy",
+      "category": "space",
+      "tags": ["space", "purple", "popular"],
+      "data": {
+        "bgColor": "#0a0015",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Nebula",
+            "type": "conic",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "startAngle": 45,
+            "blendMode": "screen",
+            "stops": [
+              { "pos": 0, "color": "#667eea", "opacity": 70 },
+              { "pos": 33, "color": "#764ba2", "opacity": 60 },
+              { "pos": 66, "color": "#f093fb", "opacity": 50 },
+              { "pos": 100, "color": "#667eea", "opacity": 70 }
+            ]
+          },
+          {
+            "name": "Star",
+            "type": "radial",
+            "visible": true,
+            "x": 0.3,
+            "y": 0.3,
+            "color": "#ffffff",
+            "size": 50,
+            "feather": 60,
+            "opacity": 80,
+            "blendMode": "screen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "neon",
+      "name": "Neon",
+      "category": "cyber",
+      "tags": ["cyber", "bright", "popular"],
+      "data": {
+        "bgColor": "#0a0a14",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Pink",
+            "type": "radial",
+            "visible": true,
+            "x": 0.2,
+            "y": 0.3,
+            "color": "#ff0080",
+            "size": 350,
+            "feather": 75,
+            "opacity": 80,
+            "blendMode": "screen"
+          },
+          {
+            "name": "Cyan",
+            "type": "radial",
+            "visible": true,
+            "x": 0.8,
+            "y": 0.7,
+            "color": "#00ffff",
+            "size": 320,
+            "feather": 75,
+            "opacity": 80,
+            "blendMode": "screen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fire",
+      "name": "Fire",
+      "category": "warm",
+      "tags": ["warm", "red", "intense"],
+      "data": {
+        "bgColor": "#0d0000",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Core",
+            "type": "radial",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.8,
+            "color": "#fff200",
+            "size": 150,
+            "feather": 50,
+            "opacity": 100,
+            "blendMode": "screen"
+          },
+          {
+            "name": "Flame",
+            "type": "radial",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.6,
+            "color": "#ff6600",
+            "size": 300,
+            "feather": 70,
+            "opacity": 90,
+            "blendMode": "screen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mesh",
+      "name": "Mesh",
+      "category": "modern",
+      "tags": ["modern", "colorful", "popular"],
+      "data": {
+        "bgColor": "#fef9ef",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Blob 1",
+            "type": "radial",
+            "visible": true,
+            "x": 0.1,
+            "y": 0.1,
+            "color": "#ff9a9e",
+            "size": 400,
+            "feather": 90,
+            "opacity": 70,
+            "blendMode": "normal"
+          },
+          {
+            "name": "Blob 2",
+            "type": "radial",
+            "visible": true,
+            "x": 0.9,
+            "y": 0.2,
+            "color": "#a18cd1",
+            "size": 350,
+            "feather": 90,
+            "opacity": 60,
+            "blendMode": "normal"
+          },
+          {
+            "name": "Blob 3",
+            "type": "radial",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.8,
+            "color": "#fbc2eb",
+            "size": 450,
+            "feather": 90,
+            "opacity": 65,
+            "blendMode": "normal"
+          }
+        ]
+      }
+    },
+    {
+      "id": "midnight",
+      "name": "Midnight",
+      "category": "dark",
+      "tags": ["dark", "blue", "elegant"],
+      "data": {
+        "bgColor": "#0f0c29",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Gradient",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 135,
+            "blendMode": "normal",
+            "stops": [
+              { "pos": 0, "color": "#302b63", "opacity": 100 },
+              { "pos": 50, "color": "#24243e", "opacity": 100 },
+              { "pos": 100, "color": "#0f0c29", "opacity": 100 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "rainbow",
+      "name": "Rainbow",
+      "category": "colorful",
+      "tags": ["colorful", "fun", "bright"],
+      "data": {
+        "bgColor": "#1a1a2e",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Rainbow",
+            "type": "conic",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "startAngle": 0,
+            "blendMode": "screen",
+            "stops": [
+              { "pos": 0, "color": "#ff0000", "opacity": 100 },
+              { "pos": 17, "color": "#ff8000", "opacity": 100 },
+              { "pos": 33, "color": "#ffff00", "opacity": 100 },
+              { "pos": 50, "color": "#00ff00", "opacity": 100 },
+              { "pos": 67, "color": "#0080ff", "opacity": 100 },
+              { "pos": 83, "color": "#8000ff", "opacity": 100 },
+              { "pos": 100, "color": "#ff0000", "opacity": 100 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "synthwave",
+      "name": "Synthwave",
+      "category": "cyber",
+      "tags": ["cyber", "retro", "80s"],
+      "data": {
+        "bgColor": "#0f0024",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Sun",
+            "type": "radial",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.8,
+            "color": "#ff2a6d",
+            "size": 300,
+            "feather": 70,
+            "opacity": 100,
+            "blendMode": "screen"
+          },
+          {
+            "name": "Sky",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 180,
+            "blendMode": "multiply",
+            "stops": [
+              { "pos": 0, "color": "#1a0033", "opacity": 100 },
+              { "pos": 60, "color": "#4a0072", "opacity": 80 },
+              { "pos": 100, "color": "#ff2a6d", "opacity": 60 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "forest",
+      "name": "Forest",
+      "category": "nature",
+      "tags": ["nature", "green", "calm"],
+      "data": {
+        "bgColor": "#0a1a0a",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Canopy",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 180,
+            "blendMode": "normal",
+            "stops": [
+              { "pos": 0, "color": "#134e5e", "opacity": 100 },
+              { "pos": 100, "color": "#71b280", "opacity": 100 }
+            ]
+          },
+          {
+            "name": "Light",
+            "type": "radial",
+            "visible": true,
+            "x": 0.7,
+            "y": 0.1,
+            "color": "#ffd93d",
+            "size": 400,
+            "feather": 90,
+            "opacity": 30,
+            "blendMode": "overlay"
+          }
+        ]
+      }
+    },
+    {
+      "id": "test",
+      "name": "test",
+      "category": "nature",
+      "tags": ["nature", "green", "calm"],
+      "data": {
+        "bgColor": "#0a1a0a",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Deep",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 210,
+            "blendMode": "normal",
+            "stops": [
+              {
+                "pos": 0,
+                "color": "#001830",
+                "opacity": 100
+              },
+              {
+                "pos": 100,
+                "color": "#006994",
+                "opacity": 100
+              }
+            ],
+            "id": "rhvduy"
+          },
+          {
+            "name": "Light",
+            "type": "radial",
+            "visible": true,
+            "x": 0.3,
+            "y": 0.2,
+            "color": "#00d4ff",
+            "size": 350,
+            "feather": 85,
+            "opacity": 50,
+            "blendMode": "screen",
+            "id": "3bvyy6"
+          }
+        ]
+      }
+    },
+    {
+      "id": "minimal",
+      "name": "Minimal",
+      "category": "minimal",
+      "tags": ["minimal", "clean", "dark"],
+      "data": {
+        "bgColor": "#0a0a0f",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Glow",
+            "type": "radial",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "color": "#1a1a2e",
+            "size": 500,
+            "feather": 95,
+            "opacity": 100,
+            "blendMode": "screen"
+          }
+        ]
+      }
+    }
+  ]
+}

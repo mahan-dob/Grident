@@ -27,6 +27,8 @@ const CONFIG = {
   },
 };
 
+const STORAGE_KEY = 'gradient-designer-state-v1';
+
 // ========== DOM ELEMENTS ==========
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -408,6 +410,550 @@ function lighten(hex, amount = 20) {
     b.toString(16).padStart(2, "0")
   );
 }
+
+
+// ========== UNDO/REDO SYSTEM ==========
+const History = {
+  undoStack: [],
+  redoStack: [],
+  maxSize: 50,
+  isRestoring: false,
+  lastSnapshot: null,
+  inputSnapshot: null,  // برای input ها
+  dragSnapshot: null,   // برای drag
+  
+  createSnapshot() {
+    return JSON.stringify({
+      stops: state.stops,
+      selected: state.selected,
+      bgColor: state.bgColor,
+      bgAlpha: state.bgAlpha,
+      bgBlendMode: state.bgBlendMode,
+      bgEnabled: state.bgEnabled,
+      canvasWidth: state.canvasWidth,
+      canvasHeight: state.canvasHeight,
+      lockVertical: state.lockVertical,
+      showHandles: state.showHandles,
+      filterState: { ...filterState },
+      noiseState: { ...noiseState },
+      counter: counter,
+    });
+  },
+  
+  restoreSnapshot(snapshot) {
+    if (!snapshot) return false;
+    try {
+      const data = JSON.parse(snapshot);
+      state.stops = data.stops || [];
+      state.selected = data.selected;
+      state.bgColor = data.bgColor || "#0a0e14";
+      state.bgAlpha = data.bgAlpha ?? 100;
+      state.bgBlendMode = data.bgBlendMode || 'normal';
+      state.bgEnabled = data.bgEnabled ?? true;
+      state.canvasWidth = data.canvasWidth || 800;
+      state.canvasHeight = data.canvasHeight || 600;
+      state.lockVertical = data.lockVertical ?? false;
+      state.showHandles = data.showHandles ?? true;
+      if (data.filterState) Object.assign(filterState, data.filterState);
+      if (data.noiseState) Object.assign(noiseState, data.noiseState);
+      if (data.counter !== undefined) counter = data.counter;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+  
+  // ✅ وقتی focus میشه - ذخیره snapshot
+  onInputFocus() {
+    if (this.isRestoring) return;
+    if (!this.inputSnapshot) {
+      this.inputSnapshot = this.createSnapshot();
+    }
+  },
+  
+  // ✅ وقتی blur میشه - ذخیره تغییرات
+  onInputBlur() {
+    if (this.isRestoring) return;
+    if (!this.inputSnapshot) return;
+    
+    const current = this.createSnapshot();
+    
+    if (current !== this.inputSnapshot) {
+      this.undoStack.push({ snapshot: this.inputSnapshot });
+      if (this.undoStack.length > this.maxSize) this.undoStack.shift();
+      this.redoStack = [];
+      this.lastSnapshot = current;
+      this.updateUI();
+    }
+    
+    this.inputSnapshot = null;
+  },
+  
+  // ✅ شروع drag
+  onDragStart() {
+    if (this.isRestoring) return;
+    if (!this.dragSnapshot) {
+      this.dragSnapshot = this.createSnapshot();
+    }
+  },
+  
+  // ✅ پایان drag
+  onDragEnd() {
+    if (this.isRestoring) return;
+    if (!this.dragSnapshot) return;
+    
+    const current = this.createSnapshot();
+    
+    if (current !== this.dragSnapshot) {
+      this.undoStack.push({ snapshot: this.dragSnapshot });
+      if (this.undoStack.length > this.maxSize) this.undoStack.shift();
+      this.redoStack = [];
+      this.lastSnapshot = current;
+      this.updateUI();
+    }
+    
+    this.dragSnapshot = null;
+  },
+  
+  // ✅ ذخیره فوری (برای دکمه‌ها)
+  saveState() {
+    if (this.isRestoring) return;
+    
+    const snapshot = this.createSnapshot();
+    if (snapshot === this.lastSnapshot) return;
+    
+    this.undoStack.push({ snapshot });
+    if (this.undoStack.length > this.maxSize) this.undoStack.shift();
+    this.redoStack = [];
+    this.lastSnapshot = snapshot;
+    this.inputSnapshot = null;
+    this.dragSnapshot = null;
+    this.updateUI();
+  },
+  
+  undo() {
+    if (this.undoStack.length === 0) return false;
+    
+    // لغو هر pending
+    this.inputSnapshot = null;
+    this.dragSnapshot = null;
+    
+    const current = this.createSnapshot();
+    this.redoStack.push({ snapshot: current });
+    
+    const prev = this.undoStack.pop();
+    
+    this.isRestoring = true;
+    if (this.restoreSnapshot(prev.snapshot)) {
+      this.lastSnapshot = prev.snapshot;
+      this.refreshUI();
+      this.showIndicator('undo');
+    }
+    this.isRestoring = false;
+    this.updateUI();
+    return true;
+  },
+  
+  redo() {
+    if (this.redoStack.length === 0) return false;
+    
+    const current = this.createSnapshot();
+    this.undoStack.push({ snapshot: current });
+    
+    const next = this.redoStack.pop();
+    
+    this.isRestoring = true;
+    if (this.restoreSnapshot(next.snapshot)) {
+      this.lastSnapshot = next.snapshot;
+      this.refreshUI();
+      this.showIndicator('redo');
+    }
+    this.isRestoring = false;
+    this.updateUI();
+    return true;
+  },
+  
+  clear() {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.lastSnapshot = this.createSnapshot();
+    this.inputSnapshot = null;
+    this.dragSnapshot = null;
+    this.updateUI();
+  },
+  
+  updateUI() {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    if (undoBtn) undoBtn.disabled = this.undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = this.redoStack.length === 0;
+  },
+  
+  refreshUI() {
+    resize();
+    draw();
+    renderList();
+    renderInspector();
+    updateCSS();
+    updateBgPreview();
+    if (typeof updateFilterUI === 'function') updateFilterUI();
+    if (typeof updateNoiseUI === 'function') updateNoiseUI();
+    if (typeof updateBgUI === 'function') updateBgUI();
+    if (typeof applyNoiseFilter === 'function') applyNoiseFilter();
+    if (typeof updateAllDimensionUI === 'function') updateAllDimensionUI();
+  },
+  
+  showIndicator(type) {
+    let el = document.getElementById('historyIndicator');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'historyIndicator';
+      document.body.appendChild(el);
+    }
+    
+    el.textContent = type === 'undo' ? '↶ Undo' : '↷ Redo';
+    el.className = `history-indicator ${type} show`;
+    
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => el.classList.remove('show'), 800);
+  },
+  
+  init() {
+    this.lastSnapshot = this.createSnapshot();
+    this.setupGlobalListeners();
+    this.overrideFunctions();
+    this.updateUI();
+  },
+  
+  setupGlobalListeners() {
+    // Canvas drag
+    if (typeof canvas !== 'undefined' && canvas) {
+      canvas.addEventListener('mousedown', () => this.onDragStart());
+      canvas.addEventListener('touchstart', () => this.onDragStart(), { passive: true });
+    }
+    
+    document.addEventListener('mouseup', () => {
+      if (this.dragSnapshot) {
+        setTimeout(() => this.onDragEnd(), 50);
+      }
+    });
+    
+    document.addEventListener('touchend', () => {
+      if (this.dragSnapshot) {
+        setTimeout(() => this.onDragEnd(), 50);
+      }
+    });
+  },
+  
+  overrideFunctions() {
+    const self = this;
+    
+    // addStop
+    if (typeof window.addStop === 'function') {
+      const orig = window.addStop;
+      window.addStop = function(type) { self.saveState(); orig(type); };
+    }
+    
+    // delStop
+    if (typeof window.delStop === 'function') {
+      const orig = window.delStop;
+      window.delStop = function(id) { self.saveState(); orig(id); };
+    }
+    
+    // dupStop
+    if (typeof window.dupStop === 'function') {
+      const orig = window.dupStop;
+      window.dupStop = function(id) { self.saveState(); orig(id); };
+    }
+    
+    // toggleVis
+    if (typeof window.toggleVis === 'function') {
+      const orig = window.toggleVis;
+      window.toggleVis = function(id) { self.saveState(); orig(id); };
+    }
+    
+    // addColorStop
+    if (typeof window.addColorStop === 'function') {
+      const orig = window.addColorStop;
+      window.addColorStop = function(s) { self.saveState(); orig(s); };
+    }
+    
+    // delColorStop
+    if (typeof window.delColorStop === 'function') {
+      const orig = window.delColorStop;
+      window.delColorStop = function(s, i) { self.saveState(); orig(s, i); };
+    }
+    
+    // swapDimensions
+    if (typeof window.swapDimensions === 'function') {
+      const orig = window.swapDimensions;
+      window.swapDimensions = function() { self.saveState(); orig(); };
+    }
+    
+    // toggleAspectLock
+    if (typeof window.toggleAspectLock === 'function') {
+      const orig = window.toggleAspectLock;
+      window.toggleAspectLock = function() { self.saveState(); orig(); };
+    }
+    
+    // setResolution
+    if (typeof window.setResolution === 'function') {
+      const orig = window.setResolution;
+      window.setResolution = function(w, h) { self.saveState(); orig(w, h); };
+    }
+    
+    // setAspectRatio
+    if (typeof window.setAspectRatio === 'function') {
+      const orig = window.setAspectRatio;
+      window.setAspectRatio = function(r) { self.saveState(); orig(r); };
+    }
+    
+    // resetFilters
+    if (typeof window.resetFilters === 'function') {
+      const orig = window.resetFilters;
+      window.resetFilters = function() { self.saveState(); orig(); };
+    }
+    
+    // toggleFilters
+    if (typeof window.toggleFilters === 'function') {
+      const orig = window.toggleFilters;
+      window.toggleFilters = function() { self.saveState(); orig(); };
+    }
+    
+    // toggleNoise
+    if (typeof window.toggleNoise === 'function') {
+      const orig = window.toggleNoise;
+      window.toggleNoise = function() { self.saveState(); orig(); };
+    }
+    
+    // toggleBackground
+    if (typeof window.toggleBackground === 'function') {
+      const orig = window.toggleBackground;
+      window.toggleBackground = function() { self.saveState(); orig(); };
+    }
+    
+    // handleLockClick
+    if (typeof window.handleLockClick === 'function') {
+      const orig = window.handleLockClick;
+      window.handleLockClick = function(e) { self.saveState(); orig(e); };
+    }
+    
+    // handleToggleClick
+    if (typeof window.handleToggleClick === 'function') {
+      const orig = window.handleToggleClick;
+      window.handleToggleClick = function(e) { self.saveState(); orig(e); };
+    }
+    
+    // openPicker
+    if (typeof window.openPicker === 'function') {
+      const orig = window.openPicker;
+      window.openPicker = function(hex, opacity, cb) {
+        self.onDragStart();
+        orig(hex, opacity, cb);
+      };
+    }
+    
+    // closePicker
+    if (typeof window.closePicker === 'function') {
+      const orig = window.closePicker;
+      window.closePicker = function() {
+        orig();
+        setTimeout(() => self.onDragEnd(), 50);
+      };
+    }
+    
+    // openStopColorPicker
+    if (typeof window.openStopColorPicker === 'function') {
+      const orig = window.openStopColorPicker;
+      window.openStopColorPicker = function(a, b, c) {
+        self.onDragStart();
+        orig(a, b, c);
+      };
+    }
+    
+    // setStopBlendMode
+    if (typeof window.setStopBlendMode === 'function') {
+      const orig = window.setStopBlendMode;
+      window.setStopBlendMode = function(id, mode) { self.saveState(); orig(id, mode); };
+    }
+    
+    // setBgBlendMode
+    if (typeof window.setBgBlendMode === 'function') {
+      const orig = window.setBgBlendMode;
+      window.setBgBlendMode = function(mode) { self.saveState(); orig(mode); };
+    }
+    
+    // startAngleDrag
+    if (typeof window.startAngleDrag === 'function') {
+      const orig = window.startAngleDrag;
+      window.startAngleDrag = function(e, id) {
+        self.onDragStart();
+        orig(e, id);
+      };
+    }
+    
+    // startConicAngleDrag
+    if (typeof window.startConicAngleDrag === 'function') {
+      const orig = window.startConicAngleDrag;
+      window.startConicAngleDrag = function(e, id) {
+        self.onDragStart();
+        orig(e, id);
+      };
+    }
+    
+    // stopAngleDrag
+    if (typeof window.stopAngleDrag === 'function') {
+      const orig = window.stopAngleDrag;
+      window.stopAngleDrag = function() {
+        orig();
+        setTimeout(() => self.onDragEnd(), 50);
+      };
+    }
+  }
+};
+
+// ========== HELPER FUNCTIONS برای Inspector ==========
+// این توابع با onfocus و onblur کار می‌کنن
+
+function HF() { History.onInputFocus(); }  // History Focus
+function HB() { History.onInputBlur(); }   // History Blur
+
+window.HF = HF;
+window.HB = HB;
+
+// ========== FILE MANAGER ==========
+const FileManager = {
+  getState() {
+    return {
+      version: 1,
+      timestamp: Date.now(),
+      stops: state.stops,
+      selected: state.selected,
+      bgColor: state.bgColor,
+      bgAlpha: state.bgAlpha,
+      bgBlendMode: state.bgBlendMode,
+      bgEnabled: state.bgEnabled,
+      cssFormat: state.cssFormat,
+      canvasWidth: state.canvasWidth,
+      canvasHeight: state.canvasHeight,
+      lockVertical: state.lockVertical,
+      showHandles: state.showHandles,
+      filterState: { ...filterState },
+      noiseState: { ...noiseState },
+      dimensionState: { ...dimensionState },
+      counter: counter,
+    };
+  },
+  
+  setState(data) {
+    if (!data) return false;
+    try {
+      if (data.stops) state.stops = data.stops.map(s => ({ ...s, id: s.id || uid() }));
+      state.selected = data.selected || null;
+      state.bgColor = data.bgColor || "#0a0e14";
+      state.bgAlpha = data.bgAlpha ?? 100;
+      state.bgBlendMode = data.bgBlendMode || 'normal';
+      state.bgEnabled = data.bgEnabled ?? true;
+      state.cssFormat = data.cssFormat || 'rgba';
+      state.canvasWidth = data.canvasWidth || 800;
+      state.canvasHeight = data.canvasHeight || 600;
+      state.lockVertical = data.lockVertical ?? false;
+      state.showHandles = data.showHandles ?? true;
+      if (data.filterState) Object.assign(filterState, data.filterState);
+      if (data.noiseState) Object.assign(noiseState, data.noiseState);
+      if (data.dimensionState) Object.assign(dimensionState, data.dimensionState);
+      if (data.counter !== undefined) counter = data.counter;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+  
+  exportJSON() {
+    const data = this.getState();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `gradient-${data.canvasWidth}x${data.canvasHeight}.json`;
+    a.click();
+  },
+  
+  importJSON() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const data = JSON.parse(await file.text());
+        History.saveState();
+        if (this.setState(data)) {
+          counter = state.stops.length;
+          this.refreshAll();
+          History.clear();
+        }
+      } catch (err) {}
+    };
+    input.click();
+  },
+  
+  loadPresetFromSession() {
+    const json = sessionStorage.getItem('loadPreset');
+    if (!json) return;
+    sessionStorage.removeItem('loadPreset');
+    try {
+      const preset = JSON.parse(json);
+      if (this.setState(preset.data)) {
+        counter = state.stops.length;
+        this.refreshAll();
+        History.clear();
+      }
+    } catch (e) {}
+  },
+  
+  refreshAll() {
+    resize(); draw(); renderList(); renderInspector();
+    updateCSS(); updateBgPreview();
+    if (typeof updateAllDimensionUI === 'function') updateAllDimensionUI();
+    if (typeof updateFilterUI === 'function') updateFilterUI();
+    if (typeof updateNoiseUI === 'function') updateNoiseUI();
+    if (typeof updateBgUI === 'function') updateBgUI();
+    if (typeof updateZoomUI === 'function') updateZoomUI();
+    if (typeof applyNoiseFilter === 'function') applyNoiseFilter();
+    setTimeout(() => { if (typeof fitToScreen === 'function') fitToScreen(); }, 100);
+  }
+};
+
+// ========== KEYBOARD ==========
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    if (e.key === 'Escape') e.target.blur();
+    return;
+  }
+  const isMod = e.ctrlKey || e.metaKey;
+  if (isMod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); History.undo(); }
+  else if (isMod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); History.redo(); }
+  else if (isMod && e.key === 's') { e.preventDefault(); FileManager.exportJSON(); }
+  else if (isMod && e.key === 'o') { e.preventDefault(); FileManager.importJSON(); }
+});
+
+// ========== INIT ==========
+function initHistorySystem() {
+  History.init();
+  setTimeout(() => FileManager.loadPresetFromSession(), 500);
+}
+
+if (document.readyState === 'complete') initHistorySystem();
+else window.addEventListener('load', initHistorySystem);
+
+window.History = History;
+window.FileManager = FileManager;
+window.undo = () => History.undo();
+window.redo = () => History.redo();
+window.exportJSON = () => FileManager.exportJSON();
+window.importJSON = () => FileManager.importJSON();
+
 const buttons = document.querySelectorAll('.control-btn');
 
 buttons.forEach(btn => {
@@ -4534,37 +5080,43 @@ function initFilterEvents() {
     
     const row = slider.closest('.filter-row');
     
-    // Slider event
+    // ✅ Slider events - با History tracking
+    slider.addEventListener('mousedown', () => History.onDragStart());
+    slider.addEventListener('touchstart', () => History.onDragStart(), { passive: true });
     slider.addEventListener('input', (e) => setFilter(name, e.target.value));
+    slider.addEventListener('mouseup', () => History.onDragEnd());
+    slider.addEventListener('touchend', () => History.onDragEnd());
     
-    // Number input events
+    // ✅ Number input events - با focus/blur
     if (numInput) {
+      numInput.addEventListener('focus', () => History.onInputFocus());
+      numInput.addEventListener('blur', () => History.onInputBlur());
       numInput.addEventListener('input', (e) => setFilter(name, e.target.value));
       numInput.addEventListener('change', (e) => setFilter(name, e.target.value));
     }
     
-    // ✅ Double-click و Double-tap برای ریست
+    // Double-click/tap برای ریست
     if (row) {
       // Desktop - dblclick
       row.addEventListener('dblclick', function(e) {
         if (e.target.tagName === 'INPUT') return;
+        History.saveState();  // ✅ اضافه شد
         resetSingleFilter(name, row);
       });
       
-      // ✅ Mobile - double tap
+      // Mobile - double tap
       let lastTap = 0;
       row.addEventListener('touchend', function(e) {
-        // اگه روی input بود، کاری نکن
         if (e.target.tagName === 'INPUT') return;
         
         const now = Date.now();
-        const DOUBLE_TAP_DELAY = 300; // میلی‌ثانیه
+        const DOUBLE_TAP_DELAY = 300;
         
         if (now - lastTap < DOUBLE_TAP_DELAY) {
-          // Double tap detected!
           e.preventDefault();
+          History.saveState();  // ✅ اضافه شد
           resetSingleFilter(name, row);
-          lastTap = 0; // ریست کن تا سه‌تایی نشه
+          lastTap = 0;
         } else {
           lastTap = now;
         }
@@ -4572,7 +5124,7 @@ function initFilterEvents() {
     }
   });
   
-  // Toggle & Reset buttons
+  // Toggle & Reset buttons - اینا توی overrideFunctions هندل میشن
   document.getElementById('filtersToggleBtn')?.addEventListener('click', toggleFilters);
   document.getElementById('filtersResetBtn')?.addEventListener('click', resetFilters);
 }
@@ -4770,6 +5322,7 @@ function initBackgroundEvents() {
   
   // Blend mode select
   document.getElementById('bgBlendMode')?.addEventListener('change', (e) => {
+    History.saveState();  // ✅ اضافه شد
     setBgBlendMode(e.target.value);
   });
 }
@@ -4940,20 +5493,45 @@ function initNoiseEvents() {
   const blendSelect = document.getElementById('noiseBlend');
   const toggleBtn = document.getElementById('noiseToggleBtn');
 
+  // ✅ Opacity - اگه slider هست
   if (opacityInput) {
+    if (opacityInput.type === 'range') {
+      opacityInput.addEventListener('mousedown', () => History.onDragStart());
+      opacityInput.addEventListener('touchstart', () => History.onDragStart(), { passive: true });
+      opacityInput.addEventListener('mouseup', () => History.onDragEnd());
+      opacityInput.addEventListener('touchend', () => History.onDragEnd());
+    } else {
+      opacityInput.addEventListener('focus', () => History.onInputFocus());
+      opacityInput.addEventListener('blur', () => History.onInputBlur());
+    }
     opacityInput.addEventListener('input', e => setNoiseOpacity(e.target.value));
     opacityInput.addEventListener('change', e => setNoiseOpacity(e.target.value));
   }
 
+  // ✅ Frequency - اگه slider هست
   if (frequencyInput) {
+    if (frequencyInput.type === 'range') {
+      frequencyInput.addEventListener('mousedown', () => History.onDragStart());
+      frequencyInput.addEventListener('touchstart', () => History.onDragStart(), { passive: true });
+      frequencyInput.addEventListener('mouseup', () => History.onDragEnd());
+      frequencyInput.addEventListener('touchend', () => History.onDragEnd());
+    } else {
+      frequencyInput.addEventListener('focus', () => History.onInputFocus());
+      frequencyInput.addEventListener('blur', () => History.onInputBlur());
+    }
     frequencyInput.addEventListener('input', e => setNoiseFrequency(e.target.value));
     frequencyInput.addEventListener('change', e => setNoiseFrequency(e.target.value));
   }
 
+  // ✅ Blend select
   if (blendSelect) {
-    blendSelect.addEventListener('change', e => setNoiseBlend(e.target.value));
+    blendSelect.addEventListener('change', e => {
+      History.saveState();
+      setNoiseBlend(e.target.value);
+    });
   }
 
+  // Toggle - توی overrideFunctions هندل میشه
   if (toggleBtn) {
     toggleBtn.addEventListener('click', toggleNoise);
   }
@@ -5222,14 +5800,14 @@ function updateAllStopItems() {
     offsetY: 0,
     delayTimer: null,
     initialRect: null,
-    scrollCancelled: false,
+    listRect: null,
+    moveHandler: null,
   };
 
   // ========== CONFIG ==========
   const DRAG_CONFIG = {
-    delay: 200,
-    threshold: 10,
-    scrollThreshold: 15,
+    delay: 300,
+    scrollThreshold: 12,
   };
 
   // ========== INIT ==========
@@ -5237,8 +5815,7 @@ function updateAllStopItems() {
     const list = document.getElementById("list");
     if (!list) return;
 
-    // استفاده از event delegation
-    list.addEventListener('mousedown', onPointerDown);
+    list.addEventListener('mousedown', onMouseDown);
     list.addEventListener('touchstart', onTouchStart, { passive: true });
   }
 
@@ -5249,13 +5826,183 @@ function updateAllStopItems() {
     if (e.touches.length !== 1) return;
     if (!isValidDragTarget(e.target)) return;
 
-    // ❌ بدون preventDefault - اجازه اسکرول اولیه
     const touch = e.touches[0];
-    startPending(stopItem, touch.clientX, touch.clientY);
+    const rect = stopItem.getBoundingClientRect();
+    const list = document.getElementById("list");
+
+    // ذخیره اطلاعات اولیه
+    layerDrag.pending = true;
+    layerDrag.stopId = stopItem.dataset.id;
+    layerDrag.element = stopItem;
+    layerDrag.startX = touch.clientX;
+    layerDrag.startY = touch.clientY;
+    layerDrag.offsetY = touch.clientY - rect.top;
+    layerDrag.initialRect = rect;
+    layerDrag.listRect = list.getBoundingClientRect();
+
+    // ✅ تایمر: اگر ۳۰۰ms نگه داشت = drag
+    layerDrag.delayTimer = setTimeout(() => {
+      if (layerDrag.pending) {
+        activateDrag();
+      }
+    }, DRAG_CONFIG.delay);
+
+    // ✅ فقط touchend برای کنسل کردن اگر زود برداشت
+    document.addEventListener('touchend', onTouchEndEarly, { passive: true });
+    document.addEventListener('touchcancel', onTouchEndEarly, { passive: true });
+    
+    // ✅ touchmove با passive برای تشخیص اسکرول
+    document.addEventListener('touchmove', onTouchMoveCheck, { passive: true });
   }
 
-  // ========== MOUSE DOWN ==========
-  function onPointerDown(e) {
+  // ========== CHECK SCROLL ==========
+  function onTouchMoveCheck(e) {
+    if (!layerDrag.pending || layerDrag.active) return;
+
+    const touch = e.touches[0];
+    const dy = Math.abs(touch.clientY - layerDrag.startY);
+    const dx = Math.abs(touch.clientX - layerDrag.startX);
+
+    // ✅ کاربر داره اسکرول می‌کنه - کنسل کن
+    if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
+      cancelPending();
+    }
+  }
+
+  // ========== EARLY TOUCH END ==========
+  function onTouchEndEarly() {
+    if (layerDrag.pending && !layerDrag.active) {
+      cancelPending();
+    }
+  }
+
+  // ========== CANCEL PENDING ==========
+  function cancelPending() {
+    clearTimeout(layerDrag.delayTimer);
+    
+    document.removeEventListener('touchmove', onTouchMoveCheck);
+    document.removeEventListener('touchend', onTouchEndEarly);
+    document.removeEventListener('touchcancel', onTouchEndEarly);
+
+    layerDrag.pending = false;
+    layerDrag.element = null;
+    layerDrag.stopId = null;
+  }
+
+  // ========== ACTIVATE DRAG ==========
+  function activateDrag() {
+    if (layerDrag.active || !layerDrag.element) return;
+
+    // حذف listener های قبلی
+    document.removeEventListener('touchmove', onTouchMoveCheck);
+    document.removeEventListener('touchend', onTouchEndEarly);
+    document.removeEventListener('touchcancel', onTouchEndEarly);
+
+    layerDrag.pending = false;
+    layerDrag.active = true;
+
+    const stopItem = layerDrag.element;
+    const rect = layerDrag.initialRect;
+
+    // ✅ ایجاد clone
+    layerDrag.clone = stopItem.cloneNode(true);
+    layerDrag.clone.classList.add('drag-clone');
+    layerDrag.clone.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0.95;
+      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+      transform: scale(1.03);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      border-radius: 8px;
+      background: var(--TransParent-bg, rgba(30,30,30,0.95));
+      backdrop-filter: blur(6px);
+      border: 2px solid var(--border, #444);
+    `;
+    document.body.appendChild(layerDrag.clone);
+
+    // ✅ ایجاد placeholder
+    layerDrag.placeholder = document.createElement('div');
+    layerDrag.placeholder.className = 'drag-placeholder';
+    layerDrag.placeholder.style.cssText = `
+      height: ${rect.height}px;
+      margin: 4px 0;
+      border: 2px dashed var(--border, #444);
+      border-radius: 8px;
+      background: var(--accent);
+      opacity: 0.3;
+      transition: height 0.2s ease;
+    `;
+
+    // مخفی کردن اصلی
+    stopItem.classList.add('drag-original');
+    stopItem.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
+    stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
+
+    // بلاک کردن اسکرول
+    document.body.style.userSelect = 'none';
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    // ✅ حالا listener های drag اضافه کن
+    document.addEventListener('touchmove', onDragMove, { passive: false });
+    document.addEventListener('touchend', onDragEnd);
+    document.addEventListener('touchcancel', onDragEnd);
+
+    // فیدبک هپتیک
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+  }
+
+  // ========== DRAG MOVE ==========
+  function onDragMove(e) {
+    if (!layerDrag.active || !layerDrag.clone) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const touch = e.touches[0];
+    const newTop = touch.clientY - layerDrag.offsetY;
+    layerDrag.clone.style.top = newTop + 'px';
+
+    updatePlaceholderPosition(touch.clientY);
+  }
+
+  // ========== DRAG END ==========
+  function onDragEnd() {
+    document.removeEventListener('touchmove', onDragMove);
+    document.removeEventListener('touchend', onDragEnd);
+    document.removeEventListener('touchcancel', onDragEnd);
+
+    if (!layerDrag.active) {
+      cleanup();
+      return;
+    }
+
+    // انیمیشن برگشت
+    if (layerDrag.clone && layerDrag.placeholder) {
+      const placeholderRect = layerDrag.placeholder.getBoundingClientRect();
+
+      layerDrag.clone.style.transition = 'all 0.25s ease';
+      layerDrag.clone.style.top = placeholderRect.top + 'px';
+      layerDrag.clone.style.left = placeholderRect.left + 'px';
+      layerDrag.clone.style.transform = 'scale(1)';
+      layerDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+
+      setTimeout(finalizeDrag, 250);
+    } else {
+      finalizeDrag();
+    }
+  }
+
+  // ========== MOUSE HANDLERS ==========
+  function onMouseDown(e) {
     if (e.button !== 0) return;
     
     const stopItem = e.target.closest(".stop-item");
@@ -5263,87 +6010,141 @@ function updateAllStopItems() {
     if (!isValidDragTarget(e.target)) return;
 
     e.preventDefault();
-    startPending(stopItem, e.clientX, e.clientY);
-  }
 
-  // ========== VALIDATE TARGET ==========
-  function isValidDragTarget(target) {
-    // دکمه‌ها نباید drag شروع کنند
-    if (target.closest(".control-btn, button, input, select")) return false;
-    
-    // فقط از هندل یا هدر drag شروع بشه
-    const handle = target.closest(".drag-handle");
-    const preview = target.closest(".stop-preview");
-    const info = target.closest(".stop-info");
-    
-    return handle || preview || info;
-  }
-
-  // ========== START PENDING ==========
-  function startPending(stopItem, clientX, clientY) {
     const rect = stopItem.getBoundingClientRect();
     const list = document.getElementById("list");
 
     layerDrag.pending = true;
     layerDrag.stopId = stopItem.dataset.id;
     layerDrag.element = stopItem;
-    layerDrag.startX = clientX;
-    layerDrag.startY = clientY;
-    layerDrag.offsetY = clientY - rect.top;
+    layerDrag.startX = e.clientX;
+    layerDrag.startY = e.clientY;
+    layerDrag.offsetY = e.clientY - rect.top;
     layerDrag.initialRect = rect;
     layerDrag.listRect = list.getBoundingClientRect();
-    layerDrag.scrollCancelled = false;
 
-    // تایمر تأخیر
     layerDrag.delayTimer = setTimeout(() => {
-      if (layerDrag.pending && !layerDrag.scrollCancelled) {
-        startActualDrag();
+      if (layerDrag.pending) {
+        activateDragMouse();
       }
     }, DRAG_CONFIG.delay);
 
-    // Event listeners
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
-    document.addEventListener('touchcancel', onEnd);
+    document.addEventListener('mousemove', onMouseMoveCheck);
+    document.addEventListener('mouseup', onMouseUpEarly);
   }
 
-  // ========== ON MOVE ==========
-  function onMove(e) {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  function onMouseMoveCheck(e) {
+    if (!layerDrag.pending) return;
 
-    // اگر هنوز در حالت pending هستیم
-    if (layerDrag.pending && !layerDrag.active) {
-      const dx = Math.abs(clientX - layerDrag.startX);
-      const dy = Math.abs(clientY - layerDrag.startY);
+    const dx = Math.abs(e.clientX - layerDrag.startX);
+    const dy = Math.abs(e.clientY - layerDrag.startY);
 
-      // تشخیص اسکرول: اگر کاربر حرکت کرد قبل از تمام شدن delay
-      if (dy > DRAG_CONFIG.scrollThreshold || dx > DRAG_CONFIG.scrollThreshold) {
-        clearTimeout(layerDrag.delayTimer);
-        layerDrag.scrollCancelled = true;
-        layerDrag.pending = false;
-        cleanup();
-        return; // اجازه اسکرول طبیعی
-      }
-      return;
+    // اگر حرکت کرد، زودتر شروع کن
+    if (dx > 5 || dy > 5) {
+      clearTimeout(layerDrag.delayTimer);
+      document.removeEventListener('mousemove', onMouseMoveCheck);
+      document.removeEventListener('mouseup', onMouseUpEarly);
+      activateDragMouse();
     }
+  }
 
-    // حرکت واقعی drag
+  function onMouseUpEarly() {
+    clearTimeout(layerDrag.delayTimer);
+    document.removeEventListener('mousemove', onMouseMoveCheck);
+    document.removeEventListener('mouseup', onMouseUpEarly);
+    layerDrag.pending = false;
+  }
+
+  function activateDragMouse() {
+    document.removeEventListener('mousemove', onMouseMoveCheck);
+    document.removeEventListener('mouseup', onMouseUpEarly);
+
+    layerDrag.pending = false;
+    layerDrag.active = true;
+
+    const stopItem = layerDrag.element;
+    const rect = layerDrag.initialRect;
+
+    // Clone
+    layerDrag.clone = stopItem.cloneNode(true);
+    layerDrag.clone.classList.add('drag-clone');
+    layerDrag.clone.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0.95;
+      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+      transform: scale(1.03);
+      border-radius: 8px;
+      background: var(--TransParent-bg, rgba(30,30,30,0.95));
+      backdrop-filter: blur(6px);
+      border: 2px solid var(--border, #444);
+    `;
+    document.body.appendChild(layerDrag.clone);
+
+    // Placeholder
+    layerDrag.placeholder = document.createElement('div');
+    layerDrag.placeholder.className = 'drag-placeholder';
+    layerDrag.placeholder.style.cssText = `
+      height: ${rect.height}px;
+      margin: 4px 0;
+      border: 2px dashed var(--border, #444);
+      border-radius: 8px;
+      background: var(--accent);
+      opacity: 0.3;
+    `;
+
+    stopItem.classList.add('drag-original');
+    stopItem.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
+    stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+
+    document.addEventListener('mousemove', onMouseDragMove);
+    document.addEventListener('mouseup', onMouseDragEnd);
+  }
+
+  function onMouseDragMove(e) {
     if (!layerDrag.active || !layerDrag.clone) return;
 
-    e.preventDefault();
-
-    // حرکت clone
-    const newTop = clientY - layerDrag.offsetY;
+    const newTop = e.clientY - layerDrag.offsetY;
     layerDrag.clone.style.top = newTop + 'px';
 
-    // پیدا کردن موقعیت جدید
-    updatePlaceholderPosition(clientY);
+    updatePlaceholderPosition(e.clientY);
   }
 
-  // ========== UPDATE PLACEHOLDER ==========
+  function onMouseDragEnd() {
+    document.removeEventListener('mousemove', onMouseDragMove);
+    document.removeEventListener('mouseup', onMouseDragEnd);
+
+    if (layerDrag.clone && layerDrag.placeholder) {
+      const placeholderRect = layerDrag.placeholder.getBoundingClientRect();
+
+      layerDrag.clone.style.transition = 'all 0.25s ease';
+      layerDrag.clone.style.top = placeholderRect.top + 'px';
+      layerDrag.clone.style.left = placeholderRect.left + 'px';
+      layerDrag.clone.style.transform = 'scale(1)';
+
+      setTimeout(finalizeDrag, 250);
+    } else {
+      finalizeDrag();
+    }
+  }
+
+  // ========== SHARED FUNCTIONS ==========
+  function isValidDragTarget(target) {
+    if (target.closest(".control-btn, button, input, select")) return false;
+    const handle = target.closest(".drag-handle");
+    const preview = target.closest(".stop-preview");
+    const info = target.closest(".stop-info");
+    return handle || preview || info;
+  }
+
   function updatePlaceholderPosition(clientY) {
     const list = document.getElementById("list");
     const items = [...list.querySelectorAll(".stop-item:not(.drag-original)")];
@@ -5372,12 +6173,9 @@ function updateAllStopItems() {
         }
       } else {
         const next = targetItem.nextElementSibling;
-        
-        // 🔧 اصلاح باگ آیتم آخر
         if (next === layerDrag.placeholder) {
-          // در جای درست هست
+          // OK
         } else if (next === layerDrag.element) {
-          // next همان المان مخفی است
           list.insertBefore(layerDrag.placeholder, layerDrag.element);
         } else if (next) {
           list.insertBefore(layerDrag.placeholder, next);
@@ -5388,107 +6186,10 @@ function updateAllStopItems() {
     }
   }
 
-  // ========== START ACTUAL DRAG ==========
-  function startActualDrag() {
-    if (layerDrag.active || !layerDrag.element) return;
-
-    const stopItem = layerDrag.element;
-    const rect = layerDrag.initialRect;
-    const list = document.getElementById("list");
-
-    layerDrag.pending = false;
-    layerDrag.active = true;
-
-    // ایجاد clone
-    layerDrag.clone = stopItem.cloneNode(true);
-    layerDrag.clone.classList.add('drag-clone');
-    layerDrag.clone.style.cssText = `
-      position: fixed;
-      left: ${rect.left}px;
-      top: ${rect.top}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      z-index: 10000;
-      pointer-events: none;
-      opacity: 0.95;
-      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
-      transform: scale(1.03);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      border-radius: 8px;
-      background: var(--TransParent-bg, rgba(30,30,30,0.95));
-      backdrop-filter: blur(6px);
-      border: 2px solid var(--border, #444);
-    `;
-    document.body.appendChild(layerDrag.clone);
-
-    // ایجاد placeholder
-    layerDrag.placeholder = document.createElement('div');
-    layerDrag.placeholder.className = 'drag-placeholder';
-    layerDrag.placeholder.style.cssText = `
-      height: ${rect.height}px;
-      margin: 4px 0;
-      border: 2px dashed var(--border, #444);
-      border-radius: 8px;
-      background: var(--accent);
-      transition: height 0.2s ease;
-    `;
-
-    // مخفی کردن المان اصلی
-    stopItem.classList.add('drag-original');
-    stopItem.style.cssText = 'opacity:0; height:0; margin:0; padding:0; overflow:hidden;';
-
-    stopItem.parentNode.insertBefore(layerDrag.placeholder, stopItem);
-
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'grabbing';
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-
-    // فیدبک هپتیک
-    if (navigator.vibrate) {
-      navigator.vibrate(30);
-    }
-  }
-
-  // ========== ON END ==========
-  function onEnd() {
-    clearTimeout(layerDrag.delayTimer);
-
-    // حذف event listeners
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onEnd);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onEnd);
-    document.removeEventListener('touchcancel', onEnd);
-
-    // اگر فقط pending بود یا اسکرول شد
-    if (!layerDrag.active) {
-      cleanup();
-      return;
-    }
-
-    // انیمیشن بازگشت
-    if (layerDrag.clone && layerDrag.placeholder) {
-      const placeholderRect = layerDrag.placeholder.getBoundingClientRect();
-
-      layerDrag.clone.style.transition = 'all 0.25s ease';
-      layerDrag.clone.style.top = placeholderRect.top + 'px';
-      layerDrag.clone.style.left = placeholderRect.left + 'px';
-      layerDrag.clone.style.transform = 'scale(1)';
-      layerDrag.clone.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-
-      setTimeout(finalizeDrag, 250);
-    } else {
-      finalizeDrag();
-    }
-  }
-
-  // ========== FINALIZE DRAG ==========
   function finalizeDrag() {
     const list = document.getElementById("list");
     const children = [...list.children];
 
-    // محاسبه index جدید
     let newIndex = 0;
     for (const child of children) {
       if (child === layerDrag.placeholder) break;
@@ -5497,10 +6198,8 @@ function updateAllStopItems() {
       }
     }
 
-    // پیدا کردن index قدیم
     const oldIndex = state.stops.findIndex(s => s.id === layerDrag.stopId);
 
-    // اگر تغییر کرده، آرایه رو آپدیت کن
     if (oldIndex !== -1 && oldIndex !== newIndex) {
       const [removed] = state.stops.splice(oldIndex, 1);
       state.stops.splice(newIndex, 0, removed);
@@ -5510,7 +6209,6 @@ function updateAllStopItems() {
     refresh();
   }
 
-  // ========== CLEANUP ==========
   function cleanup() {
     if (layerDrag.clone?.parentNode) {
       layerDrag.clone.remove();
@@ -5525,7 +6223,6 @@ function updateAllStopItems() {
       layerDrag.element.style.cssText = '';
     }
 
-    // بازگردانی استایل‌ها
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
     document.body.style.userSelect = '';
@@ -5540,11 +6237,10 @@ function updateAllStopItems() {
       placeholder: null,
       delayTimer: null,
       initialRect: null,
-      scrollCancelled: false,
+      listRect: null,
     });
   }
 
-  // Global
   window.initLayerDragDrop = initLayerDragDrop;
 })();
 // ========== به‌روزرسانی renderList با data-id ==========
@@ -5697,7 +6393,6 @@ function renderInspector() {
     return;
   }
 
-  // ========== Blend Mode Options ==========
   const blendModes = [
     { value: 'normal', label: 'Normal' },
     { value: 'screen', label: 'Screen' },
@@ -5727,32 +6422,32 @@ function renderInspector() {
       <div class="form-row">
         <label>Name</label>
         <input style="width:6rem;text-align:left" value="${s.name}" 
-          onchange="getStop('${s.id}').name=this.value;liveUpdate('${s.id}')">
-              </div>
-          <div class="form-row">
-            <label>Blend</label>
-            <select class="blend-select" onchange="setStopBlendMode('${s.id}', this.value)">
-              ${blendOptions}
-            </select>
+          onfocus="HF()" onblur="HB()"
+          oninput="getStop('${s.id}').name=this.value;liveUpdate('${s.id}')">
+      </div>
+      <div class="form-row">
+        <label>Blend</label>
+        <select class="blend-select" onchange="History.saveState(); setStopBlendMode('${s.id}', this.value)">
+          ${blendOptions}
+        </select>
       </div>
       <div class="form-row">
         <label>X</label>
         <input type="number" class="num-input" min="0" max="100" value="${Math.round(s.x * 100)}" 
-          oninput="getStop('${s.id}').x = +this.value / 100; liveUpdate('${s.id}')">
+          onfocus="HF()" onblur="HB()"
+          oninput="getStop('${s.id}').x=+this.value/100;liveUpdate('${s.id}')">
       </div>
       <div class="form-row">
         <label>Y</label>
         <input type="number" class="num-input" min="0" max="100" value="${Math.round(s.y * 100)}" 
-          oninput="getStop('${s.id}').y = +this.value / 100; liveUpdate('${s.id}')"
+          onfocus="HF()" onblur="HB()"
+          oninput="getStop('${s.id}').y=+this.value/100;liveUpdate('${s.id}')"
           ${state.lockVertical ? "disabled" : ""}>
-        ${state.lockVertical ? '<span style="font-size:9px;color:#666;"><img class="pos-lock" src="./icon/lock.svg" alt="lock position"></span>' : ""}
+        ${state.lockVertical ? '<span style="font-size:9px;color:#666;"><img class="pos-lock" src="./icon/lock.svg" alt="lock"></span>' : ""}
       </div>
-      </div>
-
+    </div>
   `;
 
-  // ... rest of renderInspector (radial, linear, conic sections)
-  
   if (s.type === "radial") {
     h += `
       <div class="form-group" data-stop-id="${s.id}">
@@ -5765,16 +6460,19 @@ function renderInspector() {
         <div class="form-row">
           <label>Size</label>
           <input type="number" style="width:4rem;text-align:left" class="num-input" min="10" value="${Math.round(s.size)}" 
+            onfocus="HF()" onblur="HB()"
             oninput="getStop('${s.id}').size=+this.value;liveUpdate('${s.id}')">
         </div>
         <div class="form-row">
           <label>Feather</label>
           <input type="number" class="num-input" min="1" max="100" value="${Math.round(s.feather)}" 
+            onfocus="HF()" onblur="HB()"
             oninput="getStop('${s.id}').feather=+this.value;liveUpdate('${s.id}')">
         </div>
         <div class="form-row form-Opacity">
           <label>Opacity</label>
           <input type="number" class="num-input" id="opacity_${s.id}" min="0" max="100" value="${Math.round(s.opacity)}" 
+            onfocus="HF()" onblur="HB()"
             oninput="updateStopOpacity('${s.id}', this.value)">
         </div>
       </div>
@@ -5795,6 +6493,7 @@ function renderInspector() {
             </div>
           </div>
           <input type="number" id="angleNum_${s.id}" class="num-input" min="0" max="360" value="${s.angle}" 
+            onfocus="HF()" onblur="HB()"
             oninput="updateAngleFromInput('${s.id}', this.value)" style="width:55px">
         </div>
       </div>
@@ -5815,6 +6514,7 @@ function renderInspector() {
             </div>
           </div>
           <input type="number" id="conicAngleNum_${s.id}" class="num-input" min="0" max="360" value="${s.startAngle}" 
+            onfocus="HF()" onblur="HB()"
             oninput="updateConicAngleFromInput('${s.id}', this.value)" style="width:55px">
         </div>
       </div>
@@ -5828,35 +6528,373 @@ function renderInspector() {
           <span>Color Stops</span>
           <button class="sm" onclick="addColorStop(getStop('${s.id}'))">Add Color</button>
         </div>
-        ${s.stops.map((cs, i) => `
-          <div class="color-stop-row" data-stop-id="${s.id}" data-color-stop="${i}">
-            <div class="color-stop-header">
-              <div class="color-swatch" onclick="openStopColorPicker('${s.id}', true, ${i})">
-                <div class="color-swatch-inner" style="background:${rgba(cs.color, cs.opacity / 100)}"></div>
+  
+        <div class="color-stop-list">
+          ${s.stops.map((cs, i) => `
+            <div class="color-stop-row stop-item"
+     data-stop-id="${s.id}"
+     data-color-index="${i}">
+
+                 
+                <span class="drag-handle">☰</span>
+  
+                <div class="color-swatch"
+                     onclick="openStopColorPicker('${s.id}', true, ${i})">
+                  <div class="color-swatch-inner"
+                       style="background:${rgba(cs.color, cs.opacity / 100)}"></div>
+                </div>
+  
+                <span class="cs-label">Stop ${i + 1}</span>
+  
+
+  
+              <div class="color-stop-fields">
+                <div class="field-group">
+                  <label>Position</label>
+                  <input type="number" class="num-input" min="0" max="100"
+                    value="${cs.pos}"
+                    onfocus="HF()" onblur="HB()"
+                    oninput="getStop('${s.id}').stops[${i}].pos=+this.value;liveUpdate('${s.id}')">
+                </div>
+  
+                <div class="field-group">
+                  <label>Opacity</label>
+                  <input type="number" class="num-input" min="0" max="100"
+                    value="${cs.opacity}"
+                    onfocus="HF()" onblur="HB()"
+                    oninput="updateColorStopOpacity('${s.id}', ${i}, this.value)">
+                </div>
               </div>
-              <span style="flex:1;font-size:10px">Stop ${i + 1}</span>
+                              ${s.stops.length > 2
+                  ? `<button class="control-btn"
+                       onclick="delColorStop(getStop('${s.id}'),${i})">
+                       <img src="./icon/close.svg">
+                     </button>`
+                  : ``}
             </div>
-            <div class="color-stop-fields">
-              <div class="field-group">
-                <label>Position</label>
-                <input type="number" class="num-input" min="0" max="100" value="${cs.pos}" 
-                  oninput="getStop('${s.id}').stops[${i}].pos=+this.value;liveUpdate('${s.id}')">
-              </div>
-              <div class="field-group">
-                <label>Opacity</label>
-                <input type="number" class="num-input" min="0" max="100" value="${cs.opacity}" 
-                  oninput="updateColorStopOpacity('${s.id}', ${i}, this.value)">
-              </div>
-            </div>
-            ${s.stops.length > 2 ? `<button class="control-btn" onclick="delColorStop(getStop('${s.id}'),${i})"><img src="./icon/close.svg" alt="delete color"></button>` : ""}
-          </div>
-        `).join("")}
+          `).join("")}
+        </div>
       </div>
     `;
   }
+  
 
   el.innerHTML = h;
+  initColorStopDrag(); 
 }
+
+// ================= COLOR STOP DRAG =================
+
+// ================= COLOR STOP DRAG =================
+
+(function () {
+  // ========== STATE ==========
+  const drag = {
+    active: false,
+    pending: false,
+    stopId: null,
+    fromIndex: null,
+    el: null,
+    clone: null,
+    placeholder: null,
+    startY: 0,
+    offsetY: 0,
+    delayTimer: null,
+    rect: null,
+  };
+
+  const CONFIG = {
+    delay: 300,
+    scrollThreshold: 12,
+  };
+
+  // ========== INIT ==========
+  function initColorStopDrag() {
+    const list = document.querySelector(".color-stop-list");
+    if (!list) return;
+
+    // حذف listener های قبلی برای جلوگیری از تکرار
+    list.removeEventListener("mousedown", onMouseDown);
+    list.removeEventListener("touchstart", onTouchStart);
+    
+    list.addEventListener("mousedown", onMouseDown);
+    list.addEventListener("touchstart", onTouchStart, { passive: false });
+  }
+
+  // ========== TOUCH ==========
+  function onTouchStart(e) {
+    if (drag.active || drag.pending) return;
+    
+    const row = e.target.closest(".color-stop-row.stop-item");
+    if (!row || e.touches.length !== 1) return;
+    if (!isValidTarget(e.target)) return;
+
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = row.getBoundingClientRect();
+
+    drag.pending = true;
+    drag.el = row;
+    drag.stopId = row.dataset.stopId;
+    drag.fromIndex = +row.dataset.colorIndex;
+    drag.startY = touch.clientY;
+    drag.offsetY = touch.clientY - rect.top;
+    drag.rect = rect;
+
+    drag.delayTimer = setTimeout(() => {
+      if (drag.pending) activate();
+    }, CONFIG.delay);
+
+    document.addEventListener("touchmove", onTouchMoveCheck, { passive: false });
+    document.addEventListener("touchend", cancelPending);
+    document.addEventListener("touchcancel", cancelPending);
+  }
+
+  function onTouchMoveCheck(e) {
+    if (!drag.pending) return;
+    const dy = Math.abs(e.touches[0].clientY - drag.startY);
+    if (dy > CONFIG.scrollThreshold) {
+      cancelPending();
+    }
+  }
+
+  // ========== MOUSE ==========
+  function onMouseDown(e) {
+    if (drag.active || drag.pending) return;
+    if (e.button !== 0) return;
+    
+    const row = e.target.closest(".color-stop-row.stop-item");
+    if (!row || !isValidTarget(e.target)) return;
+
+    e.preventDefault();
+    const rect = row.getBoundingClientRect();
+
+    drag.pending = true;
+    drag.el = row;
+    drag.stopId = row.dataset.stopId;
+    drag.fromIndex = +row.dataset.colorIndex;
+    drag.startY = e.clientY;
+    drag.offsetY = e.clientY - rect.top;
+    drag.rect = rect;
+
+    drag.delayTimer = setTimeout(() => {
+      if (drag.pending) activate();
+    }, CONFIG.delay);
+
+    document.addEventListener("mousemove", onMouseMoveCheck);
+    document.addEventListener("mouseup", cancelPending);
+  }
+
+  function onMouseMoveCheck(e) {
+    if (!drag.pending) return;
+    if (Math.abs(e.clientY - drag.startY) > 5) {
+      clearTimeout(drag.delayTimer);
+      activate();
+    }
+  }
+
+  function cancelPending() {
+    clearTimeout(drag.delayTimer);
+    drag.pending = false;
+    removePendingListeners();
+  }
+
+  function removePendingListeners() {
+    document.removeEventListener("touchmove", onTouchMoveCheck);
+    document.removeEventListener("touchend", cancelPending);
+    document.removeEventListener("touchcancel", cancelPending);
+    document.removeEventListener("mousemove", onMouseMoveCheck);
+    document.removeEventListener("mouseup", cancelPending);
+  }
+
+  // ========== ACTIVATE ==========
+  function activate() {
+    if (drag.active) return;
+    drag.pending = false;
+    drag.active = true;
+
+    // حذف listener های pending
+    removePendingListeners();
+
+    const { el, rect } = drag;
+
+    // CLONE
+    drag.clone = el.cloneNode(true);
+    drag.clone.classList.add("drag-clone");
+    drag.clone.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0.95;
+      box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+      transform: scale(1.03);
+      border-radius: 8px;
+      background: var(--TransParent-bg, rgba(30,30,30,0.95));
+      backdrop-filter: blur(6px);
+      border: 2px solid var(--border, #444);
+    `;
+    document.body.appendChild(drag.clone);
+
+    // PLACEHOLDER
+    drag.placeholder = document.createElement("div");
+    drag.placeholder.className = "color-stop-placeholder";
+    drag.placeholder.style.height = el.offsetHeight + "px";
+
+    // مخفی کردن آیتم اصلی
+    el.classList.add("drag-original");
+    el.style.cssText = "opacity:0 !important; height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; pointer-events:none !important;";
+    
+    // placeholder را قبل از آیتم اصلی قرار بده
+    el.parentNode.insertBefore(drag.placeholder, el);
+
+    document.body.style.userSelect = "none";
+    document.body.style.overflow = "hidden";
+
+    // اضافه کردن listener های drag
+    document.addEventListener("touchmove", onDragMove, { passive: false });
+    document.addEventListener("touchend", onDragEnd);
+    document.addEventListener("touchcancel", onDragEnd);
+    document.addEventListener("mousemove", onMouseDragMove);
+    document.addEventListener("mouseup", onDragEnd);
+  }
+
+  // ========== MOVE ==========
+  function onDragMove(e) {
+    if (!drag.active || !drag.clone) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    const y = touch.clientY - drag.offsetY;
+    drag.clone.style.top = y + "px";
+    updatePlaceholder(touch.clientY);
+  }
+
+  function onMouseDragMove(e) {
+    if (!drag.active || !drag.clone) return;
+    
+    const y = e.clientY - drag.offsetY;
+    drag.clone.style.top = y + "px";
+    updatePlaceholder(e.clientY);
+  }
+
+  function updatePlaceholder(clientY) {
+    const list = drag.placeholder?.parentNode;
+    if (!list) return;
+
+    // فقط آیتم‌های قابل مشاهده (بدون drag-original)
+    const items = [...list.querySelectorAll(".color-stop-row.stop-item:not(.drag-original)")];
+
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      
+      if (clientY < midY) {
+        list.insertBefore(drag.placeholder, item);
+        return;
+      }
+    }
+    
+    // اگر پایین‌تر از همه بود، به آخر اضافه کن
+    // placeholder را بعد از آخرین آیتم قرار بده
+    const lastItem = items[items.length - 1];
+    if (lastItem && lastItem.nextSibling !== drag.placeholder) {
+      list.insertBefore(drag.placeholder, lastItem.nextSibling);
+    }
+  }
+
+  // ========== END ==========
+  function onDragEnd() {
+    if (!drag.active) {
+      cancelPending();
+      return;
+    }
+    finalize();
+  }
+
+  function finalize() {
+    const list = drag.placeholder?.parentNode;
+    
+    if (list) {
+      // محاسبه ایندکس جدید: شمارش موقعیت placeholder بین آیتم‌های قابل مشاهده
+      const visibleItems = [...list.querySelectorAll(".color-stop-row.stop-item:not(.drag-original)")];
+      let toIndex = 0;
+      
+      for (let i = 0; i < visibleItems.length; i++) {
+        const item = visibleItems[i];
+        // اگر placeholder قبل از این آیتم است
+        if (drag.placeholder.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          toIndex = i;
+          break;
+        }
+        toIndex = i + 1;
+      }
+
+      const stop = getStop(drag.stopId);
+      if (stop && stop.stops && toIndex !== drag.fromIndex) {
+        History.saveState();
+        const [moved] = stop.stops.splice(drag.fromIndex, 1);
+        stop.stops.splice(toIndex, 0, moved);
+      }
+    }
+
+    cleanup();
+    renderInspector();
+    refresh();
+  }
+
+  function cleanup() {
+    // حذف المان‌های موقت
+    if (drag.clone) {
+      drag.clone.remove();
+    }
+    if (drag.placeholder) {
+      drag.placeholder.remove();
+    }
+
+    // برگرداندن آیتم اصلی
+    if (drag.el) {
+      drag.el.style.cssText = "";
+      drag.el.classList.remove("drag-original");
+    }
+
+    // برگرداندن استایل body
+    document.body.style.userSelect = "";
+    document.body.style.overflow = "";
+
+    // حذف همه listener ها
+    removePendingListeners();
+    document.removeEventListener("touchmove", onDragMove);
+    document.removeEventListener("touchend", onDragEnd);
+    document.removeEventListener("touchcancel", onDragEnd);
+    document.removeEventListener("mousemove", onMouseDragMove);
+    document.removeEventListener("mouseup", onDragEnd);
+
+    // ریست کردن state
+    Object.assign(drag, {
+      active: false,
+      pending: false,
+      el: null,
+      clone: null,
+      placeholder: null,
+      stopId: null,
+      fromIndex: null,
+      rect: null,
+    });
+  }
+
+  function isValidTarget(target) {
+    // فقط با drag-handle کار کند
+    if (target.closest("input, button, .color-swatch")) return false;
+    return !!target.closest(".drag-handle");
+  }
+
+  // Export
+  window.initColorStopDrag = initColorStopDrag;
+})();
 
 // ========== تابع تنظیم Blend Mode ==========
 function setStopBlendMode(stopId, mode) {
@@ -7616,6 +8654,7 @@ document.getElementById("bgBtn")?.addEventListener("click", () => {
 });
 
 document.getElementById("cssFormat")?.addEventListener("change", (e) => {
+  History.saveState();  // ✅ اضافه شد
   state.cssFormat = e.target.value;
   updateCSS();
 });
@@ -7739,7 +8778,7 @@ if (document.readyState === "loading") {
     return isNaN(s) || s <= 0 ? 1 : s;
   };
 
-  const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+  const clampValue = (v, min, max) => Math.min(max, Math.max(min, v));
 
   window.__isNumberScrubbing = false;
 
@@ -7749,6 +8788,7 @@ if (document.readyState === "loading") {
 
     const now = Date.now();
 
+    // Double-tap to focus (mobile)
     if (e.pointerType === "touch" && now - lastTapTime < DOUBLE_TAP_DELAY) {
       input.focus();
       input.style.cursor = "text";
@@ -7758,6 +8798,7 @@ if (document.readyState === "loading") {
 
     lastTapTime = now;
 
+    // اگر input فوکوس داره، اجازه تایپ بده
     if (input === document.activeElement) return;
 
     e.preventDefault();
@@ -7769,6 +8810,11 @@ if (document.readyState === "loading") {
 
     window.__isNumberScrubbing = true;
     document.body.style.cursor = "ew-resize";
+    
+    // ✅ FIX: شروع History tracking
+    if (typeof History !== 'undefined' && History.onDragStart) {
+      History.onDragStart();
+    }
   });
 
   document.addEventListener("pointermove", (e) => {
@@ -7787,7 +8833,7 @@ if (document.readyState === "loading") {
     const min = activeInput.min === "" ? -Infinity : +activeInput.min;
     const max = activeInput.max === "" ? Infinity : +activeInput.max;
 
-    value = clamp(value, min, max);
+    value = clampValue(value, min, max);
     value = Math.round(value / step) * step;
 
     activeInput.value = value;
@@ -7796,9 +8842,16 @@ if (document.readyState === "loading") {
 
   const end = (e) => {
     if (!activeInput) return;
+    
+    // ✅ FIX: پایان History tracking
+    if (typeof History !== 'undefined' && History.onDragEnd) {
+      History.onDragEnd();
+    }
+    
     try {
       activeInput.releasePointerCapture(e.pointerId);
     } catch {}
+    
     activeInput = null;
     document.body.style.cursor = "";
     window.__isNumberScrubbing = false;
@@ -7807,7 +8860,7 @@ if (document.readyState === "loading") {
   document.addEventListener("pointerup", end);
   document.addEventListener("pointercancel", end);
 
-  // دسکتاپ هنوز dblclick داره
+  // Double-click to focus (desktop)
   document.addEventListener("dblclick", (e) => {
     const input = e.target.closest('input[type="number"]');
     if (!input) return;
