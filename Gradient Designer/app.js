@@ -547,7 +547,6 @@ const History = {
     if (this.restoreSnapshot(prev.snapshot)) {
       this.lastSnapshot = prev.snapshot;
       this.refreshUI();
-      this.showIndicator('undo');
     }
     this.isRestoring = false;
     this.updateUI();
@@ -566,7 +565,6 @@ const History = {
     if (this.restoreSnapshot(next.snapshot)) {
       this.lastSnapshot = next.snapshot;
       this.refreshUI();
-      this.showIndicator('redo');
     }
     this.isRestoring = false;
     this.updateUI();
@@ -601,21 +599,6 @@ const History = {
     if (typeof updateBgUI === 'function') updateBgUI();
     if (typeof applyNoiseFilter === 'function') applyNoiseFilter();
     if (typeof updateAllDimensionUI === 'function') updateAllDimensionUI();
-  },
-  
-  showIndicator(type) {
-    let el = document.getElementById('historyIndicator');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'historyIndicator';
-      document.body.appendChild(el);
-    }
-    
-    el.textContent = type === 'undo' ? '↶ Undo' : '↷ Redo';
-    el.className = `history-indicator ${type} show`;
-    
-    clearTimeout(this._timer);
-    this._timer = setTimeout(() => el.classList.remove('show'), 800);
   },
   
   init() {
@@ -825,7 +808,6 @@ window.HB = HB;
 const FileManager = {
   getState() {
     return {
-      version: 1,
       timestamp: Date.now(),
       stops: state.stops,
       selected: state.selected,
@@ -841,7 +823,6 @@ const FileManager = {
       filterState: { ...filterState },
       noiseState: { ...noiseState },
       dimensionState: { ...dimensionState },
-      counter: counter,
     };
   },
   
@@ -2086,63 +2067,10 @@ function onPointerDown(e) {
   refresh();
 }
 
-function onPointerMove(e) {
-  if (!drag) return;
-  e.preventDefault();
-
-  const pos = getEventPos(e);
-  const mx = pos.x;
-  const my = pos.y;
-  const cx = drag.s.x * W;
-  const cy = drag.s.y * H;
-
-  switch (drag.t) {
-    case "move":
-      drag.s.x = clamp(mx / W, 0, 1);
-      if (!state.lockVertical) {
-        drag.s.y = clamp(my / H, 0, 1);
-      }
-      break;
-
-    case "cs":
-      const { x1, y1, x2, y2 } = drag;
-      const dx = x2 - x1,
-        dy = y2 - y1;
-      const len2 = dx * dx + dy * dy;
-      const t = clamp(((mx - x1) * dx + (my - y1) * dy) / len2, 0, 1);
-      drag.s.stops[drag.i].pos = Math.round(t * 100);
-      break;
-
-    case "angle":
-      let newAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
-      if (newAngle < 0) newAngle += 360;
-      drag.s.angle = Math.round(newAngle) % 360;
-      break;
-
-    case "conic-angle":
-      let conicAngle = (Math.atan2(my - cy, mx - cx) * 180) / Math.PI + 90;
-      if (conicAngle < 0) conicAngle += 360;
-      drag.s.startAngle = Math.round(conicAngle) % 360;
-      break;
-
-    case "conic-cs":
-      const startAngleRad = ((drag.s.startAngle - 90) * Math.PI) / 180;
-      let relAngle = Math.atan2(my - cy, mx - cx) - startAngleRad;
-      if (relAngle < 0) relAngle += Math.PI * 2;
-      drag.s.stops[drag.i].pos = clamp(
-        Math.round((relAngle / (Math.PI * 2)) * 100),
-        0,
-        100
-      );
-      break;
-  }
-
-  throttledDraw();
-}
-
 function onPointerUp() {
   if (drag) {
     updateCSS();
+    updateInspectorInputs(drag.s.id);  // ✅ آپدیت نهایی
   }
   drag = null;
 }
@@ -4861,16 +4789,31 @@ function delStop(id) {
 function dupStop(id) {
   const o = getStop(id);
   if (!o) return;
-  counter++;
+
   const c = JSON.parse(JSON.stringify(o));
   c.id = uid();
-  c.name += " Copy";
+
+  // === Name logic ===
+  const baseName = o.name.replace(/\sCopy(\s\d+)?$/, "");
+  const copies = state.stops.filter(s =>
+    s.name === `${baseName} Copy` ||
+    s.name.match(new RegExp(`^${baseName} Copy \\d+$`))
+  );
+
+  if (copies.length === 0) {
+    c.name = `${baseName} Copy`;
+  } else {
+    c.name = `${baseName} Copy ${copies.length + 1}`;
+  }
+
   c.x = clamp(c.x + 0.04, 0, 1);
   c.y = clamp(c.y + 0.04, 0, 1);
+
   state.stops.push(c);
   state.selected = c.id;
   refresh();
 }
+
 
 function toggleVis(id) {
   const s = getStop(id);
@@ -5578,28 +5521,62 @@ function handleAngleMove(e) {
     clientY = e.clientY;
   }
 
-  let angle =
-    Math.atan2(clientX - centerX, centerY - clientY) * (180 / Math.PI);
+  let angle = Math.atan2(clientX - centerX, centerY - clientY) * (180 / Math.PI);
   angle = Math.round((angle + 360) % 360);
 
   const stop = getStop(stopId);
   if (stop) {
     stop.angle = angle;
+    
+    // ✅ آپدیت المان‌های UI
     handle.style.transform = `rotate(${angle}deg)`;
     document.getElementById(`angleCenter_${stopId}`).textContent = `${angle}°`;
-    document.getElementById(`angleNum_${stopId}`).value = angle;
+    
+    const numInput = document.getElementById(`angleNum_${stopId}`);
+    if (numInput && numInput !== document.activeElement) {
+      numInput.value = angle;
+    }
+    
     draw();
     updateCSS();
+    updateStopItem(stopId);
   }
+}
+function startAngleDrag(e, stopId) {
+  e.preventDefault();
+  activeAnglePicker = stopId;
+  
+  // ✅ شروع History tracking
+  if (typeof History !== 'undefined' && History.onDragStart) {
+    History.onDragStart();
+  }
+  
+  handleAngleMove(e);
+
+  document.addEventListener("mousemove", handleAngleMove);
+  document.addEventListener("mouseup", stopAngleDrag);
+  document.addEventListener("touchmove", handleAngleMove, { passive: false });
+  document.addEventListener("touchend", stopAngleDrag);
 }
 
 function stopAngleDrag() {
+  // ✅ پایان History tracking
+  if (typeof History !== 'undefined' && History.onDragEnd) {
+    History.onDragEnd();
+  }
+  
   activeAnglePicker = null;
   document.removeEventListener("mousemove", handleAngleMove);
   document.removeEventListener("mouseup", stopAngleDrag);
   document.removeEventListener("touchmove", handleAngleMove);
   document.removeEventListener("touchend", stopAngleDrag);
 }
+
+// ========== Export ==========
+window.liveUpdate = liveUpdate;
+window.updateInspectorInputs = updateInspectorInputs;
+window.updateStopItem = updateStopItem;
+window.updateAllStopItems = updateAllStopItems;
 
 function updateAngleFromInput(stopId, value) {
   let angle = parseInt(value) || 0;
@@ -5619,6 +5596,11 @@ function updateAngleFromInput(stopId, value) {
 
 function startConicAngleDrag(e, id) {
   e.preventDefault();
+  
+  // ✅ شروع History tracking
+  if (typeof History !== 'undefined' && History.onDragStart) {
+    History.onDragStart();
+  }
 
   function move(ev) {
     ev.preventDefault();
@@ -5645,15 +5627,28 @@ function startConicAngleDrag(e, id) {
     const stop = getStop(id);
     if (stop) {
       stop.startAngle = Math.round(ang);
+      
+      // ✅ آپدیت المان‌های UI
       handle.style.transform = `rotate(${ang}deg)`;
       center.textContent = stop.startAngle + "°";
-      document.getElementById(`conicAngleNum_${id}`).value = stop.startAngle;
+      
+      const numInput = document.getElementById(`conicAngleNum_${id}`);
+      if (numInput && numInput !== document.activeElement) {
+        numInput.value = stop.startAngle;
+      }
+      
       draw();
       updateCSS();
+      updateStopItem(id);
     }
   }
 
   function up() {
+    // ✅ پایان History tracking
+    if (typeof History !== 'undefined' && History.onDragEnd) {
+      History.onDragEnd();
+    }
+    
     document.removeEventListener("mousemove", move);
     document.removeEventListener("mouseup", up);
     document.removeEventListener("touchmove", move);
@@ -6221,17 +6216,129 @@ function renderList() {
     .join("");
 }
 
+// ✅ تابع جدید: آپدیت input های inspector بدون re-render
+function updateInspectorInputs(stopId) {
+  const s = getStop(stopId);
+  if (!s || state.selected !== stopId) return;
+  
+  const inspector = document.getElementById("inspector");
+  if (!inspector) return;
+  
+  // ========== Position X, Y ==========
+  const allInputs = inspector.querySelectorAll('input');
+  allInputs.forEach(input => {
+    if (input === document.activeElement) return; // Skip focused inputs
+    
+    const oninput = input.getAttribute('oninput') || '';
+    
+    // X position
+    if (oninput.includes(`getStop('${stopId}').x`)) {
+      input.value = Math.round(s.x * 100);
+    }
+    // Y position
+    else if (oninput.includes(`getStop('${stopId}').y`)) {
+      input.value = Math.round(s.y * 100);
+    }
+    // Size (radial)
+    else if (oninput.includes(`getStop('${stopId}').size`)) {
+      input.value = Math.round(s.size);
+    }
+    // Feather (radial)
+    else if (oninput.includes(`getStop('${stopId}').feather`)) {
+      input.value = Math.round(s.feather);
+    }
+  });
+  
+  // ========== Radial opacity ==========
+  if (s.type === "radial") {
+    const opacityInput = document.getElementById(`opacity_${stopId}`);
+    if (opacityInput && opacityInput !== document.activeElement) {
+      opacityInput.value = Math.round(s.opacity);
+    }
+  }
+  
+  // ========== Linear angle ==========
+  if (s.type === "linear") {
+    const angleNum = document.getElementById(`angleNum_${stopId}`);
+    const angleCenter = document.getElementById(`angleCenter_${stopId}`);
+    const angleHandle = document.getElementById(`angleHandle_${stopId}`);
+    
+    if (angleNum && angleNum !== document.activeElement) {
+      angleNum.value = s.angle;
+    }
+    if (angleCenter) {
+      angleCenter.textContent = `${s.angle}°`;
+    }
+    if (angleHandle) {
+      angleHandle.style.transform = `rotate(${s.angle}deg)`;
+    }
+  }
+  
+  // ========== Conic angle ==========
+  if (s.type === "conic") {
+    const angleNum = document.getElementById(`conicAngleNum_${stopId}`);
+    const angleCenter = document.getElementById(`conicAngleCenter_${stopId}`);
+    const angleHandle = document.getElementById(`conicAngleHandle_${stopId}`);
+    
+    if (angleNum && angleNum !== document.activeElement) {
+      angleNum.value = s.startAngle;
+    }
+    if (angleCenter) {
+      angleCenter.textContent = `${s.startAngle}°`;
+    }
+    if (angleHandle) {
+      angleHandle.style.transform = `rotate(${s.startAngle}deg)`;
+    }
+  }
+  
+  // ========== Color Stops (linear/conic) ==========
+  if (s.stops && (s.type === "linear" || s.type === "conic")) {
+    s.stops.forEach((cs, i) => {
+      const row = inspector.querySelector(`[data-stop-id="${stopId}"][data-color-index="${i}"]`);
+      if (!row) return;
+      
+      // Position
+      const posInputs = row.querySelectorAll('input');
+      posInputs.forEach(input => {
+        if (input === document.activeElement) return;
+        
+        const oninput = input.getAttribute('oninput') || '';
+        if (oninput.includes('.pos=') || oninput.includes('.pos =')) {
+          input.value = cs.pos;
+        }
+        if (oninput.includes('updateColorStopOpacity')) {
+          input.value = cs.opacity;
+        }
+      });
+      
+      // Color swatch
+      const swatch = row.querySelector('.color-swatch-inner');
+      if (swatch) {
+        swatch.style.background = rgba(cs.color, cs.opacity / 100);
+      }
+    });
+  }
+  
+  // ========== Radial color swatch ==========
+  if (s.type === "radial") {
+    const container = inspector.querySelector(`[data-stop-id="${stopId}"]`);
+    if (container) {
+      const swatch = container.querySelector('.color-swatch-inner');
+      if (swatch) {
+        swatch.style.background = rgba(s.color, s.opacity / 100);
+      }
+    }
+  }
+}
 // ========== تابع یکپارچه برای به‌روزرسانی همه چیز ==========
 function liveUpdate(stopId = null) {
   draw();
   updateCSS();
   
-  if (stopId) {
-    updateStopItem(stopId);
-    updateInspectorPreview(stopId);
-  } else if (state.selected) {
-    updateStopItem(state.selected);
-    updateInspectorPreview(state.selected);
+  const id = stopId || state.selected;
+  if (id) {
+    updateStopItem(id);
+    updateInspectorInputs(id);
   }
 }
 
@@ -6362,6 +6469,8 @@ function onPointerMove(e) {
 
   throttledDraw();
   updateStopItem(drag.s.id);
+  updateInspectorInputs(drag.s.id);  // ✅ اضافه شد
+  updateCSS();  // ✅ اضافه شد برای آپدیت CSS در حین drag
 }
 
 // ========== به‌روزرسانی angle drag ==========
@@ -7417,7 +7526,6 @@ async function exportAsImage(format = "png", quality = 0.92) {
                          state.bgBlendMode !== 'normal';
     
     if (needsBgBlend) {
-      // Canvas موقت
       const gradCanvas = document.createElement('canvas');
       gradCanvas.width = width;
       gradCanvas.height = height;
@@ -7429,7 +7537,6 @@ async function exportAsImage(format = "png", quality = 0.92) {
       });
       gradCtx.globalCompositeOperation = 'source-over';
       
-      // ✅ ترکیب با bgBlendMode
       exportCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
       exportCtx.drawImage(gradCanvas, 0, 0);
       exportCtx.globalCompositeOperation = 'source-over';
@@ -7464,32 +7571,41 @@ async function exportAsImage(format = "png", quality = 0.92) {
     }
   }
 
-// ========== 4. نویز ==========
-if (noiseState.enabled && noiseState.opacity > 0) {
-  const noiseCanvas = await getNoiseCanvas(
-    width,
-    height,
-    noiseState.frequency
-  );
+  // ========== 4. نویز ==========
+  if (noiseState.enabled && noiseState.opacity > 0) {
+    const noiseCanvas = await getNoiseCanvas(
+      width,
+      height,
+      noiseState.frequency
+    );
 
-  if (noiseCanvas instanceof HTMLCanvasElement) {
-    exportCtx.save();
-    exportCtx.globalCompositeOperation = noiseState.blend;
-    exportCtx.globalAlpha = noiseState.opacity / 100;
-    exportCtx.drawImage(noiseCanvas, 0, 0, width, height);
-    exportCtx.restore();
+    if (noiseCanvas instanceof HTMLCanvasElement) {
+      exportCtx.save();
+      exportCtx.globalCompositeOperation = noiseState.blend;
+      exportCtx.globalAlpha = noiseState.opacity / 100;
+      exportCtx.drawImage(noiseCanvas, 0, 0, width, height);
+      exportCtx.restore();
+    }
   }
-}
 
-
-
-  // ========== 5. دانلود ==========
-  const mime = format === "jpg" ? "image/jpeg" : "image/png";
-  const filename = `gradient-${width}x${height}.${format}`;
+  // ========== 5. دانلود ✅ با پشتیبانی WebP ==========
+  const mimeTypes = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp"
+  };
+  
+  const ext = format.toLowerCase();
+  const mime = mimeTypes[ext] || "image/png";
+  const filename = `gradient-${width}x${height}.${ext === 'jpeg' ? 'jpg' : ext}`;
 
   exportCanvas.toBlob(
     (blob) => {
-      if (!blob) return;
+      if (!blob) {
+        console.error("❌ Failed to create blob");
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -8694,6 +8810,23 @@ function initMobile() {
 }
 
 // ========== INITIALIZATION ==========
+function rand(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+function randInt(min, max) {
+  return Math.floor(rand(min, max));
+}
+
+function randFrom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+const COLOR_POOL = [
+  "#ff0066", "#7c3aed", "#00d4ff",
+  "#00ff88", "#ffb703", "#fb5607"
+];
+
 async function init() {
   initMobile();
   initPickerEvents();
@@ -8712,37 +8845,42 @@ async function init() {
   updateBgUI();
   initLayerDragDrop();
 
-  // Default gradients
+  /* ========= RADIAL ========= */
   addStop("radial");
-  state.stops[0].name = "Pink Glow";
-  state.stops[0].color = "#ff0066";
-  state.stops[0].x = 0.25;
-  state.stops[0].y = 0.4;
-  state.stops[0].feather = 70;
+  Object.assign(state.stops[0], {
+    name: "Radial Glow",
+    color: randFrom(COLOR_POOL),
+    x: rand(0.2, 0.8),
+    y: rand(0.2, 0.8),
+    feather: randInt(40, 85)
+  });
 
+  /* ========= CONIC ========= */
   addStop("conic");
-  state.stops[1].name = "Rainbow";
-  state.stops[1].x = 0.7;
-  state.stops[1].y = 0.5;
-  state.stops[1].startAngle = 0;
-  state.stops[1].stops = [
-    { pos: 0, color: "#ff0066", opacity: 40 },
-    { pos: 33, color: "#00ff88", opacity: 40 },
-    { pos: 66, color: "#00d4ff", opacity: 40 },
-  ];
+  state.stops[1].name = "Conic Flow";
+  state.stops[1].x = rand(0.3, 0.7);
+  state.stops[1].y = rand(0.3, 0.7);
+  state.stops[1].startAngle = randInt(0, 360);
+  state.stops[1].stops = Array.from({ length: 3 }, (_, i) => ({
+    pos: i * 33,
+    color: randFrom(COLOR_POOL),
+    opacity: randInt(30, 60)
+  }));
 
+  /* ========= LINEAR ========= */
   addStop("linear");
-  state.stops[2].name = "Sunset";
-  state.stops[2].angle = 135;
+  state.stops[2].name = "Linear Blend";
+  state.stops[2].angle = randInt(0, 360);
   state.stops[2].stops = [
-    { pos: 0, color: "#00d4ff", opacity: 60 },
-    { pos: 50, color: "#7c3aed", opacity: 70 },
-    { pos: 100, color: "#ff6b9d", opacity: 60 },
+    { pos: 0, color: randFrom(COLOR_POOL), opacity: randInt(50, 70) },
+    { pos: 50, color: randFrom(COLOR_POOL), opacity: randInt(50, 80) },
+    { pos: 100, color: randFrom(COLOR_POOL), opacity: randInt(50, 70) }
   ];
 
   state.selected = null;
   refresh();
 }
+
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);

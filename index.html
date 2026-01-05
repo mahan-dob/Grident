@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gradient Designer</title>
+  <link rel="shortcut icon" href="./LOGO.svg" type="image/x-icon">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   
   <header class="header">
-    <div class="header-content">
+      <img class="header-logo" src="./LOGO.svg" alt="logo">
       <h1 class="logo">Gradient Designer</h1>
       <a href="./Gradient Designer/Gradient-Designer.html" class="btn-editor">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -17,7 +18,6 @@
         </svg>
         Open Editor
       </a>
-    </div>
     <div class="theme-select">
         <select id="themeSelect">
           <option value="auto">Auto</option>
@@ -28,7 +28,27 @@
         </select>
       </div>
   </header>
-  
+  <div class="wellcome">
+    <div class="logo-continer">
+      <h1 class="wellcome-text name">Gradient Designer</h1>
+      <img class="logo" src="./LOGO.svg" alt="logo">
+    </div>
+    <div class="wellcome-text about">
+      <h3>Noise & Grain</h3>
+      <p>Add depth and texture to flat gradients</p>
+      
+      <h3>CSS Output</h3>
+      <p>CSS Responsive gradient output</p>
+      
+      <h3>Image Export</h3>
+      <p>Export PNG, JPG, WEBP, or SVG</p>
+      
+      <h3>Filters</h3>
+      <p>Fine-tune contrast, blur, and visual balance</p>
+        
+    </div>
+    <h2 class="wellcome-text outro-text">Build your creativity, gradient by gradient</h2>
+  </div>
   <main class="main">
     <section class="hero">
       <h2>Choose a Preset</h2>
@@ -44,142 +64,145 @@
       </div>
     </div>
   </main>
+  
+<svg width="0" height="0" style="position:absolute">
+  <filter id="noiseFilter"
+          x="0%" y="0%"
+          width="100%" height="100%"
+          filterUnits="objectBoundingBox">
+    
+    <feTurbulence type="fractalNoise"
+                  baseFrequency="0.7000000000000001"
+                  numOctaves="4"
+                  stitchTiles="stitch"
+                  result="noise"/>
+    
+    <feColorMatrix type="saturate"
+                   values="0"
+                   in="noise"
+                   result="bwNoise"/>
+    
+    <feBlend in="SourceGraphic"
+             in2="bwNoise"
+             mode="multiply"/>
+  </filter>
+</svg>
+
   <script src="./script.js"></script>
   <script>
-    // ========== CONFIG ==========
-    const PRESETS_URL = './presets.json';
-    const EDITOR_URL = './Gradient Designer/Gradient-Designer.html';
+// ========== CONFIG ==========
+const PRESETS_URL = './presets.json';
+const EDITOR_URL = './Gradient Designer/Gradient-Designer.html';
+const DEFAULT_THUMBNAIL = './thumbnails/default.png'; // عکس پیش‌فرض
+
+// ========== GALLERY ==========
+const Gallery = {
+  presets: [],
+  currentCategory: 'all',
+  
+  async init() {
+    await this.loadPresets();
+    this.renderFilters();
+    this.render();
+  },
+  
+  async loadPresets() {
+    const grid = document.getElementById('presetsGrid');
     
-    // ========== GALLERY ==========
-    const Gallery = {
-      presets: [],
-      currentCategory: 'all',
+    try {
+      const response = await fetch(PRESETS_URL);
+      if (!response.ok) throw new Error('Failed to load');
       
-      async init() {
-        await this.loadPresets();
-        this.renderFilters();
-        this.render();
-      },
+      const data = await response.json();
+      this.presets = data.presets || [];
+      console.log(`✅ Loaded ${this.presets.length} presets`);
       
-      async loadPresets() {
-        const grid = document.getElementById('presetsGrid');
-        
-        try {
-          const response = await fetch(PRESETS_URL);
-          if (!response.ok) throw new Error('Failed to load');
-          
-          const data = await response.json();
-          this.presets = data.presets || [];
-          console.log(`✅ Loaded ${this.presets.length} presets`);
-          
-        } catch (error) {
-          console.error('Error:', error);
-          grid.innerHTML = `
-            <div class="error">
-              <p>❌ Failed to load presets</p>
-              <button onclick="Gallery.init()">Retry</button>
-            </div>
-          `;
-        }
-      },
-      
-      getCategories() {
-        const cats = new Set(this.presets.map(p => p.category));
-        return ['all', ...Array.from(cats)];
-      },
-      
-      filterBy(category) {
-        this.currentCategory = category;
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.category === category);
-        });
-        this.render();
-      },
-      
-      renderFilters() {
-        const container = document.getElementById('filters');
-        if (!container) return;
-        
-        const categories = this.getCategories();
-        container.innerHTML = categories.map(cat => `
-          <button 
-            class="filter-btn ${cat === this.currentCategory ? 'active' : ''}" 
-            data-category="${cat}"
-            onclick="Gallery.filterBy('${cat}')"
-          >
-            ${cat.charAt(0).toUpperCase() + cat.slice(1)}
-          </button>
-        `).join('');
-      },
-      
-      render() {
-        const grid = document.getElementById('presetsGrid');
-        if (!grid) return;
-        
-        const filtered = this.currentCategory === 'all' 
-          ? this.presets 
-          : this.presets.filter(p => p.category === this.currentCategory);
-        
-        if (filtered.length === 0) {
-          grid.innerHTML = '<div class="loading">No presets found</div>';
-          return;
-        }
-        
-        grid.innerHTML = filtered.map(preset => `
-          <div class="preset-card" onclick="Gallery.openPreset('${preset.id}')">
-            <div class="preset-card-bg" style="background: ${this.generateCSS(preset)}"></div>
-            <div class="preset-card-overlay"></div>
-            <div class="preset-card-info">
-              <div class="preset-card-name">${preset.name}</div>
-              <div class="preset-card-tags">
-                ${preset.tags.slice(0, 3).map(t => `<span class="preset-tag">${t}</span>`).join('')}
-              </div>
-            </div>
+    } catch (error) {
+      console.error('Error:', error);
+      grid.innerHTML = `
+        <div class="error">
+          <p>❌ Failed to load presets</p>
+          <button onclick="Gallery.init()">Retry</button>
+        </div>
+      `;
+    }
+  },
+  
+  getCategories() {
+    const cats = new Set(this.presets.map(p => p.category));
+    return ['all', ...Array.from(cats)];
+  },
+  
+  filterBy(category) {
+    this.currentCategory = category;
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.category === category);
+    });
+    this.render();
+  },
+  
+  renderFilters() {
+    const container = document.getElementById('filters');
+    if (!container) return;
+    
+    const categories = this.getCategories();
+    container.innerHTML = categories.map(cat => `
+      <button 
+        class="filter-btn ${cat === this.currentCategory ? 'active' : ''}" 
+        data-category="${cat}"
+        onclick="Gallery.filterBy('${cat}')"
+      >
+        ${cat.charAt(0).toUpperCase() + cat.slice(1)}
+      </button>
+    `).join('');
+  },
+  
+  render() {
+    const grid = document.getElementById('presetsGrid');
+    if (!grid) return;
+    
+    const filtered = this.currentCategory === 'all' 
+      ? this.presets 
+      : this.presets.filter(p => p.category === this.currentCategory);
+    
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="loading">No presets found</div>';
+      return;
+    }
+    
+    // ✅ رندر با عکس به جای CSS gradient
+    grid.innerHTML = filtered.map(preset => `
+      <div class="preset-card" onclick="Gallery.openPreset('${preset.id}')">
+        <img 
+          class="preset-card-img" 
+          src="${preset.thumbnail || DEFAULT_THUMBNAIL}" 
+          alt="${preset.name}"
+          loading="lazy"
+          onerror="this.src='${DEFAULT_THUMBNAIL}'"
+        />
+        <div class="preset-card-overlay"></div>
+        <div class="preset-card-info">
+          <div class="preset-card-name">${preset.name}</div>
+          <div class="preset-card-tags">
+            ${preset.tags.slice(0, 3).map(t => `<span class="preset-tag">${t}</span>`).join('')}
           </div>
-        `).join('');
-      },
-      
-      generateCSS(preset) {
-        const data = preset.data;
-        const stops = data.stops?.filter(s => s.visible !== false) || [];
-        
-        if (stops.length === 0) return data.bgColor || '#000';
-        
-        const gradients = stops.map(s => {
-          if (s.type === 'radial') {
-            return `radial-gradient(circle at ${s.x * 100}% ${s.y * 100}%, ${s.color} 0%, transparent 70%)`;
-          } 
-          else if (s.type === 'linear' && s.stops) {
-            const cs = s.stops.map(c => `${c.color} ${c.pos}%`).join(', ');
-            return `linear-gradient(${s.angle || 0}deg, ${cs})`;
-          } 
-          else if (s.type === 'conic' && s.stops) {
-            const cs = s.stops.map(c => `${c.color} ${c.pos}%`).join(', ');
-            return `conic-gradient(from ${s.startAngle || 0}deg at ${s.x * 100}% ${s.y * 100}%, ${cs})`;
-          }
-          return '';
-        }).filter(Boolean);
-        
-        return gradients.length > 0 
-          ? `${gradients.join(', ')}, ${data.bgColor || '#000'}`
-          : data.bgColor || '#000';
-      },
-      
-      openPreset(presetId) {
-        const preset = this.presets.find(p => p.id === presetId);
-        if (!preset) return;
-        
-        // ذخیره پریست در sessionStorage
-        sessionStorage.setItem('loadPreset', JSON.stringify(preset));
-        
-        // رفتن به ویرایشگر
-        window.location.href = EDITOR_URL;
-      }
-    };
+        </div>
+      </div>
+    `).join('');
+  },
+  
+  openPreset(presetId) {
+    const preset = this.presets.find(p => p.id === presetId);
+    if (!preset) return;
     
-    // Init
-    document.addEventListener('DOMContentLoaded', () => Gallery.init());
-    window.Gallery = Gallery;
+    sessionStorage.setItem('loadPreset', JSON.stringify(preset));
+    window.location.href = EDITOR_URL;
+  }
+};
+
+// Init
+document.addEventListener('DOMContentLoaded', () => Gallery.init());
+window.Gallery = Gallery;
   </script>
 </body>
 </html>

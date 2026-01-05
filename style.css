@@ -58,6 +58,36 @@
     --sec-border: rgba(148, 163, 184, 0.5);
   }
 
+  @font-face {
+    font-family: "SF Pro";
+    src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot");
+    src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot?#iefix")
+        format("embedded-opentype"),
+      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.woff2")
+        format("woff2"),
+      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.woff")
+        format("woff"),
+      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.ttf")
+        format("truetype"),
+      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.svg#SF Pro")
+        format("svg");
+  }
+  
+  @font-face {
+    font-family: "Filson Soft";
+    src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot");
+    src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot?#iefix")
+        format("embedded-opentype"),
+      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.woff2")
+        format("woff2"),
+      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.woff")
+        format("woff"),
+      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.ttf")
+        format("truetype"),
+      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.svg#Filson Soft")
+        format("svg");
+  }
+
   /* ========================================
    RESET & BASE STYLES
 ======================================== */
@@ -75,9 +105,8 @@
     color: var(--text-primary);
     font-family: "SF Pro";
     font-size: 12px;
-    transition: background-color var(--btn-transition),
-      color var(--btn-transition);
   }
+
   /* ========================================
      theme
   ======================================== */
@@ -236,24 +265,18 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
+  height: 10vh;
   background: var(--TransParent-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
-}
-
-.header-content {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 16px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.logo {
-  font-size: 20px;
-  font-weight: 700;
+.header-logo{
+  height: 100%;
 }
 
 .btn-editor {
@@ -272,8 +295,261 @@ body {
 
 .btn-editor:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+  box-shadow: 0 8px 20px var(--primary);
 }
+
+  /* ========================================
+     wellcome
+  ======================================== */
+
+  @property --rx { syntax: '<percentage>'; inherits: false; initial-value: 43%; }
+  @property --ry { syntax: '<percentage>'; inherits: false; initial-value: 100%; }
+  @property --a1 { syntax: '<angle>'; inherits: false; initial-value: 212deg; }
+  @property --a2 { syntax: '<angle>'; inherits: false; initial-value: 77deg; }
+  @property --a3 { syntax: '<angle>'; inherits: false; initial-value: 296deg; }
+  @property --b { syntax: '<number>'; inherits: false; initial-value: 1.04; }
+  
+  .wellcome {
+    height: 90dvh;
+    background-color: rgba(10, 10, 20, 1);
+    background-image:
+      radial-gradient(50% 70% at var(--rx) var(--ry),
+        rgba(0, 212, 255, 0.7) 0%,
+        rgba(0, 212, 255, 0.7) 7%,
+        rgba(0, 212, 255, 0) 100%
+      ),
+      conic-gradient(from var(--a1) at 55% 89%,
+        rgba(255,0,0,0) 39%,
+        rgba(0,212,255,0.6) 46%,
+        rgba(255,255,255,0.4) 48%,
+        rgba(249,249,249,0.4) 52%,
+        rgba(0,255,136,0.6) 54%,
+        rgba(255,0,0,0) 60%
+      ),
+      conic-gradient(from var(--a2) at 40% 50%,
+        rgba(255,0,0,0) 27%,
+        rgba(0,212,255,0.7) 46%,
+        rgba(255,255,255,0.64) 48%,
+        rgba(255,255,255,0.64) 52%,
+        rgba(0,212,255,0.7) 54%,
+        rgba(255,0,0,0) 75%
+      ),
+      conic-gradient(from var(--a3) at 27% 10%,
+        rgba(255,0,0,0) 10%,
+        rgba(0,255,136,0.29) 46%,
+        rgba(255,255,255,0.4) 48%,
+        rgba(249,249,249,0.4) 52%,
+        rgba(0,255,136,0.61) 54%,
+        rgba(255,0,0,0) 60%
+      );
+  
+    background-blend-mode: luminosity;
+    filter: brightness(var(--b)) contrast(130%) saturate(129%);
+    
+    animation:
+      moveGradients 25s ease-in-out infinite,
+      pulseLight 6s ease-in-out infinite alternate;
+  }
+  
+  @keyframes moveGradients {
+    0% {
+      --rx: 43%;
+      --ry: 100%;
+      --a1: 212deg;
+      --a2: 77deg;
+      --a3: 296deg;
+    }
+    25% {
+      --rx: 44%;
+      --ry: 99%;
+      --a1: 262deg;
+      --a2: 127deg;
+      --a3: 336deg;
+    }
+    50% {
+      --rx: 45%;
+      --ry: 98%;
+      --a1: 312deg;
+      --a2: 177deg;
+      --a3: 376deg;
+    }
+    75% {
+      --rx: 44%;
+      --ry: 99%;
+      --a1: 262deg;
+      --a2: 127deg;
+      --a3: 336deg;
+    }
+    100% {
+      --rx: 43%;
+      --ry: 100%;
+      --a1: 212deg;
+      --a2: 77deg;
+      --a3: 296deg;
+    }
+  }
+  
+  @keyframes pulseLight {
+    0%   { --b: 1.04; }
+    50%  { --b: 1.12; }
+    100% { --b: 1.04; }
+  }
+  
+
+
+.wellcome::after{
+content: '';
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+pointer-events: none;
+opacity: 0.20;
+filter: url(#noiseFilter);
+mix-blend-mode: multiply;
+}
+
+.wellcome-text{
+  color: #ffffff4b;
+}
+
+.logo-continer{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 2rem;
+}
+.logo{
+
+  width: 12%;
+}
+
+.name{
+  font-size: 4rem;
+  background-image: var(--accent);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  font-family: "Filson Soft";
+  width: max-content;
+  background-size: 200% 200%;
+  animation: gradientMove 3s linear infinite;
+}
+
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.about{
+  margin-left: 4rem;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 2rem;
+  font-family: "Filson Soft";
+}
+
+
+.about h3,
+.about p {
+  position: relative;
+  background:
+    transparent
+    -webkit-linear-gradient(
+      110deg,
+      transparent 40%,
+      rgba(255,255,255,0.9) 50%,
+      transparent 60%
+    )
+    no-repeat -150% 0 / 40px 100%;
+
+  background-clip: text;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.35);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+  margin-top: 1rem;
+}
+
+.about p{
+  font-size: 18px;
+}
+.sweep-active {
+  animation: sweep 2.8s linear forwards;
+}
+
+@keyframes sweep {
+  0% {
+    background-position: -150% 0;
+    text-shadow: none;
+  }
+
+  35% {
+    text-shadow:
+      0 0 6px rgba(180, 240, 255, 0.4),
+      0 0 14px rgba(120, 200, 255, 0.3);
+  }
+
+  50% {
+    background-position: 0% 0;
+    text-shadow:
+      0 0 10px rgba(220, 255, 255, 0.9),
+      0 0 25px rgba(160, 220, 255, 0.8),
+      0 0 45px rgba(120, 180, 255, 0.6);
+  }
+
+  65% {
+    text-shadow:
+      0 0 6px rgba(180, 240, 255, 0.4),
+      0 0 14px rgba(120, 200, 255, 0.3);
+  }
+
+  100% {
+    background-position: 150% 0;
+    text-shadow: none;
+  }
+}
+
+
+
+.outro-text {
+  position: absolute;
+  bottom: 1rem;
+  font-size: 2.5rem;
+  margin-left: 2rem;
+  background-image: var(--accent);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  font-family: "Filson Soft";
+  width: max-content;
+
+  /* انیمیشن گرادیانت */
+  background-size: 200% 200%;
+  animation: gradientMove 3s linear infinite;
+}
+
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+
 
 /* Main */
 .main {
@@ -441,7 +717,81 @@ body {
   color: white;
   cursor: pointer;
 }
+.preset-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 4/3;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
 
+.preset-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ✅ استایل عکس */
+.preset-card-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.preset-card:hover .preset-card-img {
+  transform: scale(1.05);
+}
+
+.preset-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.8) 0%,
+    rgba(0, 0, 0, 0.2) 50%,
+    transparent 100%
+  );
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.preset-card:hover .preset-card-overlay {
+  opacity: 0.9;
+}
+
+.preset-card-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  z-index: 2;
+}
+
+.preset-card-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.preset-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.preset-tag {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.8);
+}
 /* Mobile */
 @media (max-width: 768px) {
   .header-content { padding: 12px 16px; }

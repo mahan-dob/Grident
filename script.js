@@ -38,3 +38,18 @@ select.addEventListener('change', e => {
   applyTheme(e.target.value);
 });
 
+const targets = document.querySelectorAll('.about h3, .about p');
+
+function runSweep() {
+  const el = targets[Math.floor(Math.random() * targets.length)];
+
+  el.classList.remove('sweep-active');
+  void el.offsetWidth; // reflow قطعی
+  el.classList.add('sweep-active');
+
+  const delay = 1000 + Math.random() * 3000;
+  setTimeout(runSweep, delay);
+}
+
+setTimeout(runSweep, 1200);
+
