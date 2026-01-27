@@ -1,24 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gradient Designer</title>
-  <link rel="shortcut icon" href="./LOGO.svg" type="image/x-icon">
-  <link rel="stylesheet" href="style.css">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gradient Designer</title>
+    <link rel="shortcut icon" href="./LOGO.svg" type="image/x-icon" />
+    <link rel="stylesheet" href="/css/index.css" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <!-- <link rel="preconnect" href="https://fonts.googleapis.com"> -->
+<!-- <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+  -->
 </head>
-<body>
-  
-  <header class="header">
-      <img class="header-logo" src="./LOGO.svg" alt="logo">
-      <h1 class="logo">Gradient Designer</h1>
-      <a href="./Gradient Designer/Gradient-Designer.html" class="btn-editor">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-        </svg>
-        Open Editor
+  <body>
+    <header class="header">
+      <img class="header-logo" src="./LOGO.svg" alt="logo" />
+      <h1 class="header-name">Gradient Designer</h1>
+      <div class="link-list">
+        <a class="link" href="./guide.html">Guide</a>
+      </div>
+      <a
+        href="./Gradient-Designer.html"
+        class="header-btn-editor"
+      >
+        <img src="./icon/pencil-edit.svg" alt="open Gradient Designer" />
+        Open Gradient Designer
       </a>
-    <div class="theme-select">
+      <div class="theme-select">
         <select id="themeSelect">
           <option value="auto">Auto</option>
           <option value="dark">Dark</option>
@@ -27,182 +38,124 @@
           <option value="midnight">MidNight</option>
         </select>
       </div>
-  </header>
-  <div class="wellcome">
-    <div class="logo-continer">
-      <h1 class="wellcome-text name">Gradient Designer</h1>
-      <img class="logo" src="./LOGO.svg" alt="logo">
+    </header>
+    <div class="wellcome">
+
+        <h1 class="wellcome-text name">Gradient Designer</h1>
+        <h2 class="dis">Precision gradients with noise, depth, and control</h2>
+        <img class="logo" src="./LOGO.svg" alt="logo" />
+
+      
+      <div class="wellcome-text about">
+        <h3>Noise & Grain</h3>
+        <p>Add depth and texture to flat gradients</p>
+
+        <h3>CSS Output</h3>
+        <p>CSS Responsive gradient output</p>
+
+        <h3>Image Export</h3>
+        <p>Export PNG, JPG, WEBP, or SVG</p>
+
+        <h3>Filters</h3>
+        <p>Fine-tune contrast, blur, and visual balance</p>
+      </div>
+      <h2 class="wellcome-text outro-text">
+        Build your creativity, gradient by gradient
+      </h2>
     </div>
-    <div class="wellcome-text about">
-      <h3>Noise & Grain</h3>
-      <p>Add depth and texture to flat gradients</p>
+    <a
+      href="./Gradient-Designer.html"
+      class="btn-editor"
+    >
+      <p>Enter the Gradient Designer</p>
+      <svg
+      class="icon-arrow"
+      xmlns="http://www.w3.org/2000/svg"
+      width="30"
+      height="30"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <defs>
+        <linearGradient
+          id="arrowGradient"
+          x1="0%"
+          y1="0%"
+          x2="100%"
+          y2="100%"
+        >
+          <stop offset="0%" stop-color="#00d4ff" />
+          <stop offset="100%" stop-color="#00ff88" />
+        </linearGradient>
+      </defs>
+  
+      <path
+        class="arrow-path"
+        d="M9 6L15 12L9 18"
+        stroke="url(#arrowGradient)"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+    </a>
+    <main class="main">
+      <section class="hero">
+        <h2>Preset</h2>
+        <p>Click any gradient to open it in the editor</p>
+      </section>
+
+      <div class="filters" id="filters"></div>
+
+      <div class="presets-grid" id="presetsGrid">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Loading presets...</p>
+        </div>
+      </div>
+    </main>
+    <section class="totarial-section">
+      <h2>Totarial</h2>
+      <video autoplay loop muted playsinline>
+        <source src="./20260106_232048.mp4" type="video/mp4">
+      </video>
       
-      <h3>CSS Output</h3>
-      <p>CSS Responsive gradient output</p>
-      
-      <h3>Image Export</h3>
-      <p>Export PNG, JPG, WEBP, or SVG</p>
-      
-      <h3>Filters</h3>
-      <p>Fine-tune contrast, blur, and visual balance</p>
-        
-    </div>
-    <h2 class="wellcome-text outro-text">Build your creativity, gradient by gradient</h2>
-  </div>
-  <main class="main">
-    <section class="hero">
-      <h2>Choose a Preset</h2>
-      <p>Click any gradient to open it in the editor</p>
+      <h3><a href="./guide.html">continue to guide</a></h3>
     </section>
-    
-    <div class="filters" id="filters"></div>
-    
-    <div class="presets-grid" id="presetsGrid">
-      <div class="loading">
-        <div class="spinner"></div>
-        <p>Loading presets...</p>
+    <footer>
+      <img class="footer-logo" src="./LOGO.svg" alt="footer-logo">
+      <div class="link-continer">
+        <a class="footer-links" href="#">My Email</a>
+        <a class="footer-links" href="#">FAQ</a>
+        <a class="footer-links" href="./guide.html">Guide</a>
       </div>
-    </div>
-  </main>
-  
-<svg width="0" height="0" style="position:absolute">
-  <filter id="noiseFilter"
-          x="0%" y="0%"
-          width="100%" height="100%"
-          filterUnits="objectBoundingBox">
-    
-    <feTurbulence type="fractalNoise"
-                  baseFrequency="0.7000000000000001"
-                  numOctaves="4"
-                  stitchTiles="stitch"
-                  result="noise"/>
-    
-    <feColorMatrix type="saturate"
-                   values="0"
-                   in="noise"
-                   result="bwNoise"/>
-    
-    <feBlend in="SourceGraphic"
-             in2="bwNoise"
-             mode="multiply"/>
-  </filter>
-</svg>
-
-  <script src="./script.js"></script>
-  <script>
-// ========== CONFIG ==========
-const PRESETS_URL = './presets.json';
-const EDITOR_URL = './Gradient Designer/Gradient-Designer.html';
-const DEFAULT_THUMBNAIL = './thumbnails/default.png'; // عکس پیش‌فرض
-
-// ========== GALLERY ==========
-const Gallery = {
-  presets: [],
-  currentCategory: 'all',
-  
-  async init() {
-    await this.loadPresets();
-    this.renderFilters();
-    this.render();
-  },
-  
-  async loadPresets() {
-    const grid = document.getElementById('presetsGrid');
-    
-    try {
-      const response = await fetch(PRESETS_URL);
-      if (!response.ok) throw new Error('Failed to load');
-      
-      const data = await response.json();
-      this.presets = data.presets || [];
-      console.log(`✅ Loaded ${this.presets.length} presets`);
-      
-    } catch (error) {
-      console.error('Error:', error);
-      grid.innerHTML = `
-        <div class="error">
-          <p>❌ Failed to load presets</p>
-          <button onclick="Gallery.init()">Retry</button>
-        </div>
-      `;
-    }
-  },
-  
-  getCategories() {
-    const cats = new Set(this.presets.map(p => p.category));
-    return ['all', ...Array.from(cats)];
-  },
-  
-  filterBy(category) {
-    this.currentCategory = category;
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.category === category);
-    });
-    this.render();
-  },
-  
-  renderFilters() {
-    const container = document.getElementById('filters');
-    if (!container) return;
-    
-    const categories = this.getCategories();
-    container.innerHTML = categories.map(cat => `
-      <button 
-        class="filter-btn ${cat === this.currentCategory ? 'active' : ''}" 
-        data-category="${cat}"
-        onclick="Gallery.filterBy('${cat}')"
+    </footer>
+    <svg width="0" height="0" style="position: absolute">
+      <filter
+        id="noiseFilter"
+        x="0%"
+        y="0%"
+        width="100%"
+        height="100%"
+        filterUnits="objectBoundingBox"
       >
-        ${cat.charAt(0).toUpperCase() + cat.slice(1)}
-      </button>
-    `).join('');
-  },
-  
-  render() {
-    const grid = document.getElementById('presetsGrid');
-    if (!grid) return;
-    
-    const filtered = this.currentCategory === 'all' 
-      ? this.presets 
-      : this.presets.filter(p => p.category === this.currentCategory);
-    
-    if (filtered.length === 0) {
-      grid.innerHTML = '<div class="loading">No presets found</div>';
-      return;
-    }
-    
-    // ✅ رندر با عکس به جای CSS gradient
-    grid.innerHTML = filtered.map(preset => `
-      <div class="preset-card" onclick="Gallery.openPreset('${preset.id}')">
-        <img 
-          class="preset-card-img" 
-          src="${preset.thumbnail || DEFAULT_THUMBNAIL}" 
-          alt="${preset.name}"
-          loading="lazy"
-          onerror="this.src='${DEFAULT_THUMBNAIL}'"
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.7000000000000001"
+          numOctaves="4"
+          stitchTiles="stitch"
+          result="noise"
         />
-        <div class="preset-card-overlay"></div>
-        <div class="preset-card-info">
-          <div class="preset-card-name">${preset.name}</div>
-          <div class="preset-card-tags">
-            ${preset.tags.slice(0, 3).map(t => `<span class="preset-tag">${t}</span>`).join('')}
-          </div>
-        </div>
-      </div>
-    `).join('');
-  },
-  
-  openPreset(presetId) {
-    const preset = this.presets.find(p => p.id === presetId);
-    if (!preset) return;
-    
-    sessionStorage.setItem('loadPreset', JSON.stringify(preset));
-    window.location.href = EDITOR_URL;
-  }
-};
 
-// Init
-document.addEventListener('DOMContentLoaded', () => Gallery.init());
-window.Gallery = Gallery;
-  </script>
-</body>
+        <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise" />
+
+        <feBlend in="SourceGraphic" in2="bwNoise" mode="multiply" />
+      </filter>
+    </svg>
+    <script src="./js/script.js"></script>
+    <script src="./js/index.js"></script>
+    <script>
+    
+    </script>
+  </body>
 </html>

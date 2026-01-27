@@ -463,6 +463,7 @@
       "name": "Mesh",
       "category": "modern",
       "tags": ["modern", "colorful", "popular"],
+      "thumbnail": "./thumbnails/mesh.webp",
       "data": {
         "bgColor": "#fef9ef",
         "bgAlpha": 100,
@@ -545,6 +546,7 @@
       "name": "Rainbow",
       "category": "colorful",
       "tags": ["colorful", "fun", "bright"],
+      "thumbnail": "./thumbnails/Rainbow.webp",
       "data": {
         "bgColor": "#1a1a2e",
         "bgAlpha": 100,
@@ -572,6 +574,82 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "id": "universal",
+      "name": "Universal Blend",
+      "category": "demo",
+      "tags": ["blend", "all-modes", "colorful"],
+      "thumbnail": "./thumbnails/universal.png",
+      "data": {
+        "bgColor": "#646464",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Radial Glow",
+            "type": "radial",
+            "visible": true,
+            "x": 0.3,
+            "y": 0.3,
+            "color": "#ff4d4d",
+            "size": 400,
+            "feather": 100,
+            "opacity": 60,
+            "blendMode": "screen"
+          },
+          {
+            "name": "Conic Spectrum",
+            "type": "conic",
+            "visible": true,
+            "x": 0.7,
+            "y": 0.5,
+            "startAngle": 0,
+            "blendMode": "screen",
+            "stops": [
+              { "pos": 0, "color": "#00ffcc", "opacity": 50 },
+              { "pos": 25, "color": "#ff00ff", "opacity": 50 },
+              { "pos": 50, "color": "#ffff00", "opacity": 50 },
+              { "pos": 75, "color": "#ff6600", "opacity": 50 },
+              { "pos": 100, "color": "#00ffcc", "opacity": 50 }
+            ]
+          },
+          {
+            "name": "Linear Accent",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 135,
+            "blendMode": "screen",
+            "stops": [
+              { "pos": 0, "color": "#6600ff", "opacity": 70 },
+              { "pos": 50, "color": "#00ff00", "opacity": 70 },
+              { "pos": 100, "color": "#ff0066", "opacity": 70 }
+            ]
+          }
+        ],
+        "filterState": {
+          "enabled": true,
+          "brightness": 100,
+          "contrast": 110,
+          "saturate": 120,
+          "hue": 0,
+          "blur": 0,
+          "grayscale": 0,
+          "sepia": 0,
+          "invert": 0
+        },
+        "noiseState": {
+          "enabled": true,
+          "opacity": 5,
+          "frequency": 0.6,
+          "blend": "overlay"
+        }
       }
     },
     {
