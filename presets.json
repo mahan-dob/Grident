@@ -577,11 +577,83 @@
       }
     },
     {
+      "id": "blend-test",
+      "name": "Blend Mode Test",
+      "category": "test",
+      "tags": ["blend", "test", "universal"],
+      "data": {
+        "bgColor": "#7f8489",
+        "bgAlpha": 100,
+        "bgEnabled": true,
+        "bgBlendMode": "normal",
+        "canvasWidth": 800,
+        "canvasHeight": 600,
+        "stops": [
+          {
+            "name": "Gray Gradient",
+            "type": "linear",
+            "visible": true,
+            "x": 0.5,
+            "y": 0.5,
+            "angle": 180,
+            "blendMode": "normal",
+            "stops": [
+              { "pos": 0, "color": "#111111", "opacity": 100 },
+              { "pos": 50, "color": "#808A8A", "opacity": 100 },
+              { "pos": 100, "color": "#F2F2F2", "opacity": 100 }
+            ]
+          },
+          {
+            "name": "Muted Color Field",
+            "type": "radial",
+            "visible": true,
+            "x": 0.25,
+            "y": 0.35,
+            "color": "#4A6FA5",
+            "size": 350,
+            "feather": 90,
+            "opacity": 80,
+            "blendMode": "normal"
+          },
+          {
+            "name": "Light Test",
+            "type": "radial",
+            "visible": true,
+            "x": 0.75,
+            "y": 0.25,
+            "color": "#FFFFFF",
+            "size": 300,
+            "feather": 100,
+            "opacity": 60,
+            "blendMode": "screen"
+          },
+          {
+            "name": "Spectrum",
+            "type": "conic",
+            "visible": true,
+            "x": 0.65,
+            "y": 0.65,
+            "startAngle": 0,
+            "blendMode": "normal",
+            "stops": [
+              { "pos": 0, "color": "#FF0000", "opacity": 60 },
+              { "pos": 20, "color": "#FFFF00", "opacity": 60 },
+              { "pos": 40, "color": "#00FF00", "opacity": 60 },
+              { "pos": 60, "color": "#00FFFF", "opacity": 60 },
+              { "pos": 80, "color": "#0000FF", "opacity": 60 },
+              { "pos": 100, "color": "#FF00FF", "opacity": 60 }
+            ]
+          }
+        ]
+      }
+    },
+    
+    {
       "id": "universal",
       "name": "Universal Blend",
-      "category": "demo",
-      "tags": ["blend", "all-modes", "colorful"],
-      "thumbnail": "./thumbnails/universal.png",
+      "category": "minimal",
+      "tags": ["minimal", "bright"],
+      "thumbnail": "./thumbnails/universal.webp",
       "data": {
         "bgColor": "#646464",
         "bgAlpha": 100,

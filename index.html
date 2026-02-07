@@ -1,161 +1,268 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gradient Designer</title>
-    <link rel="shortcut icon" href="./LOGO.svg" type="image/x-icon" />
-    <link rel="stylesheet" href="/css/index.css" />
-    <link rel="stylesheet" href="/css/style.css" />
-    <!-- <link rel="preconnect" href="https://fonts.googleapis.com"> -->
-<!-- <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
-  -->
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Create stunning gradients with noise, depth, and full control. Export to CSS, PNG, JPG, WEBP, or SVG.">
+  <meta name="theme-color" content="#1c1c1c">
+  <title>Gradient Designer - Create Beautiful Gradients</title>
+  <link rel="shortcut icon" href="./LOGO.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="./font/">
+  <link rel="stylesheet" href="/css/index.css" />
+  <link rel="stylesheet" href="/css/style.css" />
 </head>
-  <body>
-    <header class="header">
-      <img class="header-logo" src="./LOGO.svg" alt="logo" />
-      <h1 class="header-name">Gradient Designer</h1>
-      <div class="link-list">
-        <a class="link" href="./guide.html">Guide</a>
-      </div>
-      <a
-        href="./Gradient-Designer.html"
-        class="header-btn-editor"
-      >
-        <img src="./icon/pencil-edit.svg" alt="open Gradient Designer" />
-        Open Gradient Designer
+
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <a href="/" class="header-brand">
+        <img class="header-logo" src="./LOGO.svg" alt="Gradient Designer Logo" width="48" height="48" />
+        <h1 class="header-name">Gradient Designer</h1>
       </a>
+    </div>
+    
+    <nav class="header-nav">
+      <ul class="nav-list">
+        <li><a class="nav-link" href="#presets">Presets</a></li>
+        <li><a class="nav-link" href="./guide.html">Guide</a></li>
+      </ul>
+    </nav>
+
+    <div class="header-right">
       <div class="theme-select">
-        <select id="themeSelect">
+        <select id="themeSelect" aria-label="Theme selector">
           <option value="auto">Auto</option>
           <option value="dark">Dark</option>
           <option value="light">Light</option>
-          <option value="dep-dark">DepDark</option>
-          <option value="midnight">MidNight</option>
+          <option value="dep-dark">Deep Dark</option>
+          <option value="midnight">Midnight</option>
         </select>
       </div>
-    </header>
-    <div class="wellcome">
-
-        <h1 class="wellcome-text name">Gradient Designer</h1>
-        <h2 class="dis">Precision gradients with noise, depth, and control</h2>
-        <img class="logo" src="./LOGO.svg" alt="logo" />
-
-      
-      <div class="wellcome-text about">
-        <h3>Noise & Grain</h3>
-        <p>Add depth and texture to flat gradients</p>
-
-        <h3>CSS Output</h3>
-        <p>CSS Responsive gradient output</p>
-
-        <h3>Image Export</h3>
-        <p>Export PNG, JPG, WEBP, or SVG</p>
-
-        <h3>Filters</h3>
-        <p>Fine-tune contrast, blur, and visual balance</p>
-      </div>
-      <h2 class="wellcome-text outro-text">
-        Build your creativity, gradient by gradient
-      </h2>
+      <button  class="btn-primary header-cta">
+        <a href="./Gradient-Designer.html">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+        <span>Open Editor</span>
+      </a>
+      </button>
     </div>
-    <a
-      href="./Gradient-Designer.html"
-      class="btn-editor"
-    >
-      <p>Enter the Gradient Designer</p>
-      <svg
-      class="icon-arrow"
-      xmlns="http://www.w3.org/2000/svg"
-      width="30"
-      height="30"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <defs>
-        <linearGradient
-          id="arrowGradient"
-          x1="0%"
-          y1="0%"
-          x2="100%"
-          y2="100%"
-        >
-          <stop offset="0%" stop-color="#00d4ff" />
-          <stop offset="100%" stop-color="#00ff88" />
-        </linearGradient>
-      </defs>
-  
-      <path
-        class="arrow-path"
-        d="M9 6L15 12L9 18"
-        stroke="url(#arrowGradient)"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section" aria-label="Welcome to Gradient Designer">
+    <div class="hero-content">
+      <div class="hero-header">
+        <h2 class="hero-title">Gradient Designer</h2>
+        <p class="hero-subtitle">Precision gradients with noise, depth, and control</p>
+      </div>
+      
+      <img class="hero-logo floating" src="./LOGO.svg" alt="" aria-hidden="true" width="200" height="200" />
+
+      <ul class="features-list">
+        <li class="feature-item" data-reveal>
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M8 12l2 2 4-4"/>
+            </svg>
+          </div>
+          <div class="feature-content">
+            <h3>Noise & Grain</h3>
+            <p>Add depth and texture to flat gradients</p>
+          </div>
+        </li>
+        <li class="feature-item" data-reveal>
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16,18 22,12 16,6"/>
+              <polyline points="8,6 2,12 8,18"/>
+            </svg>
+          </div>
+          <div class="feature-content">
+            <h3>CSS Output</h3>
+            <p>Responsive gradient code ready to use</p>
+          </div>
+        </li>
+        <li class="feature-item" data-reveal>
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div class="feature-content">
+            <h3>Image Export</h3>
+            <p>Export as PNG, JPG, WEBP, or SVG</p>
+          </div>
+        </li>
+        <li class="feature-item" data-reveal>
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35"/>
+              <path d="M11 8v6M8 11h6"/>
+            </svg>
+          </div>
+          <div class="feature-content">
+            <h3>Filters</h3>
+            <p>Adjust contrast, blur, and visual balance</p>
+          </div>
+        </li>
+      </ul>
+
+      <p class="hero-tagline">Build your creativity, gradient by gradient</p>
+    </div>
+    
+    <a href="./Gradient-Designer.html" class="btn-enter-editor">
+      <span>Enter the Gradient Designer</span>
+      <svg class="icon-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <defs>
+          <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00d4ff" />
+            <stop offset="100%" stop-color="#00ff88" />
+          </linearGradient>
+        </defs>
+        <path d="M5 12h14M12 5l7 7-7 7" stroke="url(#arrowGradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </a>
-    <main class="main">
-      <section class="hero">
-        <h2>Preset</h2>
-        <p>Click any gradient to open it in the editor</p>
-      </section>
+  </section>
 
-      <div class="filters" id="filters"></div>
-
-      <div class="presets-grid" id="presetsGrid">
-        <div class="loading">
-          <div class="spinner"></div>
+  <!-- Main Content -->
+  <main class="main" id="main-content">
+    <!-- Presets Section -->
+    <section class="section presets-section" id="presets">
+      <header class="section-header">
+        <h2 class="section-title">
+          <span class="title-decoration"></span>
+          Preset Gallery
+          <span class="title-decoration"></span>
+        </h2>
+        <p class="section-description">Click any gradient to open it in the editor</p>
+      </header>
+      
+      <div class="presets-grid" id="presetsGrid" role="list">
+        <div class="loading" role="status" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
           <p>Loading presets...</p>
         </div>
       </div>
-    </main>
-    <section class="totarial-section">
-      <h2>Totarial</h2>
-      <video autoplay loop muted playsinline>
-        <source src="./20260106_232048.mp4" type="video/mp4">
-      </video>
-      
-      <h3><a href="./guide.html">continue to guide</a></h3>
     </section>
-    <footer>
-      <img class="footer-logo" src="./LOGO.svg" alt="footer-logo">
-      <div class="link-continer">
-        <a class="footer-links" href="#">My Email</a>
-        <a class="footer-links" href="#">FAQ</a>
-        <a class="footer-links" href="./guide.html">Guide</a>
+
+    <!-- Tutorial Section -->
+    <section class="section tutorial-section">
+      <header class="section-header">
+        <h2 class="section-title">
+          <span class="title-decoration"></span>
+          Quick Tutorial
+          <span class="title-decoration"></span>
+        </h2>
+      </header>
+      
+      <div class="tutorial-content">
+        <div class="video-wrapper">
+          <video autoplay loop muted playsinline poster="./tutorial-poster.jpg">
+            <source src="./20260106_232048.mp4" type="video/mp4">
+            <p>Your browser doesn't support HTML5 video.</p>
+          </video>
+        </div>
+        
+        <a class="btn-guide" href="./guide.html">
+          <span>Continue to full guide</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
       </div>
-    </footer>
-    <svg width="0" height="0" style="position: absolute">
-      <filter
-        id="noiseFilter"
-        x="0%"
-        y="0%"
-        width="100%"
-        height="100%"
-        filterUnits="objectBoundingBox"
-      >
-        <feTurbulence
-          type="fractalNoise"
-          baseFrequency="0.7000000000000001"
-          numOctaves="4"
-          stitchTiles="stitch"
-          result="noise"
-        />
+    </section>
+  </main>
 
-        <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise" />
-
-        <feBlend in="SourceGraphic" in2="bwNoise" mode="multiply" />
-      </filter>
-    </svg>
-    <script src="./js/script.js"></script>
-    <script src="./js/index.js"></script>
-    <script>
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-noise" aria-hidden="true"></div>
     
-    </script>
-  </body>
+    <div class="container">
+      <div class="footer-content">
+        <!-- Brand -->
+        <div class="footer-brand">
+          <a href="/" class="footer-logo-wrapper">
+            <img class="footer-logo" src="./LOGO.svg" alt="" width="60" height="60">
+            <span class="footer-brand-name">Gradient Designer</span>
+          </a>
+          <p class="footer-description">
+            Create stunning color combinations for your projects, 
+            edit them, export images, and get ready-to-use CSS code.
+          </p>
+        </div>
+
+        <!-- Links -->
+        <nav class="footer-nav" aria-label="Footer navigation">
+          <div class="footer-column">
+            <h4>Navigation</h4>
+            <ul>
+              <li><a href="./Gradient-Designer.html">Create Gradient</a></li>
+              <li><a href="#presets">Presets</a></li>
+              <li><a href="./guide.html">User Guide</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-column">
+            <h4>Support</h4>
+            <ul>
+              <li><a href="#">FAQ</a></li>
+              <li><a href="#">Report a Bug</a></li>
+              <li><a href="mailto:info@example.com">Contact Us</a></li>
+            </ul>
+          </div>
+          
+          <div class="footer-column">
+            <h4>Connect</h4>
+            <div class="social-links">
+              <a href="#" aria-label="GitHub" class="social-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+              </a>
+              <a href="#" aria-label="Twitter" class="social-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </a>
+              <a href="#" aria-label="Instagram" class="social-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </nav>
+      </div>
+
+      <div class="footer-bottom">
+        <div class="footer-message">
+          <p><strong>#FreeIran</strong> 🦁☀️</p>
+        </div>
+        <p class="footer-copyright">
+          Crafted with <span class="heart">❤️</span> for Designers | © 2026
+        </p>
+        <p class="footer-version">v1.0.0</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SVG Filters -->
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="noiseFilter" x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox">
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="4" stitchTiles="stitch" result="noise" />
+      <feColorMatrix type="saturate" values="0" in="noise" result="bwNoise" />
+      <feBlend in="SourceGraphic" in2="bwNoise" mode="overlay" />
+    </filter>
+  </svg>
+
+  <script src="./js/script.js"></script>
+  <script src="./js/index.js"></script>
+</body>
 </html>

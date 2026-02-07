@@ -1,224 +1,175 @@
-:root {
-    --bg: #1c1c1c;
-    --sec-bg: #2b2b2b;
-    --TransParent-bg: #1c1c1c66;
-    --button-bg: rgba(255, 255, 255, 0.05);
-    --Zoom-ui-color:#e1e9e533;
-    --text-primary: #e8eef4;
-    --text-contrast: #000000;
-    --text-titel: #888;
-    --text-muted: #666;
-    --hover: rgba(255, 255, 255, 0.1);
-    --white-color: #e1e9e5;
-    --border: rgba(255, 255, 255, 0.1);
-    --sec-border: rgba(255, 255, 255, 0.4);
-    --accent: linear-gradient(35deg, #00d4ff 0%, #00ff88 100%);
-    /* --text-muted: #6b7a8a; */
-    --handel: #fff;
-    --primary: #00d4ff;
-    --secondary: #00ff88;
-    --btn-transition: all 0.25s ease;
-    --shadow: rgba(0, 0, 0, 0.4);
-  }
-  
-  [data-theme="light"] {
-    --bg: #ffffff;              
-    --sec-bg: #f9fafb;
-    --TransParent-bg: #fffffc66; 
-    --Zoom-ui-color:#2b2b2b33;       
-    --hover: #e5e7eb;
-    --text-primary: #111827; 
-    --text-muted: #6b7280;
-    --border: rgba(0, 0, 0, 0.1); 
-    --sec-border: rgba(0, 0, 0, 0.4);
-    --handel: #000;
-    --svg: invert(1) brightness(0);
-    --shadow: rgba(255, 255, 255, 0.4);
-  }
-  
-  [data-theme="dep-dark"] {
-    --bg: #09090b;           
-    --sec-bg: #18181b; 
-    --TransParent-bg: #09090b66;        
-    --hover: #2f2f35;          
-    --text-primary: #e4e4e7;   
-    --text-muted: #71717a;     
-    --border: rgba(255, 255, 255, 0.08); 
-  }
-  
-  [data-theme="midnight"] {
-    --bg: #1e2127;          
-    --sec-bg: #21252c;
-    --TransParent-bg: #1e212766;         
-    --hover: #334155;        
-    --text-primary: #d9e7f5;   
-    --text-muted: #94a3b8; 
-    --text-titel: #bec8d6;    
-    --border: rgba(148, 163, 184, 0.15); 
-    --sec-border: rgba(148, 163, 184, 0.5);
-  }
-
-  /* @font-face {
-    font-family: "SF Pro";
-    src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot");
-    src: url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.eot?#iefix")
-        format("embedded-opentype"),
-      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.woff2")
-        format("woff2"),
-      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.woff")
-        format("woff"),
-      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.ttf")
-        format("truetype"),
-      url("https://db.onlinewebfonts.com/t/4b57277e89dfdd30c9a6b69acaf78d3a.svg#SF Pro")
-        format("svg");
-  }
-  
-  @font-face {
-    font-family: "Filson Soft";
-    src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot");
-    src: url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.eot?#iefix")
-        format("embedded-opentype"),
-      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.woff2")
-        format("woff2"),
-      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.woff")
-        format("woff"),
-      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.ttf")
-        format("truetype"),
-      url("https://db.onlinewebfonts.com/t/bab15956435794e3d48309ddf0700b4c.svg#Filson Soft")
-        format("svg");
-  } */
-
-  /* ========================================
-   RESET & BASE STYLES
+/* ========================================
+   CSS CUSTOM PROPERTIES (Variables)
 ======================================== */
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    -webkit-tap-highlight-color: transparent;
-  }
+:root {
+  /* Colors - Dark Theme (Default) */
+  --bg: #1c1c1c;
+  --bg-secondary: #2b2b2b;
+  --bg-transparent: #1c1c1c66;
+  --bg-elevated: #333333;
   
-  html,
-  body {
-    background: var(--bg);
-    color: var(--text-primary);
-    font-family: "SF Pro";
-    font-size: 12px;
-  }
+  /* Text Colors */
+  --text-primary: #e8eef4;
+  --text-secondary: #a0a8b0;
+  --text-titel:#888;
+  --text-muted: #666666;
+  --text-contrast: #000000;
+  
+  /* Accent Colors */
+  --accent-primary: #00d4ff;
+  --accent-secondary: #00ff88;
+  --accent-gradient: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  
+  /* UI Colors */
+  --border: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.25);
+  --hover: rgba(255, 255, 255, 0.08);
+  --active: rgba(255, 255, 255, 0.12);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  /* --shadow-elevated: 0 8px 40px rgba(0, 0, 0, 0.5); */
+  
+  /* Sizing */
+  --header-height: 70px;
+  --container-max: 1400px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+  
+  /* Z-Index Scale */
+  --z-header: 100;
+  --z-modal: 200;
+  --z-tooltip: 300;
+}
 
-  /* ========================================
-     theme
-  ======================================== */
-  .theme-select {
-    position: relative;
-  }
-  
-  .theme-select select {
-    appearance: none;
-    -webkit-appearance: none;
-    border-radius: 8px;
-    color: var(--text-primary);
-    font-size: 12px;
-    text-align: center;
-    padding: 6px 12px;
-  }
-  
-  
-  /* ========================================
-     select
-  ======================================== */
-  select {
-    
-    background: none;
-    border: 1px solid var(--border);
-    color: inherit;
-    padding: 3px 6px;
-    border-radius: 8px;
-    font-size: 10px;
-  }
-  
-  option{
-    color: var(--text-primary);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px !important;
-  }
-  
-  /* ========================================
-     input
-  ======================================== */
-  input {
-    background: none;
-    border: 1px solid var(--border);
-    color: inherit;
-    padding: 4px 5px;
-    border-radius: 8px;
-    font-size: 10px;
-  }
-  
-  input[type="number"]:hover {
-    border-color: var(--sec-border);
-  }
-  
-  input[type="number"] {
-    cursor: ew-resize;
-    user-select: none;
-    touch-action: none;
-    transition: border-color var(--btn-transition), color var(--btn-transition),
-      background-color var(--btn-transition);
-  }
-  
-  input[type="number"]:focus {
-    cursor: text;
-  }
-  
-  input[type="number"]:active {
-    border-color: var(--text-muted);
-  }
-  
-  input[type="number"]::-webkit-inner-spin-button,
-  input[type="number"]::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  /* ========================================
-     range input
-  ======================================== */
-  input[type="range"] {
-    width: 120px;
-    height: 6px;
-    -webkit-appearance: none;
-    background: var(--Zoom-ui-color);
-    border: var(--sec-border);
-    border-radius: 3px;
-    cursor: pointer;
-    padding: 0;
-  }
-  
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    background: var(--accent);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: var(--btn-transition);
-  }
-  
-  input[type="range"]::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-  }
-  
-  /* ========================================
-     label
-  ======================================== */
-  label{
-    font-size: 10px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      margin-left: 10px;
-  }
-  /* ========================================
+/* Light Theme */
+[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-secondary: #f5f7fa;
+  --bg-transparent: #fffffc66;
+  --bg-elevated: #ffffff;
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-hover: rgba(0, 0, 0, 0.2);
+  --hover: rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 20px rgba(255, 255, 255, 0.4);
+  --svg: invert(1) brightness(0);
+}
+
+/* Deep Dark Theme */
+[data-theme="dep-dark"] {
+  --bg: #09090b;
+  --bg-secondary: #18181b;
+  --bg-transparent: #09090b66;
+  --bg-elevated: #1f1f23;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  --border: rgba(255, 255, 255, 0.06);
+}
+
+/* Midnight Theme */
+[data-theme="midnight"] {
+  --bg: #1e2127;
+  --bg-secondary: #21252c;
+  --bg-transparent: #1e212766;
+  --bg-elevated: #334155;
+  --hover: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-titel: #bec8d6;
+  --border: rgba(148, 163, 184, 0.15);
+  --accent-primary: #38bdf8;
+  --accent-secondary: #4ade80;
+}
+
+/* ========================================
+   FONTS
+======================================== */
+@font-face {
+  font-family: "SN Pro";
+  src: url("../font/SNPro-VariableFont_wght.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pacifico";
+  src: url("../font/Pacifico-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+/* ========================================
+   RESET & BASE
+======================================== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: "SN Pro", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ========================================
+   TYPOGRAPHY
+======================================== */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+/* ========================================
+   SCROLLBAR
+======================================== */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-gradient);
+}
+
+/* ========================================
      BUTTONS
   ======================================== */
   button {
@@ -232,17 +183,24 @@
     border-radius: 999px;
     cursor: pointer;
     animation: pulse 0.3s ease;
-    transition: var(--btn-transition);
-  }
-  
-  button:hover {
-    background: var(--hover);
+    transition: var(--transition-normal);
   }
   
   button img {
     width: 1.8rem;
     height: 1.8rem;
     filter: var(--svg);
+  }
+  
+  button:hover {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: var(--shadow);
+    background: var(--hover);
+  }
+  
+  button:active {
+    transform: scale(1.1);
+    box-shadow: var(--shadow);
   }
   
   button.run{
@@ -252,71 +210,111 @@
   @keyframes blur {
     50%   {  filter: blur(2px);}
   }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-}
-  /* ========================================
-     Header
-  ======================================== */
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  height: 10vh;
-  background: var(--TransParent-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  display: flex;
+
+.btn-primary {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.header-logo{
-  height: 80%;
-  margin-inline: 1rem;
-}
-
-.header-name{
-  background-image: var(--accent);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  font-family: "Inter";
-  width: max-content;
-  background-size: 200% 200%;
-  animation: gradientMove 3s linear infinite;
-  z-index: 2;
-}
-
-.link{
-  color: var(--text-primary);
-  font-size: 1.4rem;
-}
-.header-btn-editor {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
-  background: var(--accent);
-  color: white;
-  text-decoration: none;
-  border-radius: 8px;
-  font-weight: 500;
+  padding: 12px 24px;
+  background: var(--accent-gradient);
+  color: #000;
+  font-weight: 600;
   font-size: 14px;
-  transition: transform 0.2s, box-shadow 0.2s;
-  margin-inline: .8rem;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.header-btn-editor img{
-  width: 2.5rem;
-  height: 2.5rem;
+.btn-primary:hover {
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.3);
+    background: var(--accent-gradient);
 }
 
-.header-btn-editor:hover {
-  transform: scale(1.1);
+label{
+  color: var(--text-muted);
+}
+/* ========================================
+   FORM ELEMENTS
+======================================== */
+select,
+input {
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+select:hover,
+input:hover {
+  border-color: var(--border-hover);
+}
+
+select:focus,
+input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
+  outline: none;
+}
+
+  select {
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--border);
+    color: inherit;
+    padding: 3px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-size: .8rem;
+  }
+  
+  option{
+    color: var(--text-primary);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px !important;
+  }
+
+/* Range Input */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--accent-gradient);
+  border-radius: 50%;
+  cursor: grab;
+  transition: transform var(--transition-fast);
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+input[type="range"]::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+
+/* Number Input */
+input[type="number"] {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
 }

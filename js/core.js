@@ -27,7 +27,7 @@ const CONFIG = {
   },
 };
 
-const STORAGE_KEY = 'gradient-designer-state-v1';
+// const STORAGE_KEY = 'gradient-designer-state-v1';
 
 // ========== DOM ELEMENTS ==========
 const canvas = document.getElementById("canvas");
@@ -806,6 +806,11 @@ window.HB = HB;
 
 // ========== FILE MANAGER ==========
 const FileManager = {
+  AUTO_SAVE_KEY: 'gradientAutoSave',
+  AUTO_SAVE_DELAY: 500,
+  autoSaveTimer: null,
+  initialized: false, // اضافه شد
+
   getState() {
     return {
       timestamp: Date.now(),
@@ -815,6 +820,7 @@ const FileManager = {
       bgAlpha: state.bgAlpha,
       bgBlendMode: state.bgBlendMode,
       bgEnabled: state.bgEnabled,
+      bgImage: state.bgImage || null,
       cssFormat: state.cssFormat,
       canvasWidth: state.canvasWidth,
       canvasHeight: state.canvasHeight,
@@ -835,6 +841,7 @@ const FileManager = {
       state.bgAlpha = data.bgAlpha ?? 100;
       state.bgBlendMode = data.bgBlendMode || 'normal';
       state.bgEnabled = data.bgEnabled ?? true;
+      state.bgImage = data.bgImage || null;
       state.cssFormat = data.cssFormat || 'rgba';
       state.canvasWidth = data.canvasWidth || 800;
       state.canvasHeight = data.canvasHeight || 600;
@@ -846,8 +853,56 @@ const FileManager = {
       if (data.counter !== undefined) counter = data.counter;
       return true;
     } catch (e) {
+      console.error('setState error:', e);
       return false;
     }
+  },
+  
+  scheduleAutoSave() {
+    if (!this.initialized) return; // جلوگیری از save قبل از init
+    clearTimeout(this.autoSaveTimer);
+    this.autoSaveTimer = setTimeout(() => {
+      this.autoSave();
+    }, this.AUTO_SAVE_DELAY);
+  },
+
+  autoSave() {
+    if (!this.initialized) return;
+    try {
+      const data = this.getState();
+      localStorage.setItem(this.AUTO_SAVE_KEY, JSON.stringify(data));
+      console.log('✅ Auto-saved at', new Date().toLocaleTimeString());
+    } catch (e) {
+      console.warn('Auto-save failed:', e);
+    }
+  },
+
+  loadAutoSave() {
+    try {
+      const saved = localStorage.getItem(this.AUTO_SAVE_KEY);
+      if (!saved) {
+        console.log('ℹ️ No auto-save found');
+        return false;
+      }
+      
+      const data = JSON.parse(saved);
+      console.log('📂 Found auto-save from:', new Date(data.timestamp).toLocaleString());
+      
+      if (this.setState(data)) {
+        counter = state.stops.length;
+        console.log('✅ Auto-save loaded, stops:', state.stops.length);
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to load auto-save:', e);
+      localStorage.removeItem(this.AUTO_SAVE_KEY); // پاک کردن داده خراب
+    }
+    return false;
+  },
+
+  clearAutoSave() {
+    localStorage.removeItem(this.AUTO_SAVE_KEY);
+    console.log('🗑️ Auto-save cleared');
   },
   
   exportJSON() {
@@ -855,7 +910,7 @@ const FileManager = {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `gradient.json`;
+    a.download = `gradient-${Date.now()}.json`;
     a.click();
   },
   
@@ -873,36 +928,50 @@ const FileManager = {
           counter = state.stops.length;
           this.refreshAll();
           History.clear();
+          this.autoSave();
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error('Import failed:', err);
+      }
     };
     input.click();
   },
   
   loadPresetFromSession() {
     const json = sessionStorage.getItem('loadPreset');
-    if (!json) return;
+    if (!json) return false;
     sessionStorage.removeItem('loadPreset');
     try {
       const preset = JSON.parse(json);
       if (this.setState(preset.data)) {
         counter = state.stops.length;
-        this.refreshAll();
-        History.clear();
+        console.log('✅ Session preset loaded');
+        return true;
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Session preset load failed:', e);
+    }
+    return false;
   },
   
   refreshAll() {
-    resize(); draw(); renderList(); renderInspector();
-    updateCSS(); updateBgPreview();
+    // چک کردن وجود توابع قبل از اجرا
+    if (typeof resize === 'function') resize();
+    if (typeof draw === 'function') draw();
+    if (typeof renderList === 'function') renderList();
+    if (typeof renderInspector === 'function') renderInspector();
+    if (typeof updateCSS === 'function') updateCSS();
+    if (typeof updateBgPreview === 'function') updateBgPreview();
+    if (typeof updateSizeInputs === 'function') updateSizeInputs();
     if (typeof updateAllDimensionUI === 'function') updateAllDimensionUI();
     if (typeof updateFilterUI === 'function') updateFilterUI();
     if (typeof updateNoiseUI === 'function') updateNoiseUI();
     if (typeof updateBgUI === 'function') updateBgUI();
     if (typeof updateZoomUI === 'function') updateZoomUI();
     if (typeof applyNoiseFilter === 'function') applyNoiseFilter();
-    setTimeout(() => { if (typeof fitToScreen === 'function') fitToScreen(); }, 100);
+    if (typeof fitToScreen === 'function') fitToScreen();
+    if (typeof initFiltersFromState === 'function') initFiltersFromState();
+    
   }
 };
 
@@ -919,15 +988,56 @@ document.addEventListener('keydown', (e) => {
   else if (isMod && e.key === 'o') { e.preventDefault(); FileManager.importJSON(); }
 });
 
+// ========== AUTO SAVE TRIGGER ==========
+const originalHistorySaveState = History.saveState;
+History.saveState = function() {
+  originalHistorySaveState.call(this);
+  FileManager.scheduleAutoSave();
+};
+
 // ========== INIT ==========
-function initHistorySystem() {
-  History.init();
-  setTimeout(() => FileManager.loadPresetFromSession(), 500);
+function initFileManager() {
+  console.log('🚀 Initializing FileManager...');
+  
+  // اول History رو init کن
+  if (typeof History !== 'undefined' && History.init) {
+    History.init();
+  }
+  
+  // لود داده‌ها - اول session بعد auto-save
+  let loaded = FileManager.loadPresetFromSession();
+  if (!loaded) {
+    loaded = FileManager.loadAutoSave();
+  }
+  
+  // حالا UI رو آپدیت کن
+  FileManager.refreshAll();
+  
+  // فعال کردن auto-save
+  FileManager.initialized = true;
+  
+  // auto-save دوره‌ای
+  setInterval(() => {
+    if (FileManager.initialized) {
+      FileManager.autoSave();
+    }
+  }, 5000);
+  
+  console.log('✅ FileManager initialized');
 }
 
-if (document.readyState === 'complete') initHistorySystem();
-else window.addEventListener('load', initHistorySystem);
+// اجرا بعد از لود کامل صفحه
+if (document.readyState === 'complete') {
+  // اگه صفحه کامل لود شده
+  setTimeout(initFileManager, 100);
+} else {
+  // صبر برای لود کامل
+  window.addEventListener('load', () => {
+    setTimeout(initFileManager, 100);
+  });
+}
 
+// Export globals
 window.History = History;
 window.FileManager = FileManager;
 window.undo = () => History.undo();
@@ -2091,62 +2201,101 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   
-  const visibleStops = state.stops.filter((s) => s.visible);
+  // ✅ فقط صحنه رو بکش - فیلتر با CSS اعمال میشه
+  drawScene(ctx, W, H);
+  
+  // هندل‌ها (بعد از صحنه، فیلتر CSS روی کل canvas اعمال میشه)
+  if (state.showHandles) {
+    const visibleStops = state.stops.filter((s) => s.visible);
+    visibleStops.forEach(drawHandle);
+  }
+}
+
+// ✅ تابع جداگانه برای Export با فیلتر
+function drawForExport(targetCanvas, width, height) {
+  const targetCtx = targetCanvas.getContext('2d');
   const needsFilter = hasActiveFilters();
   
-  // ========== بدون فیلتر - رسم مستقیم ==========
+  // رسم صحنه
   if (!needsFilter) {
-    drawScene(ctx, W, H);
-    
-    // هندل‌ها
-    if (state.showHandles) {
-      visibleStops.forEach(drawHandle);
-    }
+    drawScene(targetCtx, width, height);
     return;
   }
   
   // ========== با فیلتر - Canvas موقت ==========
-  
-  // ✅ Canvas موقت با ابعاد واقعی (بدون dpr)
   const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = W;
-  tempCanvas.height = H;
+  tempCanvas.width = width;
+  tempCanvas.height = height;
   const tempCtx = tempCanvas.getContext('2d');
   
-  // رسم صحنه روی temp (بدون dpr)
-  drawScene(tempCtx, W, H);
+  // رسم صحنه روی temp
+  drawScene(tempCtx, width, height);
   
   // ========== اعمال فیلترها ==========
   
-  // 1. Blur (با CSS filter چون سریعتره)
+  // 1. Blur
   if (filterState.blur > 0) {
     const blurCanvas = document.createElement('canvas');
-    blurCanvas.width = W;
-    blurCanvas.height = H;
+    blurCanvas.width = width;
+    blurCanvas.height = height;
     const blurCtx = blurCanvas.getContext('2d');
     blurCtx.filter = `blur(${filterState.blur}px)`;
     blurCtx.drawImage(tempCanvas, 0, 0);
     
-    // کپی برگشت به temp
-    tempCtx.clearRect(0, 0, W, H);
+    tempCtx.clearRect(0, 0, width, height);
     tempCtx.drawImage(blurCanvas, 0, 0);
   }
   
-  // 2. سایر فیلترها (pixel manipulation)
+  // 2. سایر فیلترها
   if (hasNonBlurFilters()) {
-    const imageData = tempCtx.getImageData(0, 0, W, H);
+    const imageData = tempCtx.getImageData(0, 0, width, height);
     applyFiltersToImageData(imageData);
     tempCtx.putImageData(imageData, 0, 0);
   }
   
-  // ========== کپی به Canvas اصلی ==========
-  // ✅ مهم: با در نظر گرفتن dpr
-  ctx.drawImage(tempCanvas, 0, 0, W, H);
+  // کپی به canvas هدف
+  targetCtx.drawImage(tempCanvas, 0, 0);
+}
+
+// ✅ چک فیلترهای غیر از blur
+function hasNonBlurFilters() {
+  return filterState.enabled && (
+    filterState.brightness !== 100 ||
+    filterState.contrast !== 100 ||
+    filterState.saturate !== 100 ||
+    filterState.hue !== 0 ||
+    filterState.grayscale > 0 ||
+    filterState.sepia > 0 ||
+    filterState.invert > 0
+  );
+}
+
+// ✅ آپدیت تابع export
+function exportImage(format = 'png', quality = 0.95) {
+  // ساخت canvas برای export
+  const exportCanvas = document.createElement('canvas');
+  exportCanvas.width = state.canvasWidth;
+  exportCanvas.height = state.canvasHeight;
   
-  // ========== هندل‌ها (بعد از فیلتر، روی ctx اصلی) ==========
-  if (state.showHandles) {
-    visibleStops.forEach(drawHandle);
+  // رسم با فیلتر
+  drawForExport(exportCanvas, state.canvasWidth, state.canvasHeight);
+  
+  // اعمال noise اگه فعاله
+  if (typeof applyNoiseToCanvas === 'function') {
+    applyNoiseToCanvas(exportCanvas);
   }
+  
+  // دانلود
+  const link = document.createElement('a');
+  link.download = `gradient-${Date.now()}.${format}`;
+  
+  if (format === 'jpg' || format === 'jpeg') {
+    link.href = exportCanvas.toDataURL('image/jpeg', quality);
+  } else {
+    link.href = exportCanvas.toDataURL('image/png');
+  }
+  
+  link.click();
 }
 
 function drawScene(targetCtx, width, height) {
@@ -2158,8 +2307,8 @@ function drawScene(targetCtx, width, height) {
     targetCtx.fillRect(0, 0, width, height);
   }
 
-  // 2. خط قفل عمودی
-  if (state.lockVertical) {
+  // 2. خط قفل عمودی - فقط وقتی هندل‌ها نمایش داده می‌شوند
+  if (state.lockVertical && state.showHandles) { // ✅ تغییر این خط
     const scale = Math.max(width, height) / 800;
     targetCtx.strokeStyle = "rgba(255,255,255,0.5)";
     targetCtx.lineWidth = 2 * scale;
@@ -3376,7 +3525,7 @@ function updatePanUI() {
 }
 window.togglePanMode = togglePanMode;
 
-// ========== FULLSCREEN PREVIEW - COMPLETE FIXED ==========
+// ========== FULLSCREEN PREVIEW ==========
 let fullscreenOverlay = null;
 let fullscreenCanvas = null;
 let fullscreenCtx = null;
@@ -3572,8 +3721,8 @@ async function renderFullscreenCanvas() {
   workCanvas.height = originalH;
   const workCtx = workCanvas.getContext('2d');
   
-  // ✅ استفاده از همان منطق draw()
-  await renderSceneToContext(workCtx, originalW, originalH);
+  // ✅ پاس دادن true برای isFullscreen
+  await renderSceneToContext(workCtx, originalW, originalH, true);
   
   // ========== انتقال به canvas نمایش با چرخش ==========
   const ctx = fullscreenCanvas.getContext('2d');
@@ -3610,7 +3759,7 @@ async function renderFullscreenCanvas() {
 }
 
 // ========== تابع اصلی رندر - مشترک بین canvas و fullscreen ==========
-async function renderSceneToContext(targetCtx, width, height) {
+async function renderSceneToContext(targetCtx, width, height, isFullscreen = false) {
   // ذخیره W و H اصلی
   const savedW = W;
   const savedH = H;
@@ -3641,8 +3790,8 @@ async function renderSceneToContext(targetCtx, width, height) {
     renderCtx.fillRect(0, 0, width, height);
   }
   
-  // ========== 2. خط قفل عمودی ==========
-  if (state.lockVertical) {
+  // ========== 2. خط قفل عمودی - فقط در حالت عادی، نه در فول‌اسکرین ==========
+  if (state.lockVertical && state.showHandles && !isFullscreen) { // ✅ چک isFullscreen
     const scale = Math.max(width, height) / 800;
     renderCtx.strokeStyle = "rgba(255,255,255,0.5)";
     renderCtx.lineWidth = 2 * scale;
@@ -3708,13 +3857,10 @@ async function renderSceneToContext(targetCtx, width, height) {
     }
   }
   
-  
-  
   // برگرداندن W و H
   W = savedW;
   H = savedH;
 }
-
 // ========== رسم گرادینت روی هر context با ابعاد دلخواه ==========
 function drawGradToCtxGeneric(s, ctx, width, height) {
   const cx = s.x * width;
@@ -3951,25 +4097,38 @@ function zoomFullscreen(factor, clientX, clientY) {
   
   if (Math.abs(newScale - oldScale) < 0.001) return;
   
-  // مرکز پیش‌فرض
-  if (clientX === null || clientY === null) {
-    clientX = containerRect.left + containerRect.width / 2;
-    clientY = containerRect.top + containerRect.height / 2;
+  // محاسبه نقطه مرکزی برای زوم
+  let zoomPointX, zoomPointY;
+  
+  if (clientX === undefined || clientX === null || clientY === undefined || clientY === null) {
+    // اگر موقعیت موس مشخص نیست، از مرکز container استفاده کن
+    zoomPointX = containerRect.width / 2;
+    zoomPointY = containerRect.height / 2;
+  } else {
+    // تبدیل موقعیت موس به موقعیت نسبت به container
+    zoomPointX = clientX - containerRect.left;
+    zoomPointY = clientY - containerRect.top;
   }
   
-  // مرکز canvas
-  const canvasCenterX = canvasRect.left + canvasRect.width / 2;
-  const canvasCenterY = canvasRect.top + canvasRect.height / 2;
+  // محاسبه موقعیت فعلی canvas
+  const currentCanvasX = (containerRect.width - canvasRect.width) / 2 + fullscreenZoom.translateX;
+  const currentCanvasY = (containerRect.height - canvasRect.height) / 2 + fullscreenZoom.translateY;
   
+  // محاسبه موقعیت نقطه زوم نسبت به canvas
+  const pointX = (zoomPointX - currentCanvasX) / oldScale;
+  const pointY = (zoomPointY - currentCanvasY) / oldScale;
+  
+  // محاسبه translate جدید
   const scaleRatio = newScale / oldScale;
-  
-  fullscreenZoom.translateX = clientX - canvasCenterX - (clientX - canvasCenterX - fullscreenZoom.translateX) * scaleRatio;
-  fullscreenZoom.translateY = clientY - canvasCenterY - (clientY - canvasCenterY - fullscreenZoom.translateY) * scaleRatio;
+  fullscreenZoom.translateX = zoomPointX - pointX * newScale - (containerRect.width - canvasRect.width / oldScale * newScale) / 2;
+  fullscreenZoom.translateY = zoomPointY - pointY * newScale - (containerRect.height - canvasRect.height / oldScale * newScale) / 2;
   fullscreenZoom.scale = newScale;
   
   applyFullscreenTransform();
   updateFullscreenZoomUI();
-  setTimeout(() => constrainFullscreenPan(), 10);
+  
+  // استفاده از requestAnimationFrame برای بهبود performance
+  requestAnimationFrame(() => constrainFullscreenPan());
 }
 
 function resetFullscreenView() {
@@ -3985,8 +4144,14 @@ function resetFullscreenView() {
 function applyFullscreenTransform(animate = false) {
   if (!fullscreenCanvas) return;
   
-  fullscreenCanvas.style.transition = animate ? 'transform 0.3s ease-out' : 'none';
+  if (animate) {
+    fullscreenCanvas.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+  } else {
+    fullscreenCanvas.style.transition = 'none';
+  }
+  
   fullscreenCanvas.style.transform = `translate(${fullscreenZoom.translateX}px, ${fullscreenZoom.translateY}px) scale(${fullscreenZoom.scale})`;
+  fullscreenCanvas.style.transformOrigin = 'center center';
   
   if (animate) {
     setTimeout(() => {
@@ -4002,48 +4167,68 @@ function constrainFullscreenPan() {
   if (!container) return;
   
   const containerRect = container.getBoundingClientRect();
-  const canvasW = parseFloat(fullscreenCanvas.style.width) || 100;
-  const canvasH = parseFloat(fullscreenCanvas.style.height) || 100;
   
-  const scaledW = canvasW * fullscreenZoom.scale;
-  const scaledH = canvasH * fullscreenZoom.scale;
+  // دریافت ابعاد واقعی canvas
+  const canvasRect = fullscreenCanvas.getBoundingClientRect();
+  const originalWidth = canvasRect.width / fullscreenZoom.scale;
+  const originalHeight = canvasRect.height / fullscreenZoom.scale;
   
-  const maxX = Math.max(0, (scaledW - containerRect.width) / 2);
-  const maxY = Math.max(0, (scaledH - containerRect.height) / 2);
+  const scaledW = originalWidth * fullscreenZoom.scale;
+  const scaledH = originalHeight * fullscreenZoom.scale;
   
-  let changed = false;
+  let newTranslateX = fullscreenZoom.translateX;
+  let newTranslateY = fullscreenZoom.translateY;
   
+  // محدود کردن pan در محور X
   if (scaledW <= containerRect.width) {
-    if (fullscreenZoom.translateX !== 0) { fullscreenZoom.translateX = 0; changed = true; }
+    // اگر عرض canvas کمتر از container است، وسط چین کن
+    newTranslateX = 0;
   } else {
-    const clamped = Math.max(-maxX, Math.min(maxX, fullscreenZoom.translateX));
-    if (clamped !== fullscreenZoom.translateX) { fullscreenZoom.translateX = clamped; changed = true; }
+    // محاسبه حداکثر مقدار translate
+    const maxTranslateX = (scaledW - containerRect.width) / 2;
+    newTranslateX = Math.max(-maxTranslateX, Math.min(maxTranslateX, fullscreenZoom.translateX));
   }
   
+  // محدود کردن pan در محور Y
   if (scaledH <= containerRect.height) {
-    if (fullscreenZoom.translateY !== 0) { fullscreenZoom.translateY = 0; changed = true; }
+    // اگر ارتفاع canvas کمتر از container است، وسط چین کن
+    newTranslateY = 0;
   } else {
-    const clamped = Math.max(-maxY, Math.min(maxY, fullscreenZoom.translateY));
-    if (clamped !== fullscreenZoom.translateY) { fullscreenZoom.translateY = clamped; changed = true; }
+    // محاسبه حداکثر مقدار translate
+    const maxTranslateY = (scaledH - containerRect.height) / 2;
+    newTranslateY = Math.max(-maxTranslateY, Math.min(maxTranslateY, fullscreenZoom.translateY));
   }
   
-  if (changed) applyFullscreenTransform(true);
+  // اعمال تغییرات اگر لازم است
+  if (newTranslateX !== fullscreenZoom.translateX || newTranslateY !== fullscreenZoom.translateY) {
+    fullscreenZoom.translateX = newTranslateX;
+    fullscreenZoom.translateY = newTranslateY;
+    applyFullscreenTransform(true);
+  }
+  
   updateFullscreenCursor();
 }
 
 function updateFullscreenZoomUI() {
   const el = document.getElementById('fsZoomValue');
-  if (el) el.textContent = Math.round(fullscreenZoom.scale * 100) + '%';
+  if (el) {
+    el.textContent = Math.round(fullscreenZoom.scale * 100) + '%';
+  }
   
   const zoomOut = document.getElementById('fsZoomOut');
   const zoomIn = document.getElementById('fsZoomIn');
-  if (zoomOut) zoomOut.disabled = fullscreenZoom.scale <= fullscreenZoom.minScale;
-  if (zoomIn) zoomIn.disabled = fullscreenZoom.scale >= fullscreenZoom.maxScale;
+  
+  if (zoomOut) {
+    zoomOut.disabled = fullscreenZoom.scale <= fullscreenZoom.minScale + 0.01;
+  }
+  if (zoomIn) {
+    zoomIn.disabled = fullscreenZoom.scale >= fullscreenZoom.maxScale - 0.01;
+  }
 }
 
 function updateFullscreenCursor() {
   const container = document.getElementById('fsContainer');
-  if (!container) return;
+  if (!container || !fullscreenCanvas) return;
   
   if (fullscreenZoom.isPanning) {
     container.style.cursor = 'grabbing';
@@ -4052,6 +4237,22 @@ function updateFullscreenCursor() {
   } else {
     container.style.cursor = 'default';
   }
+}
+
+// تابع کمکی برای زوم با موقعیت موس
+function zoomAtPoint(factor, mouseEvent) {
+  if (mouseEvent) {
+    zoomFullscreen(factor, mouseEvent.clientX, mouseEvent.clientY);
+  } else {
+    zoomFullscreen(factor, null, null);
+  }
+}
+
+// برای استفاده با چرخ موس
+function handleWheelZoom(event) {
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? 1.1 : 0.9;
+  zoomAtPoint(factor, event);
 }
 
 // ========== TOUCH ==========
@@ -4852,7 +5053,8 @@ function safeButtonAction(action) {
   }
 }
 
-// ========== FILTER ==========
+// ========== FILTER - CSS BASED APPROACH ==========
+
 const filterState = {
   enabled: true,
   brightness: 100,
@@ -4875,6 +5077,10 @@ const filterDefaults = {
   sepia: 0,
   invert: 0,
 };
+
+// ✅ نگه‌داری آخرین مقدار برای جلوگیری از آپدیت غیرضروری
+let lastFilterString = '';
+let filterUpdateScheduled = false;
 
 function getFilterString() {
   if (!filterState.enabled) return '';
@@ -4922,45 +5128,80 @@ function hasActiveFilters() {
   );
 }
 
+// ✅ روش جدید: فقط CSS رو آپدیت میکنیم، Canvas رو دست نمیزنیم
 function setFilter(name, value) {
   const numValue = parseFloat(value);
   
-  switch(name) {
-    case 'brightness':
-    case 'contrast':
-    case 'saturate':
-      filterState[name] = clamp(numValue, 0, 200);
-      break;
-    case 'hue':
-      filterState[name] = clamp(numValue, 0, 360);
-      break;
-    case 'blur':
-      filterState[name] = clamp(numValue, 0, 20);
-      break;
-    case 'grayscale':
-    case 'sepia':
-    case 'invert':
-      filterState[name] = clamp(numValue, 0, 100);
-      break;
+  const limits = {
+    brightness: [0, 200],
+    contrast: [0, 200],
+    saturate: [0, 200],
+    hue: [0, 360],
+    blur: [0, 20],
+    grayscale: [0, 100],
+    sepia: [0, 100],
+    invert: [0, 100]
+  };
+  
+  const [min, max] = limits[name] || [0, 100];
+  filterState[name] = clamp(numValue, min, max);
+  
+  // ✅ فقط UI و CSS رو آپدیت میکنیم
+  updateFilterDisplay();
+}
+
+// ✅ آپدیت سبک: فقط CSS، بدون redraw
+function updateFilterDisplay() {
+  if (filterUpdateScheduled) return;
+  
+  filterUpdateScheduled = true;
+  requestAnimationFrame(() => {
+    // Update UI elements
+    updateFilterUI();
+    
+    // Apply CSS filter to canvas
+    const newFilterString = getFilterString();
+    if (newFilterString !== lastFilterString) {
+      applyFilterCSS(newFilterString);
+      lastFilterString = newFilterString;
+    }
+    
+    filterUpdateScheduled = false;
+  });
+}
+
+// ✅ اعمال فیلتر به Canvas بدون redraw
+function applyFilterCSS(filterString) {
+  if (canvas) {
+    canvas.style.filter = filterString;
   }
   
-  updateFilterUI();
-  draw();
-  updateCSS();
+  // اگه لایه‌های دیگه هم دارید
+  if (window.mainCanvas) {
+    window.mainCanvas.style.filter = filterString;
+  }
+  
+  // برای export نیازه که filter رو apply کنیم
+  if (window.updateCSS) {
+    window.updateCSS();
+  }
 }
 
 function toggleFilters() {
   filterState.enabled = !filterState.enabled;
-  updateFilterUI();
-  draw();
-  updateCSS();
+  updateFilterDisplay();
 }
 
+// ✅ ریست کامل فیلترها
 function resetFilters() {
-  Object.assign(filterState, filterDefaults);
-  updateFilterUI();
-  draw();
-  updateCSS();
+  // اول مقادیر پیش‌فرض رو برگردون
+  Object.keys(filterDefaults).forEach(key => {
+    filterState[key] = filterDefaults[key];
+  });
+  filterState.enabled = true;
+  
+  // بعد UI رو آپدیت کن
+  updateFilterDisplay();
   
   // انیمیشن ریست
   const btn = document.getElementById('filtersResetBtn');
@@ -4973,10 +5214,10 @@ function resetFilters() {
 function updateFilterUI() {
   const filters = ['brightness', 'contrast', 'saturate', 'hue', 'blur', 'grayscale', 'sepia', 'invert'];
   
+  // ✅ فقط المنت‌هایی که نیازه رو آپدیت کن
   filters.forEach(name => {
     const slider = document.getElementById(`filter${capitalize(name)}`);
     const numInput = document.getElementById(`filter${capitalize(name)}Num`);
-    const row = slider?.closest('.filter-row');
     
     if (slider && slider !== document.activeElement) {
       slider.value = filterState[name];
@@ -4985,6 +5226,7 @@ function updateFilterUI() {
       numInput.value = filterState[name];
     }
     
+    const row = slider?.closest('.filter-row');
     if (row) {
       const isDefault = filterState[name] === filterDefaults[name];
       row.classList.toggle('active', !isDefault);
@@ -5001,7 +5243,7 @@ function updateFilterUI() {
     }
   }
   
-  // Disable controls when filters are off
+  // Disable controls
   const controls = document.querySelector('.filter-controls');
   if (controls) {
     controls.classList.toggle('disabled', !filterState.enabled);
@@ -5012,6 +5254,7 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// ✅ Event handling با کمترین overhead
 function initFilterEvents() {
   const filters = ['brightness', 'contrast', 'saturate', 'hue', 'blur', 'grayscale', 'sepia', 'invert'];
   
@@ -5021,44 +5264,58 @@ function initFilterEvents() {
     
     if (!slider) return;
     
-    const row = slider.closest('.filter-row');
+    // ✅ برای اسلایدر: Live update اما throttled
+    let sliderTimer = null;
+    slider.addEventListener('input', (e) => {
+      const value = e.target.value;
+      
+      // آپدیت فوری state و UI
+      filterState[name] = parseFloat(value);
+      if (numInput && numInput !== document.activeElement) {
+        numInput.value = value;
+      }
+      
+      // آپدیت CSS با تاخیر
+      clearTimeout(sliderTimer);
+      sliderTimer = setTimeout(() => {
+        updateFilterDisplay();
+      }, 16); // ~60fps
+    });
     
-    // ✅ Slider events - با History tracking
+    // Save history on drag end
     slider.addEventListener('mousedown', () => History.onDragStart());
-    slider.addEventListener('touchstart', () => History.onDragStart(), { passive: true });
-    slider.addEventListener('input', (e) => setFilter(name, e.target.value));
     slider.addEventListener('mouseup', () => History.onDragEnd());
+    slider.addEventListener('touchstart', () => History.onDragStart(), { passive: true });
     slider.addEventListener('touchend', () => History.onDragEnd());
     
-    // ✅ Number input events - با focus/blur
+    // ✅ Number input
     if (numInput) {
+      numInput.addEventListener('input', (e) => {
+        setFilter(name, e.target.value);
+      });
       numInput.addEventListener('focus', () => History.onInputFocus());
       numInput.addEventListener('blur', () => History.onInputBlur());
-      numInput.addEventListener('input', (e) => setFilter(name, e.target.value));
-      numInput.addEventListener('change', (e) => setFilter(name, e.target.value));
     }
     
-    // Double-click/tap برای ریست
+    // Double-click reset
+    const row = slider.closest('.filter-row');
     if (row) {
-      // Desktop - dblclick
-      row.addEventListener('dblclick', function(e) {
+      row.addEventListener('dblclick', (e) => {
         if (e.target.tagName === 'INPUT') return;
-        History.saveState();  // ✅ اضافه شد
-        resetSingleFilter(name, row);
+        History.saveState();
+        resetSingleFilter(name);
       });
       
-      // Mobile - double tap
+      // Mobile double tap
       let lastTap = 0;
-      row.addEventListener('touchend', function(e) {
+      row.addEventListener('touchend', (e) => {
         if (e.target.tagName === 'INPUT') return;
         
         const now = Date.now();
-        const DOUBLE_TAP_DELAY = 300;
-        
-        if (now - lastTap < DOUBLE_TAP_DELAY) {
+        if (now - lastTap < 300) {
           e.preventDefault();
-          History.saveState();  // ✅ اضافه شد
-          resetSingleFilter(name, row);
+          History.saveState();
+          resetSingleFilter(name);
           lastTap = 0;
         } else {
           lastTap = now;
@@ -5067,33 +5324,40 @@ function initFilterEvents() {
     }
   });
   
-  // Toggle & Reset buttons - اینا توی overrideFunctions هندل میشن
   document.getElementById('filtersToggleBtn')?.addEventListener('click', toggleFilters);
   document.getElementById('filtersResetBtn')?.addEventListener('click', resetFilters);
 }
 
-function resetSingleFilter(name, row) {
-  // ریست به مقدار پیش‌فرض
+function resetSingleFilter(name) {
   filterState[name] = filterDefaults[name];
+  updateFilterDisplay();
+}
+
+// ✅ تابع مهم: بعد از لود state باید فیلترها رو اعمال کنیم
+function initFiltersFromState() {
+  console.log('Initializing filters from state:', filterState);
   
-  // آپدیت UI
-  updateFilterUI();
-  draw();
-  updateCSS();
+  // Force update filter string
+  lastFilterString = ''; // Reset to force update
   
-  // انیمیشن فلش سبز
-  if (row) {
-    setTimeout(() => {
-      row.style.backgroundColor = '';
-    }, 300);
+  // Update UI and apply CSS
+  updateFilterDisplay();
+  
+  // Make sure canvas has the filter
+  const filterString = getFilterString();
+  if (filterString && canvas) {
+    canvas.style.filter = filterString;
+    console.log('Applied filter on init:', filterString);
   }
 }
 
+// ========== EXPORT SUPPORT ==========
 function applyFiltersToImageData(imageData) {
+  if (!hasActiveFilters()) return imageData;
+  
   const data = imageData.data;
   const len = data.length;
   
-  // محاسبه مقادیر یک بار
   const brightness = filterState.brightness / 100;
   const contrast = filterState.contrast / 100;
   const saturate = filterState.saturate / 100;
@@ -5102,7 +5366,6 @@ function applyFiltersToImageData(imageData) {
   const invert = filterState.invert / 100;
   const hue = filterState.hue;
   
-  // Pre-calculate hue rotation matrix
   let hueMatrix = null;
   if (hue !== 0) {
     hueMatrix = getHueRotationMatrix(hue);
@@ -5112,25 +5375,20 @@ function applyFiltersToImageData(imageData) {
     let r = data[i];
     let g = data[i + 1];
     let b = data[i + 2];
-    // alpha = data[i + 3] - don't touch
     
-    // ========== ترتیب صحیح - مطابق CSS ==========
-    
-    // 1. Brightness (اول)
+    // Apply filters in order
     if (brightness !== 1) {
-      r = r * brightness;
-      g = g * brightness;
-      b = b * brightness;
+      r *= brightness;
+      g *= brightness;
+      b *= brightness;
     }
     
-    // 2. Contrast
     if (contrast !== 1) {
       r = (r - 128) * contrast + 128;
       g = (g - 128) * contrast + 128;
       b = (b - 128) * contrast + 128;
     }
     
-    // 3. Saturate
     if (saturate !== 1) {
       const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       r = gray + (r - gray) * saturate;
@@ -5138,45 +5396,38 @@ function applyFiltersToImageData(imageData) {
       b = gray + (b - gray) * saturate;
     }
     
-    // 4. Hue Rotate
     if (hueMatrix) {
       const nr = r * hueMatrix[0] + g * hueMatrix[1] + b * hueMatrix[2];
       const ng = r * hueMatrix[3] + g * hueMatrix[4] + b * hueMatrix[5];
       const nb = r * hueMatrix[6] + g * hueMatrix[7] + b * hueMatrix[8];
-      r = nr;
-      g = ng;
-      b = nb;
+      r = nr; g = ng; b = nb;
     }
     
-    // 5. Grayscale
     if (grayscale > 0) {
       const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      r = r + (gray - r) * grayscale;
-      g = g + (gray - g) * grayscale;
-      b = b + (gray - b) * grayscale;
+      r += (gray - r) * grayscale;
+      g += (gray - g) * grayscale;
+      b += (gray - b) * grayscale;
     }
     
-    // 6. Sepia
     if (sepia > 0) {
       const sr = 0.393 * r + 0.769 * g + 0.189 * b;
       const sg = 0.349 * r + 0.686 * g + 0.168 * b;
       const sb = 0.272 * r + 0.534 * g + 0.131 * b;
-      r = r + (sr - r) * sepia;
-      g = g + (sg - g) * sepia;
-      b = b + (sb - b) * sepia;
+      r += (sr - r) * sepia;
+      g += (sg - g) * sepia;
+      b += (sb - b) * sepia;
     }
     
-    // 7. Invert (آخر - مهم!)
     if (invert > 0) {
-      r = r + (255 - 2 * r) * invert;
-      g = g + (255 - 2 * g) * invert;
-      b = b + (255 - 2 * b) * invert;
+      r += (255 - 2 * r) * invert;
+      g += (255 - 2 * g) * invert;
+      b += (255 - 2 * b) * invert;
     }
     
-    // Clamp to 0-255
-    data[i]     = Math.max(0, Math.min(255, Math.round(r)));
-    data[i + 1] = Math.max(0, Math.min(255, Math.round(g)));
-    data[i + 2] = Math.max(0, Math.min(255, Math.round(b)));
+    data[i]     = Math.max(0, Math.min(255, r));
+    data[i + 1] = Math.max(0, Math.min(255, g));
+    data[i + 2] = Math.max(0, Math.min(255, b));
   }
   
   return imageData;
@@ -5187,7 +5438,6 @@ function getHueRotationMatrix(degrees) {
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
   
-  // Standard hue rotation matrix
   return [
     0.213 + cos * 0.787 - sin * 0.213,
     0.715 - cos * 0.715 - sin * 0.715,
@@ -5201,26 +5451,22 @@ function getHueRotationMatrix(degrees) {
   ];
 }
 
-function applyBlur(ctx, width, height, radius) {
-  if (radius <= 0) return;
-  
-  // از ctx.filter برای blur استفاده می‌کنیم چون سریع‌تره
-  const imageData = ctx.getImageData(0, 0, width, height);
-  
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  const tempCtx = tempCanvas.getContext('2d');
-  tempCtx.putImageData(imageData, 0, 0);
-  
-  ctx.clearRect(0, 0, width, height);
-  ctx.filter = `blur(${radius}px)`;
-  ctx.drawImage(tempCanvas, 0, 0);
-  ctx.filter = 'none';
+// ========== INIT ON PAGE LOAD ==========
+// ✅ اضافه کردن init برای بعد از لود
+if (document.readyState === 'complete') {
+  setTimeout(initFiltersFromState, 100);
+} else {
+  window.addEventListener('load', () => {
+    setTimeout(initFiltersFromState, 100);
+  });
 }
+
+// Exports
 window.setFilter = setFilter;
 window.toggleFilters = toggleFilters;
 window.resetFilters = resetFilters;
+window.updateFilterUI = updateFilterUI;
+window.initFiltersFromState = initFiltersFromState;
 
 
 // ========== BACKGROUND CONTROLS ==========
@@ -6172,16 +6418,6 @@ function renderList() {
          data-id="${s.id}"
          onclick="state.selected='${s.id}';refresh()">
       <div class="stop-header">
-        <div class="drag-handle" title="Drag to reorder">
-          <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
-            <circle cx="2" cy="2" r="1.5"/>
-            <circle cx="8" cy="2" r="1.5"/>
-            <circle cx="2" cy="8" r="1.5"/>
-            <circle cx="8" cy="8" r="1.5"/>
-            <circle cx="2" cy="14" r="1.5"/>
-            <circle cx="8" cy="14" r="1.5"/>
-          </svg>
-        </div>
         <div class="stop-preview">
           <div class="stop-preview-inner" style="background:${getGradPreview(s)}"></div>
         </div>
@@ -6628,7 +6864,7 @@ function renderInspector() {
       <div class="form-group-title">General</div>
       <div class="form-row">
         <label>Name</label>
-        <input style="width:6rem;text-align:left" value="${s.name}" 
+        <input style="width:10rem;text-align:left" value="${s.name}" 
           onfocus="HF()" onblur="HB()"
           oninput="getStop('${s.id}').name=this.value;liveUpdate('${s.id}')">
       </div>
@@ -7194,6 +7430,8 @@ function updateCSS() {
   } else {
     // ========== پس‌زمینه + گرادینت‌ها ==========
     gradientLines.push(`position: relative;`);
+    gradientLines.push(`height: ${H}px;`);
+    gradientLines.push(`width: ${W}px;`);
     
     if (state.bgEnabled) {
       gradientLines.push(`background-color: ${bgColorFmt};`);
@@ -7268,40 +7506,36 @@ function updateCSS() {
   const hasNoise = noiseState.enabled && noiseState.opacity > 0;
   
   if (hasNoise) {
-    currentNoiseCSS = `
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  opacity: ${(noiseState.opacity / 100).toFixed(2)};
-  filter: url(#noiseFilter);
-  mix-blend-mode: ${noiseState.blend};`;
+    currentNoiseCSS = `content: '';
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+pointer-events: none;
+opacity: ${(noiseState.opacity / 100).toFixed(2)};
+filter: url(#noiseFilter);
+mix-blend-mode: ${noiseState.blend};`;
 
-currentSVGFilter = `
-<svg width="0" height="0" style="position:absolute">
-  <filter id="noiseFilter"
-          x="0%" y="0%"
-          width="100%" height="100%"
-          filterUnits="objectBoundingBox">
-    
-    <feTurbulence type="fractalNoise"
-                  baseFrequency="${noiseState.frequency}"
-                  numOctaves="4"
-                  stitchTiles="stitch"
-                  result="noise"/>
-    
-    <feColorMatrix type="saturate"
-                   values="0"
-                   in="noise"
-                   result="bwNoise"/>
-    
-    <feBlend in="SourceGraphic"
-             in2="bwNoise"
-             mode="${noiseState.blend}"/>
-  </filter>
+currentSVGFilter = `<svg width="0" height="0"
+ style="position:absolute">
+<filter id="noiseFilter"
+  x="0%" y="0%"
+  width="100%" height="100%"
+  filterUnits="objectBoundingBox">    
+<feTurbulence type="fractalNoise"
+  baseFrequency="${noiseState.frequency}"
+  numOctaves="4"
+  stitchTiles="stitch"
+  result="noise"/>    
+<feColorMatrix type="saturate"
+  values="0"
+  in="noise"
+  result="bwNoise"/>
+<feBlend in="SourceGraphic"
+  in2="bwNoise"
+  mode="${noiseState.blend}"/>
+</filter>
 </svg>`;
 
   } else {
@@ -7322,69 +7556,235 @@ currentSVGFilter = `
   }
 }
 
+function highlightCSS_DOM(container, doc) {
+  const html = container.textContent
+    // 1. Gradient functions (اولین اولویت)
+    .replace(/\b(radial-gradient|linear-gradient|conic-gradient|url)\b/g, '<span class="f">$1</span>')
+    // 2. Colors
+    .replace(/(rgba?\s*\([^)]+\)|hsla?\s*\([^)]+\)|#[0-9a-fA-F]{3,8})/g, '<span class="v">$1</span>')
+    // 3. Properties
+    .replace(/^(\s*)([a-z-]+)(\s*:)/gm, '$1<span class="p">$2</span>$3')
+    // 4. Numbers
+    .replace(/\b(\d+\.?\d*(?:px|%|deg|rem|em)?)\b/g, '<span class="n">$1</span>')
+    // 5. Keywords
+    .replace(/\b(normal|screen|overlay|multiply|soft-light|hard-light|transparent|absolute|relative|none)\b/g, '<span class="k">$1</span>');
+
+  container.innerHTML = html;
+}
+
+function highlightSVG_DOM(container, doc) {
+  const text = container.textContent;
+  container.textContent = '';
+
+  const lines = text.split('\n');
+  const frag = doc.createDocumentFragment();
+
+  lines.forEach(line => {
+    const lineDiv = doc.createElement('div');
+    
+    if (line.trim() === '') {
+      lineDiv.innerHTML = '&nbsp;';
+      frag.appendChild(lineDiv);
+      return;
+    }
+
+    const tokens = [];
+
+    // Tags
+    const tagRegex = /<\/?[\w:-]+/g;
+    let m;
+    while ((m = tagRegex.exec(line)) !== null) {
+      tokens.push({ 
+        type: 'tag', 
+        start: m.index, 
+        end: m.index + m[0].length, 
+        text: m[0],
+        priority: 10
+      });
+    }
+
+    // Attributes
+    const attrRegex = /\s([\w:-]+)=/g;
+    while ((m = attrRegex.exec(line)) !== null) {
+      tokens.push({ 
+        type: 'attr', 
+        start: m.index + 1, 
+        end: m.index + m[1].length + 1, 
+        text: m[1],
+        priority: 9
+      });
+    }
+
+    // Values
+    const valRegex = /"[^"]*"/g;
+    while ((m = valRegex.exec(line)) !== null) {
+      tokens.push({ 
+        type: 'val', 
+        start: m.index, 
+        end: m.index + m[0].length, 
+        text: m[0],
+        priority: 8
+      });
+    }
+
+    tokens.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return a.start - b.start;
+    });
+
+    const finalTokens = [];
+    for (const token of tokens) {
+      const hasOverlap = finalTokens.some(t => 
+        (token.start >= t.start && token.start < t.end) ||
+        (token.end > t.start && token.end <= t.end) ||
+        (token.start <= t.start && token.end >= t.end)
+      );
+      if (!hasOverlap) {
+        finalTokens.push(token);
+      }
+    }
+
+    finalTokens.sort((a, b) => a.start - b.start);
+
+    let cursor = 0;
+    finalTokens.forEach(token => {
+      if (token.start > cursor) {
+        lineDiv.appendChild(doc.createTextNode(line.slice(cursor, token.start)));
+      }
+      
+      const span = doc.createElement('span');
+      switch(token.type) {
+        case 'tag': span.className = 't'; break;
+        case 'attr': span.className = 's'; break;
+        case 'val': span.className = 'v'; break;
+      }
+      span.textContent = token.text;
+      lineDiv.appendChild(span);
+      
+      cursor = token.end;
+    });
+
+    if (cursor < line.length) {
+      lineDiv.appendChild(doc.createTextNode(line.slice(cursor)));
+    }
+
+    frag.appendChild(lineDiv);
+  });
+
+  container.appendChild(frag);
+}
+
 function renderIframe(id, content, isSVG = false) {
   const iframe = document.getElementById(id);
   if (!iframe) return;
 
   const doc = iframe.contentDocument || iframe.contentWindow.document;
-  
-  let displayContent = content;
-  if (isSVG) {
-    displayContent = content
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
 
   doc.open();
   doc.write(`<!DOCTYPE html>
 <html>
 <head>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{
-  background:none;
-  color:#b8c4ce;
-  font-family:'Fira Code',monospace;
-  font-size:11px;
-  line-height:1.6;
-  padding:10px;
-  white-space:pre-wrap;
-  word-break:break-word;
-}
-.p{color:#7dd3fc}
-.f{color:#ff79c6}
-.v{color:#86efac}
-.n{color:#fdba74}
-.c{color:#6b7280}
-.t{color:#fbbf24}
-.s{color:#a78bfa}
-</style>
-</head>
-<body>${highlightCSS(displayContent, isSVG)}</body>
-</html>`);
-  doc.close();
-}
-
-function highlightCSS(css, isSVG = false) {
-  let result = css;
-  
-  if (isSVG) {
-    result = result
-      .replace(/(&lt;\/?[\w-]+)/g, '<span class="t">$1</span>')
-      .replace(/(\/&gt;|&gt;)/g, '<span class="t">$1</span>')
-      .replace(/(\w+)=/g, '<span class="s">$1</span>=')
-      .replace(/"([^"]+)"/g, '"<span class="v">$1</span>"');
-  } else {
-    result = result
-      .replace(/(\.[\w-]+)\s*\{/g, '<span class="s">$1</span> {')
-      .replace(/(background(?:-color|-image|-blend-mode)?|position|top|left|width|height|opacity|filter|pointer-events|mix-blend-mode)\s*:/g, '<span class="p">$1</span>:')
-      .replace(/(radial-gradient|linear-gradient|conic-gradient|url)/g, '<span class="f">$1</span>')
-      .replace(/:\s*(absolute|none|screen|overlay|soft-light|hard-light|multiply)/g, ': <span class="v">$1</span>')
-      .replace(/(\d+\.?\d*)(px|%|deg)?/g, '<span class="n">$1</span>$2')
-      .replace(/(rgba?\([^)]+\)|hsla?\([^)]+\)|#[0-9a-fA-F]{3,8})/g, '<span class="v">$1</span>');
+  *::-webkit-scrollbar {
+    height: 6px;
+    width: 4px;
   }
   
-  return result;
+  *::-webkit-scrollbar-track {
+    border-radius: 3px;
+    background-color: var(--bg);
+  }
+  
+  *::-webkit-scrollbar-thumb {
+    border-radius: 5px;
+    background-color: #666;
+  }
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  color:#c9d1d9;
+  font-family:'Fira Code', monospace;
+  font-size:12px;
+  line-height:1.6;
+  padding:12px;
+  overflow-x: hidden;
+pre, div {
+  white-space: pre-wrap;
+  overflow-wrap: break-word; /* یا anywhere */
+  word-break: normal;
+}
+
+
+.p{
+  background: linear-gradient(90deg, #00d4ff 0%, #0099ff 50%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 500;
+}
+
+/* Function*/
+.f{
+  background: linear-gradient(90deg, #a855f7 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 500;
+}
+
+/* Value/Color */
+.v{
+  background: linear-gradient(90deg, #10b981 0%, #34d399 50%, #6ee7b7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Number */
+.n{
+  background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 50%, #fcd34d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Keyword */
+.k{
+  background: linear-gradient(90deg, #fb923c 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Tag - قرمز */
+.t{
+  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 500;
+}
+
+/* Attribute */
+.s{
+  background: linear-gradient(90deg, #0ea5e9 0%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+</style>
+</head>
+<body><pre id="code"></pre></body>
+</html>`);
+  doc.close();
+
+  const pre = doc.getElementById('code');
+  pre.textContent = content;
+
+  if (isSVG) {
+    highlightSVG_DOM(pre, doc);
+  } else {
+    highlightCSS_DOM(pre, doc);
+  }
 }
 
 // ========== COPY FUNCTIONS ==========
@@ -8755,10 +9155,18 @@ document.getElementById("bgBtn")?.addEventListener("click", () => {
 });
 
 document.getElementById("cssFormat")?.addEventListener("change", (e) => {
-  History.saveState();  // ✅ اضافه شد
+  History.saveState();
   state.cssFormat = e.target.value;
   updateCSS();
 });
+
+function syncCSSFormat() {
+  const select = document.getElementById("cssFormat");
+  if (!select) return;
+
+  select.value = state.cssFormat;
+}
+
 
 document
   .getElementById("btnRadial")
@@ -8809,7 +9217,8 @@ function initMobile() {
 
 }
 
-// ========== INITIALIZATION ==========
+// ========== HELPERS ==========
+
 function rand(min, max) {
   return Math.random() * (max - min) + min;
 }
@@ -8823,9 +9232,154 @@ function randFrom(arr) {
 }
 
 const COLOR_POOL = [
-  "#ff0066", "#7c3aed", "#00d4ff",
-  "#00ff88", "#ffb703", "#fb5607"
+  "#ff0066", "#3a0ca3", "#00d4ff",
+  "#00ff88", "#b3945b", "#fb5607",
+  "#119da4", "#cf9893", "#6968a6",
+  "#dd7a83", "#3f5e96", "#010528"
 ];
+
+// ترکیب رنگ‌های هماهنگ‌تر
+function generatePalette(baseCount = 3) {
+  const base = randFrom(COLOR_POOL);
+  const colors = [base];
+  while (colors.length < baseCount) {
+    const c = randFrom(COLOR_POOL);
+    if (!colors.includes(c)) colors.push(c);
+  }
+  return colors;
+}
+
+// ساخت استاپ‌های گرادیانت با تنوع
+function createGradientStops(palette, countRange = [2, 5], opacityRange = [40, 90]) {
+  const count = randInt(countRange[0], countRange[1] + 1);
+  const stops = [];
+  for (let i = 0; i < count; i++) {
+    const pos = i === count - 1 ? 100 : Math.round((100 / (count - 1 || 1)) * i);
+    stops.push({
+      pos,
+      color: randFrom(palette),
+      opacity: randInt(opacityRange[0], opacityRange[1])
+    });
+  }
+  return stops;
+}
+
+// ========== RANDOM GRADIENT GENERATOR ==========
+
+function generateRandomGradient() {
+  // پاک کردن تمام استاپ‌ها
+  state.stops = [];
+  counter = 1;
+
+  const palette = generatePalette(randInt(3, 5));
+
+  // تعداد لایه‌ها بین 2 تا 5
+  const layerCount = randInt(2, 5);
+
+  // انواع لایه‌ها
+  const LAYER_TYPES = ["radial", "conic", "linear"];
+  const usedTypes = [];
+
+  for (let i = 0; i < layerCount; i++) {
+    const type = randFrom(LAYER_TYPES);
+
+    addStop(type);
+    const stop = state.stops[i];
+
+    // نام‌گذاری خلاقانه‌تر
+    const namePrefix = {
+      radial: ["Radial Glow", "Soft Aura", "Halo", "Pulse"],
+      conic: ["Conic Flow", "Spectrum Arc", "Spiral", "Vortex"],
+      linear: ["Linear Blend", "Stream", "Beam", "Gradient Ray"]
+    };
+    stop.name = randFrom(namePrefix[type]);
+
+    // موقعیت
+    stop.x = rand(0.15, 0.85);
+    stop.y = rand(0.15, 0.85);
+
+    // بر اساس نوع لایه
+    if (type === "radial") {
+      stop.color = randFrom(palette);
+      stop.feather = randInt(30, 90);
+      stop.opacity = randInt(50, 90);
+    }
+
+    if (type === "conic") {
+      stop.startAngle = randInt(0, 360);
+
+      const conicCount = randInt(3, 6);
+      const conicStops = [];
+      for (let j = 0; j < conicCount; j++) {
+        conicStops.push({
+          pos: randInt(0, 100),
+          color: randFrom(palette),
+          opacity: randInt(30, 80)
+        });
+      }
+      conicStops.sort((a, b) => a.pos - b.pos);
+      stop.stops = conicStops;
+    }
+
+    if (type === "linear") {
+      const favAngles = [0, 45, 60, 90, 120, 135, 180, 225, 270, 315];
+      stop.angle = Math.random() < 0.6 ? randFrom(favAngles) : randInt(0, 360);
+
+      const isPrimaryLinear = !usedTypes.includes("linear");
+      const opacityRange = isPrimaryLinear ? [40, 80] : [20, 70];
+      stop.stops = createGradientStops(palette, [3, 6], opacityRange);
+    }
+
+    usedTypes.push(type);
+  }
+
+  // لایه subtle اضافی
+  if (layerCount < 5 && Math.random() < 0.4) {
+    addStop("radial");
+    const s = state.stops[state.stops.length - 1];
+    s.name = "Subtle Glow";
+    s.color = randFrom(palette);
+    s.x = rand(0.2, 0.8);
+    s.y = rand(0.2, 0.8);
+    s.feather = randInt(60, 95);
+    s.opacity = randInt(10, 35);
+  }
+
+  state.selected = null;
+
+  // ذخیره در history
+  if (typeof History !== "undefined" && History.saveState) {
+    History.saveState();
+  }
+
+  refresh();
+}
+
+// ========== ADD GENERATE BUTTON ==========
+
+function addGenerateButton() {
+  // پیدا کردن container (کنار undo/redo)
+  const undoBtn = document.getElementById('undoBtn');
+  if (!undoBtn) return;
+  
+  const container = undoBtn.parentElement;
+  
+  // چک کنیم دکمه از قبل وجود نداشته باشه
+  document.getElementById('generateBtn');
+
+}
+
+// ========== KEYBOARD SHORTCUT ==========
+
+document.addEventListener('keydown', (e) => {
+  // Ctrl+G یا Cmd+G برای Generate
+  if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+    e.preventDefault();
+    generateRandomGradient();
+  }
+});
+
+// ========== INIT ==========
 
 async function init() {
   initMobile();
@@ -8844,43 +9398,34 @@ async function init() {
   updateFilterUI();
   updateBgUI();
   initLayerDragDrop();
+  syncCSSFormat();
 
-  /* ========= RADIAL ========= */
-  addStop("radial");
-  Object.assign(state.stops[0], {
-    name: "Radial Glow",
-    color: randFrom(COLOR_POOL),
-    x: rand(0.2, 0.8),
-    y: rand(0.2, 0.8),
-    feather: randInt(40, 85)
-  });
+  // بارگذاری History
+  if (typeof History !== 'undefined' && History.init) {
+    History.init();
+  }
 
-  /* ========= CONIC ========= */
-  addStop("conic");
-  state.stops[1].name = "Conic Flow";
-  state.stops[1].x = rand(0.3, 0.7);
-  state.stops[1].y = rand(0.3, 0.7);
-  state.stops[1].startAngle = randInt(0, 360);
-  state.stops[1].stops = Array.from({ length: 3 }, (_, i) => ({
-    pos: i * 33,
-    color: randFrom(COLOR_POOL),
-    opacity: randInt(30, 60)
-  }));
-
-  /* ========= LINEAR ========= */
-  addStop("linear");
-  state.stops[2].name = "Linear Blend";
-  state.stops[2].angle = randInt(0, 360);
-  state.stops[2].stops = [
-    { pos: 0, color: randFrom(COLOR_POOL), opacity: randInt(50, 70) },
-    { pos: 50, color: randFrom(COLOR_POOL), opacity: randInt(50, 80) },
-    { pos: 100, color: randFrom(COLOR_POOL), opacity: randInt(50, 70) }
-  ];
-
-  state.selected = null;
-  refresh();
+  // اگر auto-save وجود نداشت، گرادیانت تصادفی بساز
+  const hasAutoSave = localStorage.getItem(History?.autoSaveKey || 'gradientEditor_autoSave');
+  
+  if (!hasAutoSave) {
+    generateRandomGradient();
+  } else {
+    refresh();
+  }
+  
+  // ✅ اضافه کردن دکمه Generate
+  addGenerateButton();
 }
 
+// ========== FALLBACK برای HTML موجود ==========
+
+document.addEventListener('DOMContentLoaded', () => {
+  const existingBtn = document.getElementById('generateBtn');
+  if (existingBtn) {
+    existingBtn.onclick = generateRandomGradient;
+  }
+});
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);

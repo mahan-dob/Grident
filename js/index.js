@@ -123,7 +123,7 @@
   document.addEventListener("DOMContentLoaded", () => Gallery.init());
   window.Gallery = Gallery;
 
-const targets = document.querySelectorAll('.about h3, .about p, .btn-editor');
+const targets = document.querySelectorAll('.feature-content h3, .feature-content p, .btn-editor');
 
 function runSweep() {
   const el = targets[Math.floor(Math.random() * targets.length)];
