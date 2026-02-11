@@ -14,15 +14,15 @@
 <!-- Header -->
 <header class="header">
   <div class="header-left">
-    <a href="/" class="header-brand">
+    <a href="./Gradient-Designer.html" class="header-brand">
       <img class="header-logo" src="./LOGO.svg" alt="Gradient Designer Logo" width="48" height="48" />
-      <h1 class="header-name">Gradient Designer</h1>
+      <h3 class="header-name">Gradient Designer</h3>
     </a>
   </div>
   
   <nav class="header-nav">
     <ul class="nav-list">
-      <li><a class="nav-link" href="./index.html">home</a></li>
+      <li><a class="nav-link" href="./index.html">Home</a></li>
     </ul>
   </nav>
 
@@ -36,20 +36,16 @@
         <option value="midnight">Midnight</option>
       </select>
     </div>
-    <button  class="btn-primary header-cta">
-      <a href="./Gradient-Designer.html">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-      </svg>
-      <span>Open Editor</span>
-    </a>
-    </button>
   </div>
 </header>
   <main>
     <h1>Quick Guide</h1>
-    <h2>Gradient</h2>
-    <div class="container Gradient">
+    <h2 class="section-title">
+      <span class="title-decoration"></span>
+      Gradient
+      <span class="title-decoration"></span>
+    </h2>
+    <section class="container Gradient">
       <div>
         <img src="./img/conic-gradient.webp" alt="conic gradient">
         <h3 class="gradient-text">A conic gradient rotates colors around a central point.</h3>
@@ -62,16 +58,24 @@
         <img src="./img/linear-gradient.webp" alt="linear gradient">
         <h3 class="gradient-text">A linear gradient transitions colors smoothly in a single direction.</h3>
       </div>
-    </div>
-    <h2>Noise & Grain</h2>
-    <div class="container">
+    </section>
+    <h2 class="section-title">
+      <span class="title-decoration"></span>
+      Noise & Grain
+      <span class="title-decoration"></span>
+    </h2>
+    <section class="container">
       <img src="./img/noise.webp" alt="noise">
       <img src="./img/gradient-noise.webp" alt="gradient noise">
       <h3>Noise or Grain is a subtle layer of random texture added to gradients to reduce banding and make color
         transitions feel more natural. It helps gradients look smoother, deeper, and more professional.</h3>
-    </div>
-    <h2>Fillter</h2>
-    <div class="container fillter">
+    </section>
+    <h2 class="section-title">
+      <span class="title-decoration"></span>
+      Fillter
+      <span class="title-decoration"></span>
+    </h2>
+    <section class="container fillter">
       <div class="fillter-box">
         <video autoplay loop muted playsinline>
           <source src="./video/brightness.mp4" type="video/mp4">
@@ -122,9 +126,13 @@
         <h3>Invert</h3>
         <h4>Inverts all colors for creative and experimental effects.</h4>
       </div>
-    </div>
-    <h2>Blend mode</h2>
-    <div class="container blend">
+    </section>
+    <h2 class="section-title">
+      <span class="title-decoration"></span>
+      Blend mode
+      <span class="title-decoration"></span>
+    </h2>
+    <section class="container blend">
       <div class="Blend-box">
         <img class="blend-img" src="./img/blend-modes/normal.webp" alt="Normal blend mode preview">
         <h3>Normal</h3>
@@ -221,9 +229,13 @@
         <h3>Luminosity</h3>
         <h4>Applies the gradient's brightness to layers below while preserving color and saturation.</h4>
       </div>
-    </div>
-    <h2>Layers</h2>
-    <div class="container layer">
+    </section>
+    <h2 class="section-title">
+      <span class="title-decoration"></span>
+      Layers
+      <span class="title-decoration"></span>
+    </h2>
+    <section class="container layer">
       <div class="layer-img">
         <img src="./img/radial-down.webp" alt="noise">
         <img src="./img/radial-up.webp" alt="gradient noise">
@@ -235,10 +247,14 @@
         <img src="./img/radial-down-code.webp" alt="gradient noise">
         <img src="./img/radial-up-code.webp" alt="gradient noise">
       </div>
-    </div>
+    </section>
   </main>
-  <h2>Output</h2>
-  <div class="container Output">
+  <h2 class="section-title">
+    <span class="title-decoration"></span>
+    Output
+    <span class="title-decoration"></span>
+  </h2>
+  <section class="container Output">
     <div id="css-output">
       <img src="./img/css.webp" alt="css export">
       <h3>Copy the generated CSS and apply it directly to the target element. The result will match the preview exactly
@@ -254,7 +270,7 @@
       <h3>The Noise effect is generated as a separate layer and is best applied to ::before, ::after, or a child element
         to achieve a clean and fully controllable result.</h3>
     </div>
-  </div>
+  </section>
   <footer>
     <a href="./index.html">Back To Home           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M5 12h14M12 5l7 7-7 7"/>

@@ -37,6 +37,7 @@
 .header-name {
   font-family: "Pacifico", cursive;
   font-size: 1.5rem;
+  line-height: 3rem;
   font-weight: normal;
   background: var(--accent-gradient);
   background-size: 200% 200%;
@@ -48,9 +49,7 @@
 
 /* Navigation */
 .header-nav {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+
 }
 
 .nav-list {
@@ -87,15 +86,6 @@
   width: 100%;
 }
 
-/* Header CTA */
-.header-cta {
-  padding: 10px 20px;
-}
-
-.header-cta svg {
-  width: 18px;
-  height: 18px;
-}
 
 /* Mobile Menu Button */
 .mobile-menu-btn {
@@ -128,33 +118,21 @@ h1 {
   font-family: "Pacifico", cursive;
 }
 
-h2 {
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   font-size: 32px;
   font-weight: 700;
   margin-bottom: 16px;
-  position: relative;
-  display: inline-block;
-  padding: 0 16px;
+  width: 100%;
 }
 
-h2::before,
-h2::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 100vw;
+.title-decoration {
+  flex: 1;
   height: 1px;
-  background: var(--text-primary);
-}
-
-h2::before {
-  right: 100%;
-  margin-right: 16px;
-}
-
-h2::after {
-  left: 100%;
-  margin-left: 16px;
+  background: var(--text-primary, #000);
 }
 
 .container {
@@ -373,21 +351,6 @@ footer a:hover svg {
     display: flex;
   }
 
-  .header-nav {
-    position: fixed;
-    top: var(--header-height);
-    left: 0;
-    right: 0;
-    background: var(--bg-transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--border);
-    padding: 20px;
-    transform: translateX(-100%);
-    opacity: 0;
-    transition: all 0.3s ease;
-  }
-
   .header-nav.active {
     transform: translateX(0);
     opacity: 1;
@@ -401,12 +364,6 @@ footer a:hover svg {
 
   .header-name {
     font-size: 1.2rem;
-  }
-
-
-  .header-cta {
-    padding: 8px 16px;
-    font-size: 13px;
   }
 
   .header-right {
@@ -446,7 +403,7 @@ footer a:hover svg {
   .layer-img img,
   .layer-code-img img {
     margin: .25rem;
-    max-width: calc(50% - 0.5rem);
+    max-width: 100%;
   }
 
   #noise-svg,
@@ -484,6 +441,10 @@ footer a:hover svg {
     gap: 8px;
   }
 
+  .header-name{
+    display: none;
+  }
+
   .header-cta {
     padding: 6px 12px;
     font-size: 12px;
@@ -515,7 +476,6 @@ footer a:hover svg {
 
   .layer-img img,
   .layer-code-img img {
-    max-width: 100%;
     margin: 0.25rem 0;
   }
 

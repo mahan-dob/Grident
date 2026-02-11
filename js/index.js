@@ -123,7 +123,7 @@
   document.addEventListener("DOMContentLoaded", () => Gallery.init());
   window.Gallery = Gallery;
 
-const targets = document.querySelectorAll('.feature-content h3, .feature-content p, .btn-editor');
+const targets = document.querySelectorAll('.feature-content h3, .feature-content p, .btn-enter-editor');
 
 function runSweep() {
   const el = targets[Math.floor(Math.random() * targets.length)];
@@ -138,18 +138,4 @@ function runSweep() {
 
 setTimeout(runSweep, 1200);
 
-const wave = document.querySelectorAll('.wave');
-
-function runWave() {
-  const el = targets[Math.floor(Math.random() * targets.length)];
-
-  el.classList.remove('Wave-active');
-  void el.offsetWidth; // reflow قطعی
-  el.classList.add('wave-active');
-
-  const delay = 1000 + Math.random() * 3000;
-  setTimeout(runWave, delay);
-}
-
-setTimeout(runWave, 1200);
 

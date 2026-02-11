@@ -37,6 +37,7 @@
 .header-name {
   font-family: "Pacifico", cursive;
   font-size: 1.5rem;
+  line-height: 3rem;
   font-weight: normal;
   background: var(--accent-gradient);
   background-size: 200% 200%;
@@ -48,9 +49,6 @@
 
 /* Navigation */
 .header-nav {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
 }
 
 .nav-list {
@@ -85,16 +83,6 @@
 
 .nav-link:hover::after {
   width: 100%;
-}
-
-/* Header CTA */
-.header-cta {
-  padding: 10px 20px;
-}
-
-.header-cta svg {
-  width: 18px;
-  height: 18px;
 }
 
 /* ========================================
@@ -136,7 +124,7 @@
   initial-value: 1.04;
 }
 .hero-section {
-  height: 90dvh;
+  height: 93dvh;
   background-color: rgba(10, 10, 20, 1);
   background-image:
     radial-gradient(50% 70% at var(--rx) var(--ry),
@@ -229,6 +217,7 @@
     --b: 1.04;
   }
 }
+
 .hero-section::after {
   content: '';
   position: absolute;
@@ -259,6 +248,7 @@
   max-width: var(--container-max);
   margin: 0 auto;
   width: 100%;
+  padding: 1rem;
 }
 
 .hero-header {
@@ -268,6 +258,7 @@
 .hero-title {
   font-family: "Pacifico", cursive;
   font-size: clamp(2.5rem, 8vw, 5rem);
+  line-height: clamp(4rem, 16vw, 10rem);
   font-weight: normal;
   background: var(--accent-gradient);
   background-size: 200% 200%;
@@ -324,7 +315,7 @@
   padding: 20px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-md);
+  border-radius: 140px 999px 999px 999px;
   backdrop-filter: blur(10px);
   transform: translateX(-20px);
   opacity: 0;
@@ -351,7 +342,7 @@
   align-items: center;
   justify-content: center;
   background: var(--accent-gradient);
-  border-radius: var(--radius-sm);
+  border-radius: 200px 999px 999px 999px;
 }
 
 .feature-icon svg {
@@ -403,7 +394,7 @@
 
 .btn-enter-editor:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent-gradient-gradient-primary);
+  border-color: var(--accent-gradient);
   color: #fff;
   transform: translateX(-5px);
 }
@@ -416,6 +407,41 @@
   transform: translateX(5px);
 }
 
+.sweep-active {
+  animation: sweep 2.8s linear forwards;
+}
+
+@keyframes sweep {
+  0% {
+    background-position: -150% 0;
+    text-shadow: none;
+  }
+
+  35% {
+    text-shadow:
+      0 0 6px rgba(255, 255, 255, 0.4),
+      0 0 14px rgba(255, 255, 255, 0.3);
+  }
+
+  50% {
+    background-position: 0% 0;
+    text-shadow:
+      0 0 10px rgba(255, 255, 255, 0.9),
+      0 0 25px rgba(255, 255, 255, 0.8),
+      0 0 45px rgba(255, 255, 255, 0.6);
+  }
+
+  65% {
+    text-shadow:
+      0 0 6px rgba(255, 255, 255, 0.4),
+      0 0 14px rgba(255, 255, 255, 0.3);
+  }
+
+  100% {
+    background-position: 150% 0;
+    text-shadow: none;
+  }
+}
 /* ========================================
    MAIN CONTENT
 ======================================== */
@@ -436,33 +462,20 @@
 }
 
 .section-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   font-size: 32px;
   font-weight: 700;
   margin-bottom: 16px;
-  position: relative;
-  display: inline-block;
-  padding: 0 16px;
-  /* فاصله متن از خط‌ها */
+  width: 100%;
 }
 
-.section-title::before,.section-title::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 100vw;
-  /* خط‌ها بلند باشن */
+.title-decoration {
+  flex: 1;
   height: 1px;
-  background: var(--text-primary);
-}
-
-.section-title::before {
-  right: 100%;
-  margin-right: 16px;
-}
-
-.section-title::after {
-  left: 100%;
-  margin-left: 16px;
+  background: var(--text-primary, #000);
 }
 
 .section-description {
@@ -472,8 +485,40 @@
 }
 
 /* ========================================
-   PRESETS GRID
+   PRESETS 
 ======================================== */
+
+/* Filters */
+.filters {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 8px 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.filter-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 .presets-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -494,7 +539,7 @@
   width: 48px;
   height: 48px;
   border: 3px solid var(--border);
-  border-top-color: var(--accent-gradient-gradient-primary);
+  border-top-color: var(--accent-gradient);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 16px;
@@ -521,7 +566,7 @@
 .preset-card:hover {
   transform: translateY(-8px) scale(1.02);
   box-shadow: var(--shadow-elevated);
-  border-color: var(--accent-gradient-gradient-primary);
+  border-color: var(--accent-gradient);
 }
 
 .preset-card:active {
@@ -628,7 +673,7 @@
 
 .btn-guide:hover {
   background: var(--hover);
-  border-color: var(--accent-gradient-gradient-primary);
+  border-color: var(--accent-gradient);
   transform: translateX(5px);
 }
 
@@ -643,28 +688,203 @@
 /* ========================================
    FOOTER
 ======================================== */
-.site-footer {
-  position: relative;
-  padding: 80px 24px 32px;
-  overflow: hidden;
-  
-  /* Gradient Background */
-  background-color: #0a0a14;
-  background-image:
-    radial-gradient(ellipse 40% 80% at 0% 100%, 
-      rgba(0, 212, 255, 0.5) 0%, 
-      transparent 60%),
-    radial-gradient(ellipse 50% 80% at 100% 0%, 
-      rgba(0, 255, 136, 0.3) 0%, 
-      transparent 60%);
+/* تعریف Custom Properties */
+@property --angle1 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 267deg;
 }
 
-.footer-noise {
+@property --angle2 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 281deg;
+}
+
+@property --angle3 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 295deg;
+}
+
+@property --angle4 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 309deg;
+}
+
+@property --angle5 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 322deg;
+}
+
+@property --angle6 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 334deg;
+}
+
+@property --angle7 {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 347deg;
+}
+
+/* استایل اصلی با انیمیشن */
+.site-footer {
+  padding: 48px;
+  position: relative;
+  background-color: #ffffff;
+  background-image:
+    conic-gradient(from var(--angle1) at 100% 100%, 
+      rgba(227, 191, 195, 1.00) 0%, 
+      rgba(221, 122, 131, 1.00) 4%, 
+      rgba(143, 251, 200, 0.00) 4%),
+    conic-gradient(from var(--angle2) at 100% 100%, 
+      rgba(227, 191, 195, 1.00) 0%, 
+      rgba(221, 122, 131, 1.00) 4%, 
+      rgba(255, 102, 0, 0.00) 4%),
+    conic-gradient(from var(--angle3) at 100% 100%, 
+     rgba(227, 191, 195, 1.00) 0%, 
+      rgba(221, 122, 131, 1.00) 4%, 
+      rgba(255, 102, 0, 0.00) 4%),
+    conic-gradient(from var(--angle4) at 100% 100%, 
+     rgba(227, 191, 195, 1.00) 0%, 
+      rgba(221, 122, 131, 1.00) 4%, 
+      rgba(255, 102, 0, 0.00) 4%),
+    conic-gradient(from var(--angle5) at 100% 100%, 
+     rgba(227, 191, 195, 1.00) 0%, 
+      rgba(221, 122, 131, 1.00) 4%, 
+      rgba(255, 102, 0, 0.00) 4%),
+    conic-gradient(from var(--angle6) at 100% 100%, 
+     rgba(227, 191, 195, 1.00) 0%, 
+      rgba(221, 122, 131, 1.00) 4%, 
+      rgba(255, 102, 0, 0.00) 4%),
+    conic-gradient(from var(--angle7) at 100% 100%, 
+    rgba(227, 191, 195, 1.00) 0%, 
+     rgba(221, 122, 131, 1.00) 4%, 
+      rgba(255, 102, 0, 0.00) 4%);
+  background-blend-mode: normal;
+  filter:saturate(120%);
+  
+  animation: moveUpDown 25s ease-in-out infinite;
+
+}
+
+@keyframes moveUpDown {
+  /* شروع از پایین */
+  0% {
+    --angle1: 267deg;
+    --angle2: 281deg;
+    --angle3: 295deg;
+    --angle4: 309deg;
+    --angle5: 322deg;
+    --angle6: 334deg;
+    --angle7: 347deg;
+  }
+  
+  /* آروم میاد بالا */
+  15% {
+    --angle1: 237deg;
+    --angle2: 251deg;
+    --angle3: 265deg;
+    --angle4: 279deg;
+    --angle5: 292deg;
+    --angle6: 304deg;
+    --angle7: 317deg;
+  }
+  
+  /* رسیده به بالا */
+  30% {
+    --angle1: 177deg;
+    --angle2: 191deg;
+    --angle3: 205deg;
+    --angle4: 219deg;
+    --angle5: 232deg;
+    --angle6: 244deg;
+    --angle7: 257deg;
+  }
+  
+  /* حرکت باد - چپ */
+  40% {
+    --angle1: 172deg;
+    --angle2: 186deg;
+    --angle3: 200deg;
+    --angle4: 214deg;
+    --angle5: 227deg;
+    --angle6: 239deg;
+    --angle7: 252deg;
+  }
+  
+  /* حرکت باد - راست */
+  50% {
+    --angle1: 182deg;
+    --angle2: 196deg;
+    --angle3: 210deg;
+    --angle4: 224deg;
+    --angle5: 237deg;
+    --angle6: 249deg;
+    --angle7: 262deg;
+  }
+  
+  /* حرکت باد - چپ */
+  60% {
+    --angle1: 175deg;
+    --angle2: 189deg;
+    --angle3: 203deg;
+    --angle4: 217deg;
+    --angle5: 230deg;
+    --angle6: 242deg;
+    --angle7: 255deg;
+  }
+  
+  /* شروع برگشت به پایین */
+  75% {
+    --angle1: 207deg;
+    --angle2: 221deg;
+    --angle3: 235deg;
+    --angle4: 249deg;
+    --angle5: 262deg;
+    --angle6: 274deg;
+    --angle7: 287deg;
+  }
+  
+  /* در حال برگشت */
+  90% {
+    --angle1: 247deg;
+    --angle2: 261deg;
+    --angle3: 275deg;
+    --angle4: 289deg;
+    --angle5: 302deg;
+    --angle6: 314deg;
+    --angle7: 327deg;
+  }
+  
+  /* رسیده به پایین */
+  100% {
+    --angle1: 267deg;
+    --angle2: 281deg;
+    --angle3: 295deg;
+    --angle4: 309deg;
+    --angle5: 322deg;
+    --angle6: 334deg;
+    --angle7: 347deg;
+  }
+}
+
+
+.site-footer::after {
+  content: '';
   position: absolute;
-  inset: 0;
-  opacity: 0.1;
-  filter: url(#noiseFilter);
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
+  opacity: 0.15;
+  filter: url(#noiseFilter);
+  mix-blend-mode: overlay;
 }
 
 .container {
@@ -679,7 +899,7 @@
   grid-template-columns: 2fr repeat(3, 1fr);
   gap: 48px;
   padding-bottom: 48px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--text-contrast);
 }
 
 /* Footer Brand */
@@ -697,16 +917,17 @@
 .footer-logo {
   width: 50px;
   height: 50px;
+  /* filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.3)); */
 }
 
 .footer-brand-name {
   font-size: 1.3rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-contrast);
 }
 
 .footer-description {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-contrast);
   line-height: 1.7;
 }
 
@@ -716,7 +937,7 @@
 }
 
 .footer-column h4 {
-  color: #fff;
+  color: var(--text-contrast);
   font-size: 1rem;
   margin-bottom: 20px;
   position: relative;
@@ -730,7 +951,7 @@
   left: 0;
   width: 100%;
   height: 3px;
-  background: var(--accent-gradient);
+  background: var(--text-primary);
   border-radius: 2px;
 }
 
@@ -742,13 +963,13 @@
 }
 
 .footer-column a {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-contrast);
   transition: all var(--transition-fast);
   display: inline-block;
 }
 
 .footer-column a:hover {
-  color: var(--accent-gradient-gradient-primary);
+  color: var(--accent-gradient);
   transform: translateX(-4px);
 }
 
@@ -767,7 +988,7 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-contrast);
   transition: all var(--transition-normal);
 }
 
@@ -781,17 +1002,16 @@
 .footer-bottom {
   padding-top: 32px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-contrast);
 }
 
 .footer-message {
   margin-bottom: 12px;
-  text-align: start;
   position: absolute;
 }
 
 .footer-message p {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-contrast);
   font-weight: 600;
 }
 
@@ -849,44 +1069,137 @@
     display: none;
   }
   
-  .header-nav {
-    display: none;
+   /* Hero Container */
+   .hero-section {
+    padding: 20px 16px 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    
+    /* سبک‌تر کردن انیمیشن برای موبایل */
+    animation: 
+      moveGradients 35s ease-in-out infinite,
+      pulseLight 8s ease-in-out infinite alternate;
   }
   
-  .header-cta span {
-    display: none;
-  }
-  
-  .header-cta {
-    padding: 10px;
-  }
-  
-  /* Hero Mobile */
+  /* کاهش شدت فیلترها برای پرفورمنس بهتر */
   .hero-section {
-    padding: 40px 20px;
-    min-height: auto;
+    filter: brightness(var(--b)) contrast(120%) saturate(110%);
   }
-  
+
+  /* Hero Content */
+  .hero-content {
+    padding: 0;
+  }
+
+  /* Hero Header */
+  .hero-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
   .hero-logo {
     position: static;
-    width: 80px;
-    margin-bottom: 20px;
+    width: 70px;
+    height: 70px;
+    margin-bottom: 12px;
+    order: 1;
   }
-  
+
+  .hero-title {
+    order: 2;
+    font-size: 2.2rem;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  .hero-subtitle {
+    order: 3;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    max-width: 280px;
+  }
+
+  /* Features List - Compact Layout */
   .features-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
     margin: 24px 0;
-    gap: 16px;
+    max-width: 100%;
   }
-  
+
   .feature-item {
-    padding: 16px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 16px 12px;
+    gap: 10px;
+    border-radius: 16px;
+    
+    /* حذف انیمیشن slide-in برای موبایل */
+    transform: none;
+    opacity: 1;
+    animation: fadeIn 0.4s ease forwards;
   }
-  
+
+  .feature-item:nth-child(1) { animation-delay: 0.05s; }
+  .feature-item:nth-child(2) { animation-delay: 0.1s; }
+  .feature-item:nth-child(3) { animation-delay: 0.15s; }
+  .feature-item:nth-child(4) { animation-delay: 0.2s; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .feature-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .feature-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .feature-content h3 {
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+  }
+
+  .feature-content p {
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  /* Tagline */
+  .hero-tagline {
+    text-align: center;
+    font-size: 1.1rem;
+    margin-top: 20px;
+  }
+
+
   .btn-enter-editor {
-    position: static;
-    width: 100%;
+    left: 12px;
+    right: 12px;
     justify-content: center;
-    margin-top: 32px;
+  }
+
+  /* Floating animation - کاهش حرکت برای موبایل */
+  .floating {
+    animation: float-mobile 4s ease-in-out infinite;
+  }
+
+  @keyframes float-mobile {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
   }
   
   /* Main Mobile */
@@ -903,11 +1216,15 @@
     gap: 16px;
   }
   
+  .site-footer{
+    padding-block: 18px;
+  }
   /* Footer Mobile */
   .footer-content {
     grid-template-columns: 1fr;
     gap: 32px;
     text-align: center;
+    padding-bottom: 12px;
   }
   
   .footer-column h4::after {
@@ -922,28 +1239,101 @@
   .social-links {
     justify-content: center;
   }
+
+  .footer-message {
+    position: relative;
+  }
 }
 
 @media (max-width: 480px) {
-  .hero-title {
-    font-size: 2rem;
+  .hero-section {
+    padding: 16px 12px 90px;
   }
-  
+
+  .hero-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .hero-title {
+    font-size: 1.8rem;
+  }
+
   .hero-subtitle {
+    font-size: 0.85rem;
+    max-width: 240px;
+  }
+
+  /* Single Column Features برای صفحات خیلی کوچک */
+  .features-list {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .feature-item {
+    flex-direction: row;
+    text-align: left;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .feature-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .feature-content h3 {
+    font-size: 0.85rem;
+  }
+
+  .feature-content p {
+    font-size: 0.7rem;
+  }
+
+  .hero-tagline {
+    font-size: 0.95rem;
+  }
+
+  .btn-enter-editor {
+    padding: 16px 20px;
     font-size: 0.9rem;
   }
-  
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .hero-section {
+    padding: 20px 24px 80px;
+  }
+
+  .hero-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .hero-logo {
+    width: 50px;
+    height: 50px;
+    margin: 0;
+  }
+
+  .hero-title {
+    font-size: 1.8rem;
+  }
+
+  .features-list {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
   .feature-item {
-    flex-direction: column;
-    text-align: center;
+    padding: 12px 8px;
   }
-  
-  .section-title {
-    font-size: 1.3rem;
-  }
-  
-  .title-decoration {
-    max-width: 60px;
+
+  .feature-content p {
+    display: none; /* مخفی کردن توضیحات در حالت افقی */
   }
 }
 
@@ -960,11 +1350,17 @@
   }
 }
 
-/* Print Styles */
-@media print {
-  .header,
-  .hero-section,
-  .site-footer {
-    display: none;
+/* ========================================
+   SAFE AREA (برای آیفون‌های نچ‌دار)
+======================================== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .btn-enter-editor {
+      padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    }
+    
+    .hero-section {
+      padding-bottom: calc(100px + env(safe-area-inset-bottom));
+    }
   }
 }

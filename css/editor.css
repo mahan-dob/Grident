@@ -16,7 +16,7 @@ body {
   grid-template-rows: 10rem 10rem auto;
   transition: background-color var(--btn-transition),
     color var(--btn-transition);
-    min-width: 372px;
+    min-width: 290px;
 }
 
 /* ========================================
@@ -475,18 +475,23 @@ header h1 {
 ======================================== */
 
 #generateBtn{
-position: absolute;
-top: .5rem;
-right: .5rem;
   gap: 6px;
   padding: 8px 12px;
   background: var(--accent-gradient);
   color: var(--text-contrast);
   fill: var(--text-contrast);
   border: none;
-  cursor: pointer;
   font-size: 13px;
   font-weight: 500;
+  z-index: 3;
+  float: right;
+  margin-left: -10rem;
+  margin-right: .5rem;
+  width: min-content;
+  height: min-content;
+  grid-column: 1 / 2;
+  grid-row: 3 / 4;
+  justify-self: end;
 }
 /* ========================================
    CANVAS AREA
@@ -508,6 +513,23 @@ right: .5rem;
   grid-column: 1 / 2;
   grid-row: 3 / 4;
   
+  /* --notch-w: 116px;
+  --notch-h: 42px;
+  --r: 11px;
+
+  clip-path: polygon(
+    0% 0%, 
+    calc(100% - var(--notch-w) - var(--r)) 0%,
+    calc(100% - var(--notch-w) - var(--r)) 0%,
+    calc(100% - var(--notch-w)) var(--r),
+    calc(100% - var(--notch-w)) calc(var(--notch-h) - var(--r)),
+    calc(100% - var(--notch-w) + var(--r)) var(--notch-h),
+    100% var(--notch-h),
+    100% 100%,
+    0% 100%
+  ); */
+  
+
 }
 
 .canvas-container {
@@ -675,13 +697,15 @@ right: .5rem;
 
 .tool-bar{
   position: absolute;
-  bottom: 1.5rem;
+  top: 1.5rem;
   left: .5rem;
   display: flex;
   gap: 10px;
   z-index: 1000;
   height: min-content;
   z-index: 11111;
+  flex-wrap: wrap;
+  padding-right: 10rem;
 }
 
 /* ========================================
@@ -785,6 +809,7 @@ right: .5rem;
   right: 16px;
   display: flex;
   gap: 8px;
+  flex-wrap: wrap-reverse;
 }
 
 .fullscreen-btn {
@@ -879,7 +904,7 @@ right: .5rem;
   height: 32px;
   border: none;
   border-radius: 50%;
-  background: var(--bg-secondary);
+  background: var(--bg-transparent);
   transition: var(--transition-fast);
 }
 
@@ -906,7 +931,7 @@ right: .5rem;
   text-align: center;
   width: 50px;
   text-align: center;
-  background: var(--bg-secondary);
+  background: var(--bg-transparent);
   padding: 4px 10px;
   border-radius: var(--radius-full);
 }
@@ -1119,7 +1144,6 @@ grid-column: 2/3;
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   padding-inline: 1.1rem;
   width: max-content;
 }
@@ -1882,10 +1906,6 @@ margin-right: .4rem;
   50%  { transform: scale(1.06); }
   100% { transform: scale(1); }
 }
-.copy-btn {
-  position: relative;
-  overflow: hidden;
-}
 
 /* bounce + glow */
 .copy-btn.copied {
@@ -1946,11 +1966,6 @@ margin-right: .4rem;
   .canvas-wrap {
     height: 70%;
     border-radius: 0;
-  }
-
-  .tool-bar{
-    left: .5rem;
-    top: 1rem;
   }
 
   .zoom-controls{
@@ -2031,8 +2046,26 @@ margin-right: .4rem;
     grid-row: 6/7;
     width: 100%;
   }
+}
+
+@media (max-width: 400px) {
+  .name{
+    display: none;
+  }
 
   .canvas-wrap{
     height: 45rem !important;
+  }
+
+  .gradient-btn-bar{
+    gap: .4rem;
+  }
+
+  .gradient-btn{
+    font-size: 11px;
+  }
+
+  #copyBtn{
+    display: none;
   }
 }

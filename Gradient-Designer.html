@@ -93,13 +93,13 @@
   </div>
 
 
+  <button id="generateBtn">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+    </svg>
+    Generate
+  </button>
   <div class="canvas-wrap">
-    <button id="generateBtn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-      </svg>
-      Generate
-    </button>
 <div class="tool-bar">
       <button class="preview-btn" onclick="openFullscreenPreview()" title="Fullscreen Preview (P)">
       <img src="./icon/full-screen.svg" alt="fullscreen">
@@ -190,7 +190,6 @@
     </div>
   </div>
 </div>
-<!-- Filters Section -->
 <div class="section" data-id="Filters">
   <div class="section-header">
     <div class="section-title">Filters</div>
@@ -424,6 +423,22 @@
       </div>
     </div>
   </div>
+  <svg width="0" height="0">
+    <clipPath id="notchClip" clipPathUnits="objectBoundingBox">
+      <path d="M0,0 
+               H0.62
+               Q0.63,0 0.63,0.05
+               V0.35
+               Q0.63,0.42 0.64,0.42
+               H1
+               V1
+               H0
+               Z" />
+    </clipPath>
+  </svg>
+  
+  <div class="clipped"></div>
+  
   <svg width="0" height="0" style="position:absolute">
     <filter id="noiseFilter" width="100%" height="100%" x="0%" y="0%"
     filterUnits="objectBoundingBox">

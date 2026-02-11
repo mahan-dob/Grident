@@ -59,7 +59,7 @@
   --border: rgba(0, 0, 0, 0.1);
   --border-hover: rgba(0, 0, 0, 0.2);
   --hover: rgba(0, 0, 0, 0.05);
-  --shadow: 0 4px 20px rgba(255, 255, 255, 0.4);
+
   --svg: invert(1) brightness(0);
 }
 
@@ -162,7 +162,6 @@ a {
 ::-webkit-scrollbar-thumb {
   background: var(--text-muted);
   border-radius: 4px;
-  transition: background var(--transition-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -256,8 +255,8 @@ input:hover {
 
 select:focus,
 input:focus {
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 3px #e8eef41a;
   outline: none;
 }
 
