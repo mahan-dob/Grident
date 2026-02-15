@@ -13,7 +13,7 @@ body {
 body {
   display: grid;
   grid-template-columns: 70% 30%;
-  grid-template-rows: 10rem 10rem auto;
+  grid-template-rows: 10rem 10rem 1fr;
   transition: background-color var(--btn-transition),
     color var(--btn-transition);
     min-width: 290px;
@@ -475,6 +475,7 @@ header h1 {
 ======================================== */
 
 #generateBtn{
+  position: relative;
   gap: 6px;
   padding: 8px 12px;
   background: var(--accent-gradient);
@@ -485,8 +486,7 @@ header h1 {
   font-weight: 500;
   z-index: 3;
   float: right;
-  margin-left: -10rem;
-  margin-right: .5rem;
+  margin: .5rem .5rem 0 -10rem;
   width: min-content;
   height: min-content;
   grid-column: 1 / 2;
@@ -906,6 +906,7 @@ header h1 {
   border-radius: 50%;
   background: var(--bg-transparent);
   transition: var(--transition-fast);
+  border: 1px solid var(--border);
 }
 
 .zoom-controls button:active {
@@ -934,6 +935,7 @@ header h1 {
   background: var(--bg-transparent);
   padding: 4px 10px;
   border-radius: var(--radius-full);
+  border: 1px solid var(--border);
 }
 
 .zoom-indicator {
@@ -1432,7 +1434,7 @@ display: none;
 }
 
 .stop-item.selected {
-  border: 2px solid var(--border);
+  border: 2px solid var(--border-hover);
 }
 
 .stop-item.hidden {

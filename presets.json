@@ -1435,7 +1435,7 @@
       "id": "Spectrum-Drift",
       "name": "Spectrum Drift",
       "category": "modern",
-      "tags": ["minimal", "modern"],
+      "tags": ["minimal", "modern", "popular"],
       "thumbnail": "./thumbnails/Spectrum-Drift.webp",
       "data": {
         "bgColor": "#7f8489",
