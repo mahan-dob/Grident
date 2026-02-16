@@ -1,7 +1,7 @@
   // ========== CONFIG ==========
-  const PRESETS_URL = "../presets.json";
-  const EDITOR_URL = "../Gradient-Designer.html";
-  const DEFAULT_THUMBNAIL = "../thumbnails/default.webp"; // عکس پیش‌فرض
+  const PRESETS_URL = "./presets.json";
+  const EDITOR_URL = "./Gradient-Designer.html";
+  const DEFAULT_THUMBNAIL = "./thumbnails/default.webp"; // عکس پیش‌فرض
 
   // ========== GALLERY ==========
   const Gallery = {
@@ -82,7 +82,6 @@
         return;
       }
 
-      // ✅ رندر با عکس به جای CSS gradient
       grid.innerHTML = filtered
         .map(
           (preset) => `
@@ -129,7 +128,7 @@ function runSweep() {
   const el = targets[Math.floor(Math.random() * targets.length)];
 
   el.classList.remove('sweep-active');
-  void el.offsetWidth; // reflow قطعی
+  void el.offsetWidth;
   el.classList.add('sweep-active');
 
   const delay = 1000 + Math.random() * 3000;

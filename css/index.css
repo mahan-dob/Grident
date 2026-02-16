@@ -666,7 +666,7 @@
 
 .btn-guide:hover {
   background: var(--hover);
-  border-color: var(--accent-gradient);
+  border-color: var(--text-primary);
   transform: translateX(5px);
 }
 
@@ -962,10 +962,11 @@
 }
 
 .footer-column a:hover {
-  background: var(--accent-gradient);
+  /* background: var(--accent-gradient);
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  -webkit-text-fill-color: transparent; */
   transform: translateX(-4px);
+  text-decoration: underline;
 }
 
 
