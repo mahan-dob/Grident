@@ -2048,15 +2048,15 @@ margin-right: .4rem;
     grid-row: 6/7;
     width: 100%;
   }
+
+    .canvas-wrap{
+    height: 45rem !important;
+    }
 }
 
 @media (max-width: 400px) {
   .name{
     display: none;
-  }
-
-  .canvas-wrap{
-    height: 45rem !important;
   }
 
   .gradient-btn-bar{
