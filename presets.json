@@ -1438,7 +1438,7 @@
       "tags": ["minimal", "modern", "popular"],
       "thumbnail": "./thumbnails/Spectrum-Drift.webp",
       "data": {
-        "bgColor": "#7f8489",
+        "bgColor": "#000",
         "bgAlpha": 100,
         "bgEnabled": true,
         "bgBlendMode": "normal",

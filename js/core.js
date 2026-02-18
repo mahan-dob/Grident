@@ -1045,7 +1045,7 @@ window.redo = () => History.redo();
 window.exportJSON = () => FileManager.exportJSON();
 window.importJSON = () => FileManager.importJSON();
 
-const buttons = document.querySelectorAll('.control-btn');
+const buttons = document.querySelectorAll('.animate');
 
 buttons.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -2027,6 +2027,8 @@ canvasWrap.addEventListener('scroll', () => {
   const y = canvasWrap.scrollTop;
   toolbar.style.transform = `translate(${x}px, ${y}px)`;
   zoomControls.style.transform = `translate(${x}px, ${y}px)`;
+  zoomControls.style.transition=`none`
+  toolbar.style.transition=`none`
 });
 
 function getEventPos(e) {
@@ -2268,34 +2270,6 @@ function hasNonBlurFilters() {
     filterState.sepia > 0 ||
     filterState.invert > 0
   );
-}
-
-// ✅ آپدیت تابع export
-function exportImage(format = 'png', quality = 0.95) {
-  // ساخت canvas برای export
-  const exportCanvas = document.createElement('canvas');
-  exportCanvas.width = state.canvasWidth;
-  exportCanvas.height = state.canvasHeight;
-  
-  // رسم با فیلتر
-  drawForExport(exportCanvas, state.canvasWidth, state.canvasHeight);
-  
-  // اعمال noise اگه فعاله
-  if (typeof applyNoiseToCanvas === 'function') {
-    applyNoiseToCanvas(exportCanvas);
-  }
-  
-  // دانلود
-  const link = document.createElement('a');
-  link.download = `gradient-${Date.now()}.${format}`;
-  
-  if (format === 'jpg' || format === 'jpeg') {
-    link.href = exportCanvas.toDataURL('image/jpeg', quality);
-  } else {
-    link.href = exportCanvas.toDataURL('image/png');
-  }
-  
-  link.click();
 }
 
 function drawScene(targetCtx, width, height) {
@@ -4808,11 +4782,11 @@ function setupKeyboardZoom() {
           e.preventDefault();
           delStop(state.selected);
         }
-        case "p":
-  if (!isMod) {
-    e.preventDefault();
-    openFullscreenPreview();
-  }
+  //       case "p":
+  // if (!isMod) {
+  //   e.preventDefault();
+  //   openFullscreenPreview();
+  // }
   break;
         break;
       case "escape":

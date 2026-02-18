@@ -124,9 +124,46 @@ h1 {
   gap: 2rem;
 }
 
-.container img {
+.container img , video {
   border-radius: var(--radius-md);
+  animation: fadeUp linear;
+  animation-timeline: view();
+  animation-range: entry 0% cover 25%;
 }
+
+p,h3,h4{
+  animation: fadeRight linear;
+  animation-timeline: view();
+  animation-range: entry 0% cover 30%;
+}
+
+@keyframes fadeUp {
+  0%{
+    opacity: 0;
+    transform: translateY(20px) scale(.5);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeRight {
+  0% {
+    opacity: 0;
+    transform: translateX(50px) scale(0.5); /* 50px از سمت راست */
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1); /* جای اصلی */
+    filter: blur(0);
+  }
+}
+
+
+
 
 .Gradient {
   justify-content: center;
