@@ -2043,10 +2043,6 @@ button.sm {
     grid-row: 6/7;
     width: 100%;
   }
-
-  .canvas-wrap {
-    height: 45rem !important;
-  }
 }
 
 @media (max-width: 400px) {
@@ -2054,7 +2050,11 @@ button.sm {
     display: none;
   }
 
-  .gradient-btn-bar {
+  .canvas-wrap{
+    height: 45rem !important;
+  }
+
+  .gradient-btn-bar{
     gap: .4rem;
   }
 
