@@ -4,76 +4,169 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gradient Designer Guide</title>
-  <link rel="shortcut icon" href="./LOGO.svg" type="image/x-icon" />
+  
+  <!-- Primary Meta Tags -->
+  <title>Gradient Designer Guide - Learn Gradients, Noise, Filters & Blend Modes</title>
+  <meta name="title" content="Gradient Designer Guide - Learn Gradients, Noise, Filters & Blend Modes">
+  <meta name="description" content="Quick guide to master gradient design. Learn about linear, radial, conic gradients, noise effects, CSS filters, blend modes, layers, and export options.">
+  <meta name="keywords" content="gradient guide, CSS gradient tutorial, noise effect, blend modes, gradient filters, linear gradient, radial gradient, conic gradient, layer stacking, CSS export">
+  <meta name="author" content="Gradient Designer">
+  <meta name="robots" content="index, follow">
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://yourwebsite.com/guide.html">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://yourwebsite.com/guide.html">
+  <meta property="og:title" content="Gradient Designer Guide - Learn Gradients, Noise & Effects">
+  <meta property="og:description" content="Quick guide to master gradient design. Learn about gradients, noise effects, filters, blend modes, and export options.">
+  <meta property="og:image" content="https://yourwebsite.com/guide-og-image.jpg">
+  <meta property="og:site_name" content="Gradient Designer">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://yourwebsite.com/guide.html">
+  <meta name="twitter:title" content="Gradient Designer Guide">
+  <meta name="twitter:description" content="Quick guide to master gradient design with noise, filters, and blend modes.">
+  <meta name="twitter:image" content="https://yourwebsite.com/guide-twitter-image.jpg">
+  <meta name="twitter:creator" content="@GDesignerHQ">
+  
+  <!-- Theme -->
+  <meta name="theme-color" content="#1c1c1c">
+  
+  <!-- Favicons -->
+  <link rel="icon" type="image/svg+xml" href="./LOGO.svg">
+  <link rel="shortcut icon" href="./LOGO.svg" type="image/svg+xml">
+  
+  <!-- Stylesheets -->
   <link rel="stylesheet" href="./css/style.css">
   <link rel="stylesheet" href="./css/guide.css">
+  
+  <!-- Structured Data - Article -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Gradient Designer Quick Guide",
+    "description": "Learn about gradients, noise effects, filters, blend modes, layers, and export options.",
+    "author": {
+      "@type": "Organization",
+      "name": "Gradient Designer"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Gradient Designer",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://yourwebsite.com/LOGO.svg"
+      }
+    },
+    "datePublished": "2026-01-10",
+    "mainEntityOfPage": "https://yourwebsite.com/guide.html"
+  }
+  </script>
+  
+  <!-- Structured Data - BreadcrumbList -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://yourwebsite.com/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Guide",
+        "item": "https://yourwebsite.com/guide.html"
+      }
+    ]
+  }
+  </script>
 </head>
 
 <body>
-<!-- Header -->
-<header class="header">
-  <div class="header-left">
-    <a href="./Gradient-Designer.html" class="header-brand">
-      <img class="header-logo" src="./LOGO.svg" alt="Gradient Designer Logo" width="48" height="48" />
-      <h3 class="header-name">Gradient Designer</h3>
-    </a>
-  </div>
-  
-  <nav class="header-nav">
-    <ul class="nav-list">
-      <li><a class="nav-link" href="./index.html">Home</a></li>
-    </ul>
-  </nav>
-
-  <div class="header-right">
-    <div class="theme-select">
-      <select id="themeSelect" aria-label="Theme selector">
-        <option value="auto">Auto</option>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
-        <option value="dep-dark">Deep Dark</option>
-        <option value="midnight">Midnight</option>
-      </select>
+  <!-- Header -->
+  <header class="header" role="banner">
+    <div class="header-left">
+      <a href="./Gradient-Designer.html" class="header-brand" aria-label="Gradient Designer Home">
+        <img class="header-logo" src="./LOGO.svg" alt="Gradient Designer Logo" width="48" height="48">
+        <h3 class="header-name">Gradient Designer</h3>
+      </a>
     </div>
-  </div>
-</header>
-  <main>
+    
+    <nav class="header-nav" role="navigation" aria-label="Main navigation">
+      <ul class="nav-list">
+        <li><a class="nav-link" href="./index.html">Home</a></li>
+      </ul>
+    </nav>
+
+    <div class="header-right">
+      <div class="theme-select">
+        <label for="themeSelect" class="visually-hidden">Choose theme</label>
+        <select id="themeSelect" aria-label="Theme selector">
+          <option value="auto">Auto</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="dep-dark">Deep Dark</option>
+          <option value="midnight">Midnight</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main role="main">
     <h1>Quick Guide</h1>
+    <p class="guide-intro">
+    Unlock the full potential of Gradient Designer. Discover gradient types, blend modes, noise textures, fine-tuning controls, and seamless export options to create visually striking backgrounds in minutes.
+    </p>
+    
+    <!-- Gradient Types Section -->
     <h2 class="section-title">
-      <span class="title-decoration"></span>
-      Gradient
-      <span class="title-decoration"></span>
+      <span class="title-decoration" aria-hidden="true"></span>
+      Gradient Types
+      <span class="title-decoration" aria-hidden="true"></span>
     </h2>
     <section class="container Gradient">
       <div>
-        <img src="./img/conic-gradient.webp" alt="conic gradient">
+        <img src="./img/conic-gradient.webp" alt="Conic gradient example" loading="lazy">
         <h3 class="gradient-text">A conic gradient rotates colors around a central point.</h3>
       </div>
       <div>
-        <img src="./img/radial-gradient.webp" alt="radial gradient">
+        <img src="./img/radial-gradient.webp" alt="Radial gradient example" loading="lazy">
         <h3 class="gradient-text">A radial gradient spreads colors outward from a central point.</h3>
       </div>
       <div>
-        <img src="./img/linear-gradient.webp" alt="linear gradient">
+        <img src="./img/linear-gradient.webp" alt="Linear gradient example" loading="lazy">
         <h3 class="gradient-text">A linear gradient transitions colors smoothly in a single direction.</h3>
       </div>
     </section>
+
+    <!-- Noise & Grain Effects Section -->
     <h2 class="section-title">
-      <span class="title-decoration"></span>
-      Noise & Grain
-      <span class="title-decoration"></span>
+      <span class="title-decoration" aria-hidden="true"></span>
+      Noise & Grain Effects
+      <span class="title-decoration" aria-hidden="true"></span>
     </h2>
     <section class="container">
-      <img src="./img/noise.webp" alt="noise">
-      <img src="./img/gradient-noise.webp" alt="gradient noise">
-      <h3>Noise or Grain is a subtle layer of random texture added to gradients to reduce banding and make color
-        transitions feel more natural. It helps gradients look smoother, deeper, and more professional.</h3>
+      <img src="./img/noise.webp" alt="Noise texture" loading="lazy">
+      <img src="./img/gradient-noise.webp" alt="Gradient with noise effect" loading="lazy">
+      <div class="description-box">
+        <h3>What is Noise?</h3>
+        <p>Noise or Grain is a subtle layer of random texture added to gradients to reduce banding and make color transitions feel more natural. It helps gradients look smoother, deeper, and more professional.</p>
+      </div>
     </section>
+
+    <!-- CSS Filters Section -->
     <h2 class="section-title">
-      <span class="title-decoration"></span>
-      Filter
-      <span class="title-decoration"></span>
+      <span class="title-decoration" aria-hidden="true"></span>
+      CSS Filters
+      <span class="title-decoration" aria-hidden="true"></span>
     </h2>
     <section class="container Filter">
       <div class="Filter-box">
@@ -87,7 +180,7 @@
         <video autoplay loop muted playsinline>
           <source src="./video/contrast.mp4" type="video/mp4">
         </video>
-        <h3>contrast</h3>
+        <h3>Contrast</h3>
         <h4>Adjusts the difference between light and dark areas to add depth.</h4>
       </div>
       <div class="Filter-box">
@@ -95,8 +188,7 @@
           <source src="./video/saturate.mp4" type="video/mp4">
         </video>
         <h3>Saturate</h3>
-        <h4>Controls color intensity.
-          Lower values make colors muted, higher values make them more vivid.</h4>
+        <h4>Controls color intensity. Lower values make colors muted, higher values make them more vivid.</h4>
       </div>
       <div class="Filter-box">
         <video autoplay loop muted playsinline>
@@ -127,159 +219,191 @@
         <h4>Inverts all colors for creative and experimental effects.</h4>
       </div>
     </section>
+
+    <!-- CSS Blend Modes Section -->
     <h2 class="section-title">
-      <span class="title-decoration"></span>
-      Blend mode
-      <span class="title-decoration"></span>
+      <span class="title-decoration" aria-hidden="true"></span>
+      CSS Blend Modes
+      <span class="title-decoration" aria-hidden="true"></span>
     </h2>
     <section class="container blend">
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/normal.webp" alt="Normal blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/normal.webp" alt="Normal blend mode" loading="lazy">
         <h3>Normal</h3>
         <h4>No blending is applied. The gradient appears exactly as it is.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/multiply.webp" alt="Multiply blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/multiply.webp" alt="Multiply blend mode" loading="lazy">
         <h3>Multiply</h3>
         <h4>Darkens the gradient by multiplying it with layers below. Great for shadows and depth.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/screen.webp" alt="Screen blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/screen.webp" alt="Screen blend mode" loading="lazy">
         <h3>Screen</h3>
         <h4>Lightens the gradient by inverting and combining it with layers below. Perfect for glow effects.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/overlay.webp" alt="Overlay blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/overlay.webp" alt="Overlay blend mode" loading="lazy">
         <h3>Overlay</h3>
         <h4>Combines Multiply and Screen for higher contrast. Enhances highlights and shadows simultaneously.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/darken.webp" alt="Darken blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/darken.webp" alt="Darken blend mode" loading="lazy">
         <h3>Darken</h3>
         <h4>Keeps the darker values between this gradient and layers below. Useful for dark tones.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/lighten.webp" alt="Lighten blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/lighten.webp" alt="Lighten blend mode" loading="lazy">
         <h3>Lighten</h3>
         <h4>Keeps the lighter values between this gradient and layers below. Best for bright overlays.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/color-dodge.webp" alt="Color Dodge blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/color-dodge.webp" alt="Color Dodge blend mode" loading="lazy">
         <h3>Color Dodge</h3>
         <h4>Brightens and intensifies colors of layers below. Creates strong highlight effects.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/color-burn.webp" alt="Color Burn blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/color-burn.webp" alt="Color Burn blend mode" loading="lazy">
         <h3>Color Burn</h3>
         <h4>Darkens and deepens colors of layers below. Great for dramatic effects.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/hard-light.webp" alt="Hard Light blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/hard-light.webp" alt="Hard Light blend mode" loading="lazy">
         <h3>Hard Light</h3>
         <h4>A strong combination of Overlay. Produces bold and high-contrast results.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/soft-light.webp" alt="Soft Light blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/soft-light.webp" alt="Soft Light blend mode" loading="lazy">
         <h3>Soft Light</h3>
         <h4>A milder version of Hard Light. Creates subtle and natural lighting.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/difference.webp" alt="Difference blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/difference.webp" alt="Difference blend mode" loading="lazy">
         <h3>Difference</h3>
-        <h4>Shows the difference between this gradient and layers below. Creates high-contrast, experimental effects.
-        </h4>
+        <h4>Shows the difference between this gradient and layers below. Creates high-contrast, experimental effects.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/exclusion.webp" alt="Exclusion blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/exclusion.webp" alt="Exclusion blend mode" loading="lazy">
         <h3>Exclusion</h3>
         <h4>Similar to Difference but softer. Produces subtle color interactions.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/hue.webp" alt="Hue blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/hue.webp" alt="Hue blend mode" loading="lazy">
         <h3>Hue</h3>
         <h4>Applies the gradient's hue to layers below while keeping brightness and saturation unchanged.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/saturation.webp" alt="Saturation blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/saturation.webp" alt="Saturation blend mode" loading="lazy">
         <h3>Saturation</h3>
         <h4>Applies the gradient's color intensity to layers below while preserving brightness and hue.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/color.webp" alt="Color blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/color.webp" alt="Color blend mode" loading="lazy">
         <h3>Color</h3>
         <h4>Applies the gradient's color and saturation to layers below while preserving brightness.</h4>
       </div>
 
       <div class="Blend-box">
-        <img class="blend-img" src="./img/blend-modes/luminosity.webp" alt="Luminosity blend mode preview">
+        <img class="blend-img" src="./img/blend-modes/luminosity.webp" alt="Luminosity blend mode" loading="lazy">
         <h3>Luminosity</h3>
         <h4>Applies the gradient's brightness to layers below while preserving color and saturation.</h4>
       </div>
     </section>
+
+    <!-- Layer Order & Stacking Section -->
     <h2 class="section-title">
-      <span class="title-decoration"></span>
-      Layers
-      <span class="title-decoration"></span>
+      <span class="title-decoration" aria-hidden="true"></span>
+      Layer Order & Stacking
+      <span class="title-decoration" aria-hidden="true"></span>
     </h2>
     <section class="container layer">
       <div class="layer-img">
-        <img src="./img/radial-down.webp" alt="noise">
-        <img src="./img/radial-up.webp" alt="gradient noise">
-        <h3>Layer order controls visual priority.
-          Changing the stacking order alters how gradients overlap, while blend modes determine how colors blend with
-          underlying layers.</h3>
+        <img src="./img/radial-down.webp" alt="Layer order example - bottom" loading="lazy">
+        <img src="./img/radial-up.webp" alt="Layer order example - top" loading="lazy">
+        <div class="description-box">
+          <h3>How Layers Work</h3>
+          <p>Layer order controls visual priority. Changing the stacking order alters how gradients overlap, while blend modes determine how colors blend with underlying layers.</p>
+        </div>
       </div>
       <div class="layer-code-img">
-        <img src="./img/radial-down-code.webp" alt="gradient noise">
-        <img src="./img/radial-up-code.webp" alt="gradient noise">
+        <img src="./img/radial-down-code.webp" alt="CSS code for bottom layer" loading="lazy">
+        <img src="./img/radial-up-code.webp" alt="CSS code for top layer" loading="lazy">
+      </div>
+    </section>
+
+    <!-- Export & Output Options Section -->
+    <h2 class="section-title">
+      <span class="title-decoration" aria-hidden="true"></span>
+      Export & Output Options
+      <span class="title-decoration" aria-hidden="true"></span>
+    </h2>
+    <section class="container Output">
+      <div id="css-output">
+        <img src="./img/css.webp" alt="CSS export preview" loading="lazy">
+        <div class="description-box">
+          <h3>CSS Export</h3>
+          <p>Copy the generated CSS and apply it directly to the target element. The result will match the preview exactly and adapt to the element's size.</p>
+          <code>.element { background-image: gradients; }</code>
+        </div>
+      </div>
+      <div id="noise-svg">
+        <img src="./img/noise-svg.webp" alt="Noise SVG export" loading="lazy">
+        <div class="description-box">
+          <h3>Noise SVG</h3>
+          <p>The Noise SVG is generated as a standalone filter. Simply add it to the SVG document and apply the effect to elements via CSS.</p>
+          <code>
+            &lt;body&gt;
+              &lt;div&gt;&lt;/div&gt;
+              &lt;svg&gt;
+                &lt;filter&gt;
+                  ...
+                &lt;/filter&gt;
+              &lt;/svg&gt;
+            &lt;/body&gt;
+            </code>  
+        </div>
+      </div>
+      <div id="noise-css">
+        <img src="./img/noise-css.webp" alt="Noise CSS export" loading="lazy">
+        <div class="description-box">
+          <h3>Noise CSS</h3>
+          <p>The Noise effect is generated as a separate layer and is best applied to ::before, ::after, or a child element to achieve a clean and fully controllable result.</p>
+          <code>.element::before { filter: url(#noiseFilter); }</code>
+        </div>
       </div>
     </section>
   </main>
-  <h2 class="section-title">
-    <span class="title-decoration"></span>
-    Output
-    <span class="title-decoration"></span>
-  </h2>
-  <section class="container Output">
-    <div id="css-output">
-      <img src="./img/css.webp" alt="css export">
-      <h3>Copy the generated CSS and apply it directly to the target element. The result will match the preview exactly
-        and adapt to the element’s size.</h3>
-    </div>
-    <div id="noise-svg">
-      <img src="./img/noise-svg.webp" alt="noise svg">
-      <h3>The Noise SVG is generated as a standalone filter. Simply add it to the SVG document and apply the effect to
-        elements via CSS.</h3>
-    </div>
-    <div id="noise-css">
-      <img src="./img/noise-css.webp" alt="noise css">
-      <h3>The Noise effect is generated as a separate layer and is best applied to ::before, ::after, or a child element
-        to achieve a clean and fully controllable result.</h3>
-    </div>
-  </section>
-  <footer>
-    <a href="./index.html">Back To Home           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M5 12h14M12 5l7 7-7 7"/>
-    </svg></a>
-    <a href="./Gradient-Designer.html">Continue To Gradient Designer           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M5 12h14M12 5l7 7-7 7"/>
-    </svg></a>
+
+  <footer role="contentinfo">
+    <a href="./index.html">
+      Back To Home
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </a>
+    <a href="./Gradient-Designer.html">
+      Continue To Gradient Designer
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </a>
   </footer>
-  <script src="./js/script.js"></script>
+
+  <script src="./js/script.js" defer></script>
 </body>
 
 </html>
