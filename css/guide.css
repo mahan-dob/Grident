@@ -134,13 +134,13 @@ h1 {
 p,h3,h4{
   animation: fadeRight linear;
   animation-timeline: view();
-  animation-range: entry 0% cover 30%;
+  animation-range: entry 0% cover 20%;
 }
 
 @keyframes fadeUp {
   0%{
     opacity: 0;
-    transform: translateY(20px) scale(.5);
+    transform: translateY(30px) scale(.5);
     filter: blur(8px);
   }
   100% {
@@ -356,6 +356,12 @@ footer a:hover svg {
   main {
     padding: 1.5rem;
   }
+
+  .container img , video , p,h3,h4 {
+    animation: none;
+  }
+  
+
 }
 
 /* ========================================

@@ -7404,8 +7404,9 @@ function updateCSS() {
   } else {
     // ========== پس‌زمینه + گرادینت‌ها ==========
     gradientLines.push(`position: relative;`);
-    gradientLines.push(`height: ${H}px;`);
-    gradientLines.push(`width: ${W}px;`);
+    gradientLines.push(`height: ${Math.floor(H)}px;`);
+    gradientLines.push(`width: ${Math.floor(W)}px;`);
+    
     
     if (state.bgEnabled) {
       gradientLines.push(`background-color: ${bgColorFmt};`);

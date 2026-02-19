@@ -541,7 +541,7 @@
 @keyframes fadeUp {
   0%{
     opacity: 0;
-    transform: translateY(20px) scale(.5);
+    transform: translateY(30px) scale(.5);
     filter: blur(8px);
   }
   100% {
@@ -1056,6 +1056,10 @@
   
   .footer-logo-wrapper {
     justify-content: center;
+  }
+
+  .preset-card {
+    animation: none;
   }
 }
 

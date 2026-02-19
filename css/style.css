@@ -190,6 +190,9 @@ button {
   border-radius: 999px;
   cursor: pointer;
   transition: var(--transition-normal);
+  will-change: transform;
+  -webkit-font-smoothing: antialiased;
+  font-smooth: always;
 }
 
 button img {
