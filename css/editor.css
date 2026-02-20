@@ -834,7 +834,7 @@ header h1 {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 12px;
   opacity: 0.6;
 }

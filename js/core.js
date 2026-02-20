@@ -8870,6 +8870,7 @@ if (document.readyState === "loading") {
   let activeInput = null;
   let startX = 0;
   let startValue = 0;
+  let isTouchScrub = false;
 
   let lastTapTime = 0;
   const DOUBLE_TAP_DELAY = 300;
@@ -8882,6 +8883,69 @@ if (document.readyState === "loading") {
   const clampValue = (v, min, max) => Math.min(max, Math.max(min, v));
 
   window.__isNumberScrubbing = false;
+
+  // ✅ CSS: touch-action از قبل
+  const style = document.createElement('style');
+  style.textContent = `input[type="number"] { touch-action: none; }`;
+  document.head.appendChild(style);
+
+  // ✅ بلاک اسکرول وقت اسکراب
+  document.addEventListener("touchmove", (e) => {
+    if (activeInput) e.preventDefault();
+  }, { passive: false });
+
+  // ========== ✅ BACK BUTTON / ESCAPE = BLUR ==========
+  let _inputHistoryPushed = false;
+
+  // وقتی input فوکوس میشه → یه state بذار تو history
+  document.addEventListener("focusin", (e) => {
+    const input = e.target.closest('input[type="number"]');
+    if (!input) return;
+
+    if (!_inputHistoryPushed) {
+      _inputHistoryPushed = true;
+      history.pushState({ inputFocused: true }, "");
+    }
+  });
+
+  // وقتی input بلر میشه → history رو پاک کن
+  document.addEventListener("focusout", (e) => {
+    const input = e.target.closest('input[type="number"]');
+    if (!input) return;
+    input.style.cursor = "ew-resize";
+
+    // اگه state هنوز هست، برش دار
+    if (_inputHistoryPushed) {
+      _inputHistoryPushed = false;
+      // فقط اگه خود کاربر blur نکرده (back نزده)
+      if (history.state && history.state.inputFocused) {
+        history.back();
+      }
+    }
+  });
+
+  // ✅ دکمه Back موبایل → popstate فایر میشه → blur کن
+  window.addEventListener("popstate", (e) => {
+    if (_inputHistoryPushed) {
+      _inputHistoryPushed = false;
+      const focused = document.activeElement;
+      if (focused && focused.matches('input[type="number"]')) {
+        focused.blur();
+      }
+    }
+  });
+
+  // ✅ Escape دسکتاپ → blur
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const focused = document.activeElement;
+      if (focused && focused.matches('input[type="number"]')) {
+        e.preventDefault();
+        focused.blur();
+      }
+    }
+  });
+  // =================================================
 
   document.addEventListener("pointerdown", (e) => {
     const input = e.target.closest('input[type="number"]');
@@ -8899,20 +8963,22 @@ if (document.readyState === "loading") {
 
     lastTapTime = now;
 
-    // اگر input فوکوس داره، اجازه تایپ بده
     if (input === document.activeElement) return;
 
     e.preventDefault();
-    input.setPointerCapture(e.pointerId);
+
+    try {
+      input.setPointerCapture(e.pointerId);
+    } catch {}
 
     activeInput = input;
     startX = e.clientX;
     startValue = parseFloat(input.value) || 0;
+    isTouchScrub = (e.pointerType === "touch");
 
     window.__isNumberScrubbing = true;
     document.body.style.cursor = "ew-resize";
-    
-    // ✅ FIX: شروع History tracking
+
     if (typeof History !== 'undefined' && History.onDragStart) {
       History.onDragStart();
     }
@@ -8922,9 +8988,13 @@ if (document.readyState === "loading") {
     if (!activeInput) return;
     if (activeInput === document.activeElement) return;
 
+    e.preventDefault();
+
     const step = getStep(activeInput);
     const dx = e.clientX - startX;
-    let delta = (dx / 8) * step;
+
+    const sensitivity = isTouchScrub ? 3 : 8;
+    let delta = (dx / sensitivity) * step;
 
     if (e.shiftKey) delta *= 5;
     if (e.altKey) delta *= 0.2;
@@ -8943,17 +9013,17 @@ if (document.readyState === "loading") {
 
   const end = (e) => {
     if (!activeInput) return;
-    
-    // ✅ FIX: پایان History tracking
+
     if (typeof History !== 'undefined' && History.onDragEnd) {
       History.onDragEnd();
     }
-    
+
     try {
       activeInput.releasePointerCapture(e.pointerId);
     } catch {}
-    
+
     activeInput = null;
+    isTouchScrub = false;
     document.body.style.cursor = "";
     window.__isNumberScrubbing = false;
   };
@@ -8967,11 +9037,5 @@ if (document.readyState === "loading") {
     if (!input) return;
     input.focus();
     input.style.cursor = "text";
-  });
-
-  document.addEventListener("focusout", (e) => {
-    const input = e.target.closest('input[type="number"]');
-    if (!input) return;
-    input.style.cursor = "ew-resize";
   });
 })();

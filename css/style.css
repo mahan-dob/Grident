@@ -54,8 +54,8 @@
   --bg-transparent: #fffffc66;
   --bg-elevated: rgba(0, 0, 0, 0.1);
   --text-primary: #1a1a2e;
-  --text-secondary: #4a5568;
-  --text-muted: #718096;
+  --text-secondary: #0000;
+  --text-muted: #363636;
   --border: rgba(0, 0, 0, 0.1);
   --border-hover: rgba(0, 0, 0, 0.2);
   --hover: rgba(0, 0, 0, 0.05);
