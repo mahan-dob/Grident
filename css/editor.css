@@ -1584,7 +1584,7 @@ button.sm {
   height: 18px;
 }
 
-/* Saturation/Brightness Box */
+
 .sb-box {
   width: 100%;
   height: 120px;
@@ -1647,7 +1647,7 @@ button.sm {
   pointer-events: none;
 }
 
-/* Picker Preview & Inputs */
+
 .picker-row {
   display: flex;
   gap: 6px;
@@ -1677,7 +1677,7 @@ button.sm {
   flex: 1;
 }
 
-/* Format Buttons */
+
 .format-btns {
   display: flex;
   gap: 2px;
@@ -1700,7 +1700,7 @@ button.sm {
   border-color: var(--accent-gradient);
 }
 
-/* Picker Fields */
+
 .picker-fields {
   display: flex;
   gap: 3px;
@@ -1728,7 +1728,6 @@ button.sm {
   text-align: center;
 }
 
-/* Recent Colors */
 .recent-colors {
   margin: 10px 0;
 }
@@ -1859,12 +1858,10 @@ button.sm {
   }
 }
 
-/* Tap / Active (Mobile-first) */
 .copy-btn:active {
   transform: scale(0.94);
 }
 
-/* Copied state (از JS تو فعال میشه) */
 .copy-btn.copied {
   background: rgba(74, 222, 128, 0.15);
   border-color: rgba(74, 222, 128, 0.6);
@@ -1872,7 +1869,6 @@ button.sm {
   color: rgba(74, 222, 128, 0.6);
 }
 
-/* subtle pulse */
 .copy-btn.copied {
   animation: copiedPulse 0.6s ease;
 }
@@ -1891,7 +1887,6 @@ button.sm {
   }
 }
 
-/* bounce + glow */
 .copy-btn.copied {
   animation: copyBounce 0.45s cubic-bezier(.34, 1.56, .64, 1);
 }
@@ -1914,7 +1909,6 @@ button.sm {
   }
 }
 
-/* ring wave */
 .copy-btn.copied::after {
   content: "";
   position: absolute;
@@ -2007,6 +2001,9 @@ button.sm {
   }
   .zoom-indicator{
     left: 50%;
+  }
+  .canvas-wrap{
+    height: 56rem !important;
   }
 }
 

@@ -2194,582 +2194,251 @@ document.addEventListener("mousemove", onPointerMove);
 document.addEventListener("touchmove", onPointerMove, { passive: false });
 document.addEventListener("mouseup", onPointerUp);
 document.addEventListener("touchend", onPointerUp);
-// ========== DRAWING FUNCTIONS ==========
+// ========== DRAWING FUNCTIONS (OPTIMIZED) ==========
+
+// ✅ Mobile detection (cached once)
+const IS_MOBILE = (() => {
+  try {
+    return matchMedia('(pointer: coarse)').matches ||
+      (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && window.innerWidth < 1024);
+  } catch { return false; }
+})();
+
+// ✅ Temp canvas pool — avoids GC thrashing every frame
+const _canvasPool = {};
+function tmpCanvas(key, w, h) {
+  let e = _canvasPool[key];
+  if (!e || e.canvas.width !== w || e.canvas.height !== h) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    e = { canvas: c, ctx: c.getContext('2d') };
+    _canvasPool[key] = e;
+  } else {
+    e.ctx.clearRect(0, 0, w, h);
+  }
+  return e;
+}
+
+// ✅ Cached scale
+let _scale = 1;
+function updateScale() { _scale = Math.max(W, H) / 800; }
+
+// ========== MAIN DRAW ==========
 function draw() {
   const dpr = canvas.width / W;
-  
-  // ✅ همیشه transform رو ریست کن و دوباره ست کن
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  
-  // ✅ فقط صحنه رو بکش - فیلتر با CSS اعمال میشه
-  drawScene(ctx, W, H);
-  
-  // هندل‌ها (بعد از صحنه، فیلتر CSS روی کل canvas اعمال میشه)
+  updateScale();
+
+  drawScene(ctx, W, H, true);
+
   if (state.showHandles) {
-    const visibleStops = state.stops.filter((s) => s.visible);
-    visibleStops.forEach(drawHandle);
+    state.stops.filter(s => s.visible).forEach(drawHandle);
   }
 }
 
-// ✅ تابع جداگانه برای Export با فیلتر
-function drawForExport(targetCanvas, width, height) {
-  const targetCtx = targetCanvas.getContext('2d');
-  const needsFilter = hasActiveFilters();
-  
-  // رسم صحنه
-  if (!needsFilter) {
-    drawScene(targetCtx, width, height);
-    return;
-  }
-  
-  // ========== با فیلتر - Canvas موقت ==========
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  const tempCtx = tempCanvas.getContext('2d');
-  
-  // رسم صحنه روی temp
-  drawScene(tempCtx, width, height);
-  
-  // ========== اعمال فیلترها ==========
-  
-  // 1. Blur
-  if (filterState.blur > 0) {
-    const blurCanvas = document.createElement('canvas');
-    blurCanvas.width = width;
-    blurCanvas.height = height;
-    const blurCtx = blurCanvas.getContext('2d');
-    blurCtx.filter = `blur(${filterState.blur}px)`;
-    blurCtx.drawImage(tempCanvas, 0, 0);
-    
-    tempCtx.clearRect(0, 0, width, height);
-    tempCtx.drawImage(blurCanvas, 0, 0);
-  }
-  
-  // 2. سایر فیلترها
-  if (hasNonBlurFilters()) {
-    const imageData = tempCtx.getImageData(0, 0, width, height);
-    applyFiltersToImageData(imageData);
-    tempCtx.putImageData(imageData, 0, 0);
-  }
-  
-  // کپی به canvas هدف
-  targetCtx.drawImage(tempCanvas, 0, 0);
-}
+// ========== SCENE ==========
+function drawScene(tCtx, w, h, isPreview) {
+  const visible = state.stops.filter(s => s.visible);
 
-// ✅ چک فیلترهای غیر از blur
-function hasNonBlurFilters() {
-  return filterState.enabled && (
-    filterState.brightness !== 100 ||
-    filterState.contrast !== 100 ||
-    filterState.saturate !== 100 ||
-    filterState.hue !== 0 ||
-    filterState.grayscale > 0 ||
-    filterState.sepia > 0 ||
-    filterState.invert > 0
-  );
-}
-
-function drawScene(targetCtx, width, height) {
-  const visibleStops = state.stops.filter((s) => s.visible);
-  
-  // 1. پس‌زمینه
+  // 1. Background
   if (state.bgEnabled) {
-    targetCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
-    targetCtx.fillRect(0, 0, width, height);
+    tCtx.fillStyle = rgba(state.bgColor, state.bgAlpha / 100);
+    tCtx.fillRect(0, 0, w, h);
   }
 
-  // 2. خط قفل عمودی - فقط وقتی هندل‌ها نمایش داده می‌شوند
-  if (state.lockVertical && state.showHandles) { // ✅ تغییر این خط
-    const scale = Math.max(width, height) / 800;
-    targetCtx.strokeStyle = "rgba(255,255,255,0.5)";
-    targetCtx.lineWidth = 2 * scale;
-    targetCtx.setLineDash([10 * scale, 5 * scale]);
-    targetCtx.beginPath();
-    targetCtx.moveTo(0, height / 2);
-    targetCtx.lineTo(width, height / 2);
-    targetCtx.stroke();
-    targetCtx.setLineDash([]);
+  // 2. Lock line (preview only)
+  if (isPreview && state.lockVertical && state.showHandles) {
+    tCtx.strokeStyle = "rgba(255,255,255,0.5)";
+    tCtx.lineWidth = 2 * _scale;
+    tCtx.setLineDash([10 * _scale, 5 * _scale]);
+    tCtx.beginPath();
+    tCtx.moveTo(0, h / 2);
+    tCtx.lineTo(w, h / 2);
+    tCtx.stroke();
+    tCtx.setLineDash([]);
   }
 
-  // 3. گرادینت‌ها
-  if (visibleStops.length > 0) {
-    const reversedStops = [...visibleStops].reverse();
-    
-    const needsBgBlend = state.bgEnabled && 
-                         state.bgBlendMode && 
-                         state.bgBlendMode !== 'normal';
-    
-    if (needsBgBlend) {
-      const gradCanvas = document.createElement('canvas');
-      gradCanvas.width = width;
-      gradCanvas.height = height;
-      const gradCtx = gradCanvas.getContext('2d');
-      
-      reversedStops.forEach(s => {
-        gradCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
-        drawGradToCtxFixed(s, gradCtx, width, height);
-      });
-      gradCtx.globalCompositeOperation = 'source-over';
-      
-      targetCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
-      targetCtx.drawImage(gradCanvas, 0, 0);
-      targetCtx.globalCompositeOperation = 'source-over';
-      
-    } else {
-      reversedStops.forEach(s => {
-        targetCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
-        drawGradToCtxFixed(s, targetCtx, width, height);
-      });
-      targetCtx.globalCompositeOperation = 'source-over';
-    }
+  if (!visible.length) return;
+
+  // 3. Gradients
+  const reversed = [...visible].reverse();
+  const needsBgBlend = state.bgEnabled && state.bgBlendMode && state.bgBlendMode !== 'normal';
+
+  if (needsBgBlend) {
+    const tmp = tmpCanvas('blend', w, h);
+    reversed.forEach(s => {
+      tmp.ctx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+      drawGradient(s, tmp.ctx, w, h);
+    });
+    tmp.ctx.globalCompositeOperation = 'source-over';
+
+    tCtx.globalCompositeOperation = getCanvasBlendMode(state.bgBlendMode);
+    tCtx.drawImage(tmp.canvas, 0, 0);
+    tCtx.globalCompositeOperation = 'source-over';
+  } else {
+    reversed.forEach(s => {
+      tCtx.globalCompositeOperation = getCanvasBlendMode(s.blendMode);
+      drawGradient(s, tCtx, w, h);
+    });
+    tCtx.globalCompositeOperation = 'source-over';
   }
 }
-function drawGradToCtxFixed(s, targetCtx, width, height) {
-  const cx = s.x * width;
-  const cy = s.y * height;
+
+// ========== ✅ UNIFIED GRADIENT ==========
+function drawGradient(s, tCtx, w, h) {
+  const cx = s.x * w;
+  const cy = s.y * h;
 
   if (s.type === "radial") {
-    // ✅ مقیاس‌بندی سایز برای ابعاد مختلف
-    const sizeScale = Math.max(width, height) / Math.max(W, H);
-    const scaledSize = s.size * sizeScale;
-    
-    const solidEnd = 1 - s.feather / 100;
-    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, scaledSize);
+    const scale = (w !== W || h !== H) ? Math.max(w, h) / Math.max(W, H) : 1;
+    const r = s.size * scale;
+    const solidEnd = 1 - (s.feather || 60) / 100;
     const color = rgba(s.color, s.opacity / 100);
+    const grad = tCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
 
     grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
+    if (solidEnd > 0.01 && solidEnd < 0.99) grad.addColorStop(solidEnd, color);
     grad.addColorStop(1, rgba(s.color, 0));
 
-    targetCtx.fillStyle = grad;
-    targetCtx.beginPath();
-    targetCtx.arc(cx, cy, scaledSize, 0, Math.PI * 2);
-    targetCtx.fill();
-  } 
+    tCtx.fillStyle = grad;
+    tCtx.beginPath();
+    tCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    tCtx.fill();
+  }
   else if (s.type === "linear") {
-    const angleRad = ((s.angle - 90) * Math.PI) / 180;
-    const diagonal = Math.hypot(width, height);
-    const mx = width / 2;
-    const my = height / 2;
-    const dx = (Math.cos(angleRad) * diagonal) / 2;
-    const dy = (Math.sin(angleRad) * diagonal) / 2;
+    const rad = ((s.angle - 90) * Math.PI) / 180;
+    const diag = Math.hypot(w, h);
+    const mx = w / 2, my = h / 2;
+    const dx = Math.cos(rad) * diag / 2;
+    const dy = Math.sin(rad) * diag / 2;
+    const grad = tCtx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
 
-    const grad = targetCtx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
-
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
+    fixTransparentStops(s.stops).forEach(cs => {
+      grad.addColorStop(clamp(cs.pos / 100, 0, 1), rgba(cs.color, cs.opacity / 100));
     });
 
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  } 
+    tCtx.fillStyle = grad;
+    tCtx.fillRect(0, 0, w, h);
+  }
   else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
+    const grad = tCtx.createConicGradient(((s.startAngle - 90) * Math.PI) / 180, cx, cy);
 
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
+    fixTransparentStops(s.stops).forEach(cs => {
+      grad.addColorStop(clamp(cs.pos / 100, 0, 1), rgba(cs.color, cs.opacity / 100));
     });
 
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
+    tCtx.fillStyle = grad;
+    tCtx.fillRect(0, 0, w, h);
   }
 }
-function getLinearGradientPoints(angle, width, height) {
-  const angleRad = ((angle - 90) * Math.PI) / 180;
-  const diagonal = Math.hypot(width, height);
-  const cx = width / 2;
-  const cy = height / 2;
-  const dx = (Math.cos(angleRad) * diagonal) / 2;
-  const dy = (Math.sin(angleRad) * diagonal) / 2;
 
+// ========== EXPORT WITH FILTERS ==========
+function drawForExport(targetCanvas, w, h) {
+  const tCtx = targetCanvas.getContext('2d');
+
+  if (!hasActiveFilters()) {
+    drawScene(tCtx, w, h, false);
+    return;
+  }
+
+  const tmp = tmpCanvas('exportScene', w, h);
+  drawScene(tmp.ctx, w, h, false);
+
+  // Blur
+  if (filterState.blur > 0) {
+    const blur = tmpCanvas('exportBlur', w, h);
+    blur.ctx.filter = `blur(${filterState.blur}px)`;
+    blur.ctx.drawImage(tmp.canvas, 0, 0);
+    tmp.ctx.clearRect(0, 0, w, h);
+    tmp.ctx.drawImage(blur.canvas, 0, 0);
+  }
+
+  // Pixel-level filters
+  if (hasNonBlurFilters()) {
+    const imgData = tmp.ctx.getImageData(0, 0, w, h);
+    applyFiltersToImageData(imgData);
+    tmp.ctx.putImageData(imgData, 0, 0);
+  }
+
+  tCtx.drawImage(tmp.canvas, 0, 0);
+}
+
+// ========== UTILITIES ==========
+function getCanvasBlendMode(mode) {
+  return (!mode || mode === 'normal') ? 'source-over' : mode;
+}
+
+function getLinearGradientPoints(angle, w, h) {
+  const rad = ((angle - 90) * Math.PI) / 180;
+  const d = Math.hypot(w, h);
+  const cx = w / 2, cy = h / 2;
+  const dx = Math.cos(rad) * d / 2;
+  const dy = Math.sin(rad) * d / 2;
   return { x1: cx - dx, y1: cy - dy, x2: cx + dx, y2: cy + dy, cx, cy };
-}
-
-function getHandleSize(selected = false) {
-  const scale = Math.max(W, H) / 800;
-  const baseSize = selected ? 12 : 8;
-  const size = baseSize * scale;
-  return clamp(size, selected ? 12 : 8, selected ? 50 : 35);
-}
-
-function getLineWidth(selected = false) {
-  const scale = Math.max(W, H) / 800;
-  const baseWidth = selected ? 5 : 4;
-  const width = baseWidth * scale;
-  return clamp(width, selected ? 5 : 4, selected ? 16 : 12);
-}
-
-function getFontSize() {
-  const scale = Math.max(W, H) / 800;
-  const baseSize = 10;
-  const size = baseSize * scale;
-  return clamp(size, 10, 36);
-}
-
-// ========== BLEND MODE HELPER ==========
-function getCanvasBlendMode(cssBlendMode) {
-  // CSS 'normal' = Canvas 'source-over'
-  if (!cssBlendMode || cssBlendMode === 'normal') {
-    return 'source-over';
-  }
-  return cssBlendMode;
 }
 
 function fixTransparentStops(stops) {
   const sorted = [...stops].sort((a, b) => a.pos - b.pos);
   const result = [];
-  
+
   for (let i = 0; i < sorted.length; i++) {
     const cs = sorted[i];
-    const prev = sorted[i - 1];
-    const next = sorted[i + 1];
-    
     if (cs.opacity === 0) {
-      // ✅ برای Hard Edge: دو stop شفاف در همان position
-      
-      if (prev) {
-        result.push({
-          pos: cs.pos,
-          color: prev.color,
-          opacity: 0
-        });
-      }
-      
-      if (next) {
-        result.push({
-          pos: cs.pos,  // ✅ همان position - بدون فاصله!
-          color: next.color,
-          opacity: 0
-        });
-      }
-      
-      // اگر تنها stop شفاف است
-      if (!prev && !next) {
-        result.push(cs);
-      }
-      
+      const prev = sorted[i - 1];
+      const next = sorted[i + 1];
+      if (prev) result.push({ pos: cs.pos, color: prev.color, opacity: 0 });
+      if (next) result.push({ pos: cs.pos, color: next.color, opacity: 0 });
+      if (!prev && !next) result.push(cs);
     } else {
       result.push(cs);
     }
   }
-  
   return result;
 }
 
-function drawGradToCtx(s, targetCtx, width = W, height = H) {
-  const cx = s.x * width;
-  const cy = s.y * height;
-
-  if (s.type === "radial") {
-    const outer = s.size;
-    const solidEnd = 1 - s.feather / 100;
-    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-    const color = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    targetCtx.fillStyle = grad;
-    targetCtx.beginPath();
-    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
-    targetCtx.fill();
-  } 
-  else if (s.type === "linear") {
-    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
-    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
-
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  } 
-  else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
-
-    const fixedStops = fixTransparentStops(s.stops);
-    fixedStops.forEach((cs) => {
-      grad.addColorStop(
-        clamp(cs.pos / 100, 0, 1),
-        rgba(cs.color, cs.opacity / 100)
-      );
-    });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  }
+function hasNonBlurFilters() {
+  return filterState.enabled && (
+    filterState.brightness !== 100 || filterState.contrast !== 100 ||
+    filterState.saturate !== 100 || filterState.hue !== 0 ||
+    filterState.grayscale > 0 || filterState.sepia > 0 || filterState.invert > 0
+  );
 }
 
-function drawGradToContext(s, targetCtx, width, height) {
-  const cx = s.x * width;
-  const cy = s.y * height;
-
-  if (s.type === "radial") {
-    const outer = s.size;
-    const solidEnd = 1 - s.feather / 100;
-    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-    const color = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    targetCtx.fillStyle = grad;
-    targetCtx.beginPath();
-    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
-    targetCtx.fill();
-  } 
-  else if (s.type === "linear") {
-    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, width, height);
-    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  } 
-  else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, width, height);
-  }
+// ========== ✅ HANDLE SIZING (mobile = bigger touch targets) ==========
+function getHandleSize(sel) {
+  const mobileBoost = IS_MOBILE ? 1.6 : 1; // ✅ 60% بزرگ‌تر برای موبایل
+  const base = sel ? 12 : 8;
+  const size = base * _scale * mobileBoost;
+  return clamp(size, base * mobileBoost, (sel ? 50 : 35) * mobileBoost);
 }
 
-function drawGradToContext(s, targetCtx) {
-  const cx = s.x * W;
-  const cy = s.y * H;
-
-  if (s.type === "radial") {
-    const outer = s.size;
-    const solidEnd = 1 - s.feather / 100;
-    const grad = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-    const color = rgba(s.color, s.opacity / 100);
-
-    grad.addColorStop(0, color);
-    if (solidEnd > 0 && solidEnd < 1) {
-      grad.addColorStop(solidEnd, color);
-    }
-    grad.addColorStop(1, rgba(s.color, 0));
-
-    targetCtx.fillStyle = grad;
-    targetCtx.beginPath();
-    targetCtx.arc(cx, cy, outer, 0, Math.PI * 2);
-    targetCtx.fill();
-  } 
-  else if (s.type === "linear") {
-    const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
-    const grad = targetCtx.createLinearGradient(x1, y1, x2, y2);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, W, H);
-  } 
-  else if (s.type === "conic") {
-    const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-    const grad = targetCtx.createConicGradient(startAngle, cx, cy);
-
-    [...s.stops]
-      .sort((a, b) => a.pos - b.pos)
-      .forEach((cs) => {
-        grad.addColorStop(
-          clamp(cs.pos / 100, 0, 1),
-          rgba(cs.color, cs.opacity / 100)
-        );
-      });
-
-    targetCtx.fillStyle = grad;
-    targetCtx.fillRect(0, 0, W, H);
-  }
+function getLineWidth(sel) {
+  const mobileBoost = IS_MOBILE ? 1.4 : 1; // ✅ 40% ضخیم‌تر برای موبایل
+  const base = sel ? 5 : 4;
+  const width = base * _scale * mobileBoost;
+  return clamp(width, base * mobileBoost, (sel ? 16 : 12) * mobileBoost);
 }
 
-function drawGrad(s) {
-  const cx = s.x * W;
-  const cy = s.y * H;
-
-  if (s.type === "radial") drawRadialGradient(s, cx, cy);
-  else if (s.type === "linear") drawLinearGradient(s);
-  else if (s.type === "conic") drawConicGradient(s, cx, cy);
+function getFontSize() {
+  const mobileBoost = IS_MOBILE ? 1.3 : 1; // ✅ 30% بزرگ‌تر برای موبایل
+  const size = 10 * _scale * mobileBoost;
+  return clamp(size, 10 * mobileBoost, 36 * mobileBoost);
 }
 
-function drawRadialGradient(s, cx, cy) {
-  const outer = s.size;
-  const solidEnd = 1 - s.feather / 100;
-
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outer);
-  const color = rgba(s.color, s.opacity / 100);
-
-  grad.addColorStop(0, color);
-  if (solidEnd > 0 && solidEnd < 1) {
-    grad.addColorStop(solidEnd, color);
-  }
-  grad.addColorStop(1, rgba(s.color, 0));
-
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, outer, 0, Math.PI * 2);
-  ctx.fill();
+// ✅ Touch hit area (برای تشخیص کلیک/لمس - بزرگ‌تر از handle بصری)
+function getHitRadius(sel) {
+  const visualSize = getHandleSize(sel);
+  const minHitSize = IS_MOBILE ? 22 : 12; // ✅ حداقل ۴۴px touch target روی موبایل (22*2)
+  return Math.max(visualSize, minHitSize);
 }
 
-function drawLinearGradient(s) {
-  const { x1, y1, x2, y2 } = getLinearGradientPoints(s.angle, W, H);
-  const grad = ctx.createLinearGradient(x1, y1, x2, y2);
-
-  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
-  const finalStops = [];
-  
-  for (let i = 0; i < sortedStops.length; i++) {
-    const cs = sortedStops[i];
-    
-    if (cs.opacity === 0) {
-      const prev = sortedStops[i - 1];
-      const next = sortedStops[i + 1];
-      
-      // شفاف با رنگ قبلی
-      if (prev) {
-        finalStops.push({
-          pos: cs.pos,
-          color: prev.color,
-          opacity: 0
-        });
-      }
-      
-      // شفاف با رنگ بعدی
-      if (next && (!prev || next.color !== prev.color)) {
-        finalStops.push({
-          pos: cs.pos + 0.001,
-          color: next.color,
-          opacity: 0
-        });
-      }
-      
-      // اگه اولین یا آخرین stop بود
-      if (!prev && next) {
-        finalStops.push({ pos: cs.pos, color: next.color, opacity: 0 });
-      }
-      if (!next && prev) {
-        finalStops.push({ pos: cs.pos, color: prev.color, opacity: 0 });
-      }
-    } else {
-      finalStops.push(cs);
-    }
-  }
-
-  finalStops.sort((a, b) => a.pos - b.pos);
-
-  finalStops.forEach((cs) => {
-    grad.addColorStop(
-      clamp(cs.pos / 100, 0, 1),
-      rgba(cs.color, cs.opacity / 100)
-    );
-  });
-
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-}
-
-function drawConicGradient(s, cx, cy) {
-  const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
-  const grad = ctx.createConicGradient(startAngle, cx, cy);
-
-  const sortedStops = [...s.stops].sort((a, b) => a.pos - b.pos);
-  const finalStops = [];
-  const len = sortedStops.length;
-
-  for (let i = 0; i < len; i++) {
-    const cs = sortedStops[i];
-    const prev = sortedStops[(i - 1 + len) % len];
-    const next = sortedStops[(i + 1) % len];
-
-    if (cs.opacity === 0) {
-      // ✅ مرز تیز: دو stop شفاف دقیقاً در یک pos
-      if (prev) {
-        finalStops.push({
-          pos: cs.pos,
-          color: prev.color,
-          opacity: 0
-        });
-      }
-
-      if (next && (!prev || next.color !== prev.color)) {
-        finalStops.push({
-          pos: cs.pos,
-          color: next.color,
-          opacity: 0
-        });
-      }
-    } else {
-      finalStops.push(cs);
-    }
-  }
-
-  finalStops.sort((a, b) => a.pos - b.pos);
-
-  finalStops.forEach(cs => {
-    grad.addColorStop(
-      clamp(cs.pos / 100, 0, 1),
-      rgba(cs.color, cs.opacity / 100)
-    );
-  });
-
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-}
-
+// ========== HANDLE DRAWING ==========
 function drawHandle(s) {
   const sel = state.selected === s.id;
-  const cx = s.x * W;
-  const cy = s.y * H;
+  const cx = s.x * W, cy = s.y * H;
 
   if (s.type === "radial") drawRadialHandle(s, cx, cy, sel);
   else if (s.type === "linear") drawLinearHandle(s, cx, cy, sel);
@@ -2777,87 +2446,81 @@ function drawHandle(s) {
 }
 
 function drawRadialHandle(s, cx, cy, sel) {
-  const handleSize = getHandleSize(sel);
-  const lineWidth = getLineWidth(sel);
-  const scale = Math.max(W, H) / 800;
+  const hs = getHandleSize(sel);
+  const lw = getLineWidth(sel);
 
+  // Size indicator circle
   if (sel) {
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.2)";
-    ctx.setLineDash([8 * scale, 4 * scale]);
-    ctx.lineWidth = 2 * scale;
+    ctx.setLineDash([8 * _scale, 4 * _scale]);
+    ctx.lineWidth = 2 * _scale;
     ctx.beginPath();
     ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
 
+    // Glow
     ctx.save();
     ctx.shadowColor = s.color;
-    ctx.shadowBlur = 20 * scale;
+    ctx.shadowBlur = 20 * _scale;
     ctx.fillStyle = "rgba(255,255,255,0.1)";
     ctx.beginPath();
-    ctx.arc(cx, cy, handleSize * 1.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, hs * 1.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
+  // Main handle
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.5)";
-  ctx.shadowBlur = 8 * scale;
-  ctx.shadowOffsetY = 2 * scale;
+  ctx.shadowBlur = 8 * _scale;
+  ctx.shadowOffsetY = 2 * _scale;
 
   ctx.strokeStyle = s.color;
-  ctx.lineWidth = lineWidth;
+  ctx.lineWidth = lw;
   ctx.beginPath();
-  ctx.arc(cx, cy, handleSize, 0, Math.PI * 2);
+  ctx.arc(cx, cy, hs, 0, Math.PI * 2);
   ctx.stroke();
 
   ctx.fillStyle = s.color;
   ctx.beginPath();
-  ctx.arc(cx, cy, handleSize * 0.5, 0, Math.PI * 2);
+  ctx.arc(cx, cy, hs * 0.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
 function drawLinearHandle(s, cx, cy, sel) {
-  const handleSize = getHandleSize(sel);
-  const lineWidth = getLineWidth(sel);
-  const fontSize = getFontSize();
-  const scale = Math.max(W, H) / 800;
+  const hs = getHandleSize(sel);
+  const lw = getLineWidth(sel);
+  const fs = getFontSize();
 
-  const angleRad = ((s.angle - 90) * Math.PI) / 180;
-  const handleLen = Math.min(W, H) * 0.35;
-  const dx = Math.cos(angleRad) * handleLen;
-  const dy = Math.sin(angleRad) * handleLen;
-  const x1 = cx - dx,
-    y1 = cy - dy;
-  const x2 = cx + dx,
-    y2 = cy + dy;
+  const rad = ((s.angle - 90) * Math.PI) / 180;
+  const len = Math.min(W, H) * 0.35;
+  const dx = Math.cos(rad) * len, dy = Math.sin(rad) * len;
+  const x1 = cx - dx, y1 = cy - dy;
+  const x2 = cx + dx, y2 = cy + dy;
 
+  // Gradient line with glow
   ctx.save();
   if (sel) {
     ctx.shadowColor = "rgba(255,255,255,0.3)";
-    ctx.shadowBlur = 10 * scale;
+    ctx.shadowBlur = 10 * _scale;
   }
 
   const lineGrad = ctx.createLinearGradient(x1, y1, x2, y2);
   if (s.stops.length >= 2) {
-    s.stops.forEach((cs) => {
+    s.stops.forEach(cs => {
       lineGrad.addColorStop(cs.pos / 100, rgba(cs.color, sel ? 0.8 : 0.4));
     });
   } else {
-    lineGrad.addColorStop(
-      0,
-      sel ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"
-    );
-    lineGrad.addColorStop(
-      1,
-      sel ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)"
-    );
+    const alpha = sel ? 0.6 : 0.3;
+    lineGrad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    lineGrad.addColorStop(1, `rgba(255,255,255,${alpha})`);
   }
 
   ctx.strokeStyle = lineGrad;
-  ctx.lineWidth = lineWidth;
+  ctx.lineWidth = lw;
   ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(x1, y1);
@@ -2865,158 +2528,153 @@ function drawLinearHandle(s, cx, cy, sel) {
   ctx.stroke();
   ctx.restore();
 
-  s.stops.forEach((cs, i) => {
+  // Color stops
+  s.stops.forEach(cs => {
     const px = lerp(x1, x2, cs.pos / 100);
     const py = lerp(y1, y2, cs.pos / 100);
-    drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale);
+    drawColorStop(px, py, cs, sel, hs, lw);
 
     if (sel) {
-      drawStopLabel(
-        px,
-        py + handleSize + 12 * scale,
-        cs.pos + "%",
-        fontSize,
-        scale
-      );
+      drawStopLabel(px, py + hs + 12 * _scale, cs.pos + "%", fs);
     }
   });
 
-  drawCenterHandle(cx, cy, sel, handleSize * 0.6, lineWidth, scale);
+  drawCenterHandle(cx, cy, sel, hs * 0.6, lw);
 }
 
 function drawConicHandle(s, cx, cy, sel) {
-  const handleSize = getHandleSize(sel);
-  const lineWidth = getLineWidth(sel);
-  const fontSize = getFontSize();
-  const scale = Math.max(W, H) / 800;
-
+  const hs = getHandleSize(sel);
+  const lw = getLineWidth(sel);
+  const fs = getFontSize();
   const radius = Math.min(W, H) * 0.25;
-  const startAngleRad = ((s.startAngle - 90) * Math.PI) / 180;
+  const startRad = ((s.startAngle - 90) * Math.PI) / 180;
 
-  // ۱. دایره راهنما (خط‌چین)
+  // 1. Guide circle
   if (sel) {
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.2)";
-    ctx.setLineDash([5 * scale, 5 * scale]);
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.setLineDash([5 * _scale, 5 * _scale]);
+    ctx.lineWidth = 2 * _scale;
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
 
-  // ۲. خط شعاعی (نشانگر شروع زاویه)
-  const rotateX = cx + Math.cos(startAngleRad) * radius;
-  const rotateY = cy + Math.sin(startAngleRad) * radius;
+  // 2. Start angle line
+  const rx = cx + Math.cos(startRad) * radius;
+  const ry = cy + Math.sin(startRad) * radius;
 
   ctx.save();
   ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
-  ctx.lineWidth = lineWidth;
+  ctx.lineWidth = lw;
+  ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(cx, cy);
-  ctx.lineTo(rotateX, rotateY);
+  ctx.lineTo(rx, ry);
   ctx.stroke();
-  
-  // ۳. رسم یک هندل کوچک در انتهای خط برای چرخش (اختیاری)
-  if (sel) {
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(rotateX, rotateY, 4 * scale, 0, Math.PI * 2);
-      ctx.fill();
-  }
   ctx.restore();
 
-  // ۴. رسم Color Stops
-  s.stops.forEach((cs) => {
-    // زاویه هر استاپ نسبت به startAngle محاسبه می‌شود
-    const stopAngle = startAngleRad + (cs.pos / 100) * Math.PI * 2;
-    const px = cx + Math.cos(stopAngle) * radius;
-    const py = cy + Math.sin(stopAngle) * radius;
+  // 3. Rotation handle at line end
+  if (sel) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 6 * _scale;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(rx, ry, 4 * _scale * (IS_MOBILE ? 1.5 : 1), 0, Math.PI * 2); // ✅ بزرگ‌تر برای موبایل
+    ctx.fill();
+    ctx.restore();
+  }
 
-    drawColorStop(px, py, cs, sel, handleSize * 0.8, lineWidth, scale);
+  // 4. Color stops
+  s.stops.forEach(cs => {
+    const angle = startRad + (cs.pos / 100) * Math.PI * 2;
+    const px = cx + Math.cos(angle) * radius;
+    const py = cy + Math.sin(angle) * radius;
+
+    drawColorStop(px, py, cs, sel, hs * 0.8, lw);
 
     if (sel) {
-      const labelR = radius + handleSize + 20 * scale;
-      const lx = cx + Math.cos(stopAngle) * labelR;
-      const ly = cy + Math.sin(stopAngle) * labelR;
-      drawStopLabel(lx, ly, cs.pos + "%", fontSize, scale);
+      const lr = radius + hs + 20 * _scale;
+      drawStopLabel(
+        cx + Math.cos(angle) * lr,
+        cy + Math.sin(angle) * lr,
+        cs.pos + "%", fs
+      );
     }
   });
 
-  // ۵. دسته مرکزی برای جابجایی کل گرادینت
-  drawCenterHandle(cx, cy, sel, handleSize, lineWidth, scale, s.stops[0]?.color);
+  // 5. Center handle
+  drawCenterHandle(cx, cy, sel, hs, lw, s.stops[0]?.color);
 }
 
-function drawColorStop(px, py, cs, sel, handleSize, lineWidth, scale) {
+// ========== SHARED HANDLE COMPONENTS ==========
+function drawColorStop(px, py, cs, sel, hs, lw) {
+  // Glow effect
   if (sel) {
     ctx.save();
     ctx.shadowColor = cs.color;
-    ctx.shadowBlur = 15 * scale;
+    ctx.shadowBlur = 15 * _scale;
     ctx.fillStyle = "rgba(255,255,255,0.1)";
     ctx.beginPath();
-    ctx.arc(px, py, handleSize * 1.3, 0, Math.PI * 2);
+    ctx.arc(px, py, hs * 1.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 8 * scale;
-  ctx.shadowOffsetY = 3 * scale;
+  ctx.shadowBlur = 8 * _scale;
+  ctx.shadowOffsetY = 3 * _scale;
 
+  // Outer ring
   ctx.strokeStyle = cs.color;
-  ctx.lineWidth = lineWidth * 0.8;
+  ctx.lineWidth = lw * 0.8;
   ctx.beginPath();
-  ctx.arc(px, py, handleSize, 0, Math.PI * 2);
+  ctx.arc(px, py, hs, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Inner gradient fill
   const innerGrad = ctx.createRadialGradient(
-    px - handleSize * 0.2,
-    py - handleSize * 0.2,
-    0,
-    px,
-    py,
-    handleSize * 0.6
+    px - hs * 0.2, py - hs * 0.2, 0,
+    px, py, hs * 0.6
   );
   innerGrad.addColorStop(0, lighten(cs.color, 30));
   innerGrad.addColorStop(1, cs.color);
 
   ctx.fillStyle = innerGrad;
   ctx.beginPath();
-  ctx.arc(px, py, handleSize * 0.55, 0, Math.PI * 2);
+  ctx.arc(px, py, hs * 0.55, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-function drawStopLabel(x, y, text, fontSize, scale) {
+function drawStopLabel(x, y, text, fs) {
   ctx.save();
-  const padding = 4 * scale;
-  const bgWidth = fontSize * 2.5 + padding * 2;
-  const bgHeight = fontSize + padding * 2;
+  const pad = 4 * _scale;
+  const bw = fs * 2.5 + pad * 2;
+  const bh = fs + pad * 2;
 
   ctx.fillStyle = "rgba(0,0,0,0.6)";
   ctx.beginPath();
-  ctx.roundRect(
-    x - bgWidth / 2,
-    y - bgHeight / 2,
-    bgWidth,
-    bgHeight,
-    4 * scale
-  );
+  ctx.roundRect(x - bw / 2, y - bh / 2, bw, bh, 4 * _scale);
   ctx.fill();
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.fillStyle = "#fff";
+  ctx.font = `bold ${fs}px sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, x, y);
   ctx.restore();
 }
 
-function drawCenterHandle(cx, cy, sel, size, lineWidth, scale, color = null) {
+function drawCenterHandle(cx, cy, sel, size, lw, color) {
+  // Glow
   if (sel) {
     ctx.save();
     ctx.shadowColor = "rgba(255,255,255,0.5)";
-    ctx.shadowBlur = 12 * scale;
+    ctx.shadowBlur = 12 * _scale;
     ctx.fillStyle = "rgba(255,255,255,0.15)";
     ctx.beginPath();
     ctx.arc(cx, cy, size * 1.5, 0, Math.PI * 2);
@@ -3026,16 +2684,13 @@ function drawCenterHandle(cx, cy, sel, size, lineWidth, scale, color = null) {
 
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 6 * scale;
-  ctx.shadowOffsetY = 2 * scale;
+  ctx.shadowBlur = 6 * _scale;
+  ctx.shadowOffsetY = 2 * _scale;
 
+  // Gradient fill
   const outerGrad = ctx.createRadialGradient(
-    cx - size * 0.3,
-    cy - size * 0.3,
-    0,
-    cx,
-    cy,
-    size
+    cx - size * 0.3, cy - size * 0.3, 0,
+    cx, cy, size
   );
   outerGrad.addColorStop(0, "#ffffff");
   outerGrad.addColorStop(1, "#e0e0e0");
@@ -3046,89 +2701,30 @@ function drawCenterHandle(cx, cy, sel, size, lineWidth, scale, color = null) {
   ctx.fill();
   ctx.restore();
 
+  // Border
   ctx.strokeStyle = sel ? "rgba(100,100,100,0.5)" : "rgba(150,150,150,0.3)";
-  ctx.lineWidth = lineWidth * 0.5;
+  ctx.lineWidth = lw * 0.5;
   ctx.beginPath();
   ctx.arc(cx, cy, size, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Cross icon when selected
   if (sel) {
+    const cs = size * 0.5;
     ctx.strokeStyle = "rgba(100,100,100,0.6)";
-    ctx.lineWidth = 2 * scale;
+    ctx.lineWidth = 2 * _scale;
     ctx.lineCap = "round";
-
-    const crossSize = size * 0.5;
     ctx.beginPath();
-    ctx.moveTo(cx - crossSize, cy);
-    ctx.lineTo(cx + crossSize, cy);
-    ctx.moveTo(cx, cy - crossSize);
-    ctx.lineTo(cx, cy + crossSize);
+    ctx.moveTo(cx - cs, cy);
+    ctx.lineTo(cx + cs, cy);
+    ctx.moveTo(cx, cy - cs);
+    ctx.lineTo(cx, cy + cs);
     ctx.stroke();
   }
 }
 
-function drawConicHandle(s, cx, cy, sel) {
-  const handleSize = getHandleSize(sel);
-  const lineWidth = getLineWidth(sel);
-  const fontSize = getFontSize();
-  const scale = Math.max(W, H) / 800;
-
-  const radius = Math.min(W, H) * 0.25;
-  const startAngleRad = ((s.startAngle - 90) * Math.PI) / 180;
-
-  // ۱. دایره راهنما (خط‌چین)
-  if (sel) {
-    ctx.save();
-    ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
-    ctx.setLineDash([5 * scale, 5 * scale]);
-    ctx.lineWidth = 2 * scale;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // ۲. خط شعاعی (نشانگر شروع زاویه)
-  const rotateX = cx + Math.cos(startAngleRad) * radius;
-  const rotateY = cy + Math.sin(startAngleRad) * radius;
-
-  ctx.save();
-  ctx.strokeStyle = sel ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)";
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(rotateX, rotateY);
-  ctx.stroke();
-  ctx.restore();
-
-  // ✅ ۳. هندل چرخش در انتهای خط شعاعی
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 6 * scale;
-  ctx.shadowOffsetY = 2 * scale;
-
-
-  // ۴. رسم Color Stops
-  s.stops.forEach((cs) => {
-    const stopAngle = startAngleRad + (cs.pos / 100) * Math.PI * 2;
-    const px = cx + Math.cos(stopAngle) * radius;
-    const py = cy + Math.sin(stopAngle) * radius;
-
-    drawColorStop(px, py, cs, sel, handleSize * 0.8, lineWidth, scale);
-
-    if (sel) {
-      const labelR = radius + handleSize + 20 * scale;
-      const lx = cx + Math.cos(stopAngle) * labelR;
-      const ly = cy + Math.sin(stopAngle) * labelR;
-      drawStopLabel(lx, ly, cs.pos + "%", fontSize, scale);
-    }
-  });
-
-  drawCenterHandle(cx, cy, sel, handleSize, lineWidth, scale, s.stops[0]?.color);
-}
+// ========== THROTTLED DRAW ==========
 let drawRAF = null;
-
 function throttledDraw() {
   if (drawRAF) return;
   drawRAF = requestAnimationFrame(() => {
@@ -3136,7 +2732,6 @@ function throttledDraw() {
     draw();
   });
 }
-
 // ========== RESIZE HANDLES ==========
 const widthHandle = document.querySelector(".resize-h");
 const heightHandle = document.querySelector(".resize-w");
@@ -8052,50 +7647,46 @@ function drawGradForExport(s, ctx, width, height) {
 
 // ========== EXPORT AS SVG - FIXED ==========
 // ========== EXPORT AS SVG - PIXEL PERFECT ==========
+// ========== RASTER SVG EXPORT (بهینه‌شده) ==========
 async function exportAsSVG() {
   const width = state.canvasWidth;
   const height = state.canvasHeight;
-  
-  // ========== 1. ساخت Canvas موقت و رندر کامل ==========
+
   const exportCanvas = document.createElement('canvas');
   exportCanvas.width = width;
   exportCanvas.height = height;
   const exportCtx = exportCanvas.getContext('2d');
-  
-  // رندر کامل صحنه (بدون هندل‌ها)
+
   await renderSceneToContext(exportCtx, width, height);
-  
-  // ========== 2. تبدیل به Base64 ==========
-  const imageData = exportCanvas.toDataURL('image/png');
-  
-  // ========== 3. ساخت SVG با تصویر embed شده ==========
+
+  // ✅ انتخاب هوشمند فرمت تصویر
+  const needsAlpha = !state.bgEnabled || state.bgAlpha < 100;
+  let imageData;
+
+  if (needsAlpha) {
+    // فقط وقتی شفافیت لازمه PNG بزن
+    imageData = exportCanvas.toDataURL('image/png');
+  } else {
+    // ✅ اول WebP رو تست کن (کوچکترین)
+    const webp = exportCanvas.toDataURL('image/webp', 0.88);
+    const jpeg = exportCanvas.toDataURL('image/jpeg', 0.90);
+
+    if (webp.startsWith('data:image/webp') && webp.length < jpeg.length) {
+      imageData = webp;
+    } else {
+      imageData = jpeg;
+    }
+  }
+
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" 
-     xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="${width}" 
-     height="${height}" 
-     viewBox="0 0 ${width} ${height}">
-  <title>Gradient Export</title>
-  <desc>Generated by Gradient Editor</desc>
-  <image width="${width}" height="${height}" xlink:href="${imageData}"/>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+<image width="${width}" height="${height}" xlink:href="${imageData}"/>
 </svg>`;
 
-  // ========== 4. دانلود ==========
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const filename = `gradient-${width}x${height}.svg`;
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadFile(svg, "image/svg+xml;charset=utf-8", `gradient-${width}x${height}.svg`);
 }
 
-// ========== رندر یک گرادینت ==========
+// ========== رندر گرادینت (بدون تغییر) ==========
 function renderGradient(s, ctx, width, height) {
   const cx = s.x * width;
   const cy = s.y * height;
@@ -8115,7 +7706,7 @@ function renderGradient(s, ctx, width, height) {
     ctx.beginPath();
     ctx.arc(cx, cy, s.size, 0, Math.PI * 2);
     ctx.fill();
-  } 
+  }
   else if (s.type === "linear") {
     const angleRad = ((s.angle - 90) * Math.PI) / 180;
     const diagonal = Math.hypot(width, height);
@@ -8123,9 +7714,8 @@ function renderGradient(s, ctx, width, height) {
     const my = height / 2;
     const dx = (Math.cos(angleRad) * diagonal) / 2;
     const dy = (Math.sin(angleRad) * diagonal) / 2;
-    
-    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
 
+    const grad = ctx.createLinearGradient(mx - dx, my - dy, mx + dx, my + dy);
     const fixedStops = fixTransparentStops(s.stops);
     fixedStops.forEach((cs) => {
       grad.addColorStop(
@@ -8136,11 +7726,10 @@ function renderGradient(s, ctx, width, height) {
 
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
-  } 
+  }
   else if (s.type === "conic") {
     const startAngle = ((s.startAngle - 90) * Math.PI) / 180;
     const grad = ctx.createConicGradient(startAngle, cx, cy);
-
     const fixedStops = fixTransparentStops(s.stops);
     fixedStops.forEach((cs) => {
       grad.addColorStop(
@@ -8154,21 +7743,35 @@ function renderGradient(s, ctx, width, height) {
   }
 }
 
-// ========== اطمینان از وجود تابع ==========
 function getCanvasBlendMode(cssBlendMode) {
-  if (!cssBlendMode || cssBlendMode === 'normal') {
-    return 'source-over';
-  }
+  if (!cssBlendMode || cssBlendMode === 'normal') return 'source-over';
   return cssBlendMode;
 }
 
-// ========== EXPORT AS VECTOR SVG ==========
+// ========== HELPER: دانلود فایل ==========
+function downloadFile(content, mimeType, filename) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ========== HELPER: فرمت عدد کوتاه ==========
+function n(val, decimals = 2) {
+  const num = +parseFloat(val).toFixed(decimals);
+  return String(num); // حذف صفرهای انتهایی
+}
+
+// ========== VECTOR SVG EXPORT (بهینه‌شده) ==========
 function exportAsVectorSVG() {
   const width = state.canvasWidth;
   const height = state.canvasHeight;
   const visibleStops = state.stops.filter((s) => s.visible);
-  
-  // ✅ ترتیب معکوس - مثل Canvas
   const reversedStops = [...visibleStops].reverse();
 
   let defs = "";
@@ -8176,361 +7779,216 @@ function exportAsVectorSVG() {
 
   // ========== 1. تعریف گرادینت‌ها ==========
   reversedStops.forEach((s, i) => {
-    const id = `grad${i}`;
+    const id = `g${i}`;
 
     if (s.type === "radial") {
-      const cx = (s.x * width).toFixed(2);
-      const cy = (s.y * height).toFixed(2);
+      const cx = n(s.x * width);
+      const cy = n(s.y * height);
       const rgb = hexToRgb(s.color);
-      const opacity = (s.opacity / 100).toFixed(3);
+      const op = n(s.opacity / 100, 3);
       const solidEnd = Math.max(0, Math.min(1, 1 - (s.feather || 60) / 100));
+      const c = `${rgb.r},${rgb.g},${rgb.b}`;
 
-      defs += `
-    <radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${s.size}">
-      <stop offset="0%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
+      defs += `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${s.size}">`;
+      defs += `<stop offset="0" stop-color="rgb(${c})" stop-opacity="${op}"/>`;
       if (solidEnd > 0.01 && solidEnd < 0.99) {
-        defs += `
-      <stop offset="${(solidEnd * 100).toFixed(1)}%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="${opacity}"/>`;
+        defs += `<stop offset="${n(solidEnd, 3)}" stop-color="rgb(${c})" stop-opacity="${op}"/>`;
       }
-      defs += `
-      <stop offset="100%" stop-color="rgb(${rgb.r},${rgb.g},${rgb.b})" stop-opacity="0"/>
-    </radialGradient>`;
+      defs += `<stop offset="1" stop-color="rgb(${c})" stop-opacity="0"/>`;
+      defs += `</radialGradient>`;
     }
     else if (s.type === "linear") {
       const angleRad = ((s.angle - 90) * Math.PI) / 180;
-      const x1 = (50 - Math.cos(angleRad) * 50).toFixed(2);
-      const y1 = (50 - Math.sin(angleRad) * 50).toFixed(2);
-      const x2 = (50 + Math.cos(angleRad) * 50).toFixed(2);
-      const y2 = (50 + Math.sin(angleRad) * 50).toFixed(2);
+      const cos = Math.cos(angleRad);
+      const sin = Math.sin(angleRad);
 
-      defs += `
-    <linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">`;
-      
-      const fixedStops = fixTransparentStops(s.stops);
-      fixedStops.forEach((cs) => {
+      defs += `<linearGradient id="${id}" x1="${n(50 - cos * 50)}%" y1="${n(50 - sin * 50)}%" x2="${n(50 + cos * 50)}%" y2="${n(50 + sin * 50)}%">`;
+
+      fixTransparentStops(s.stops).forEach((cs) => {
         const c = hexToRgb(cs.color);
-        defs += `
-      <stop offset="${cs.pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${(cs.opacity / 100).toFixed(3)}"/>`;
+        defs += `<stop offset="${cs.pos}%" stop-color="rgb(${c.r},${c.g},${c.b})" stop-opacity="${n(cs.opacity / 100, 3)}"/>`;
       });
-      defs += `
-    </linearGradient>`;
+      defs += `</linearGradient>`;
     }
   });
 
   // ========== 2. Noise Filter ==========
   if (noiseState.enabled && noiseState.opacity > 0) {
-    defs += `
-    <filter id="noise" x="0%" y="0%" width="100%" height="100%">
-      <feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch"/>
-      <feColorMatrix type="saturate" values="0"/>
-    </filter>`;
+    defs += `<filter id="noise" x="0%" y="0%" width="100%" height="100%">` +
+      `<feTurbulence type="fractalNoise" baseFrequency="${noiseState.frequency}" numOctaves="4" stitchTiles="stitch"/>` +
+      `<feColorMatrix type="saturate" values="0"/>` +
+      `</filter>`;
   }
 
-  // ========== 3. پس‌زمینه ==========
+  // ========== 3. فیلتر CSS ==========
+  if (hasActiveFilters()) {
+    defs += generateSVGFilterFromCSS();
+  }
+
+  // ========== 4. پس‌زمینه ==========
   if (state.bgEnabled) {
     const bg = hexToRgb(state.bgColor);
-    content += `  <rect id="bg" width="100%" height="100%" fill="rgb(${bg.r},${bg.g},${bg.b})" fill-opacity="${(state.bgAlpha / 100).toFixed(3)}"/>\n`;
+    content += `<rect width="100%" height="100%" fill="rgb(${bg.r},${bg.g},${bg.b})" fill-opacity="${n(state.bgAlpha / 100, 3)}"/>`;
   }
 
-  // ========== 4. گرادینت‌ها ==========
+  // ========== 5. گرادینت‌ها ==========
   const hasBgBlend = state.bgEnabled && state.bgBlendMode && state.bgBlendMode !== 'normal';
-  
-  if (hasBgBlend) {
-    content += `  <g style="mix-blend-mode:${state.bgBlendMode}">\n`;
+  const wrapFilter = hasActiveFilters();
+
+  if (hasBgBlend || wrapFilter) {
+    const styles = [];
+    if (hasBgBlend) styles.push(`mix-blend-mode:${state.bgBlendMode}`);
+    const filterAttr = wrapFilter ? ' filter="url(#cssFilter)"' : '';
+    content += `<g style="${styles.join(';')}"${filterAttr}>`;
   }
-  
+
   reversedStops.forEach((s, i) => {
-    const id = `grad${i}`;
+    const id = `g${i}`;
     const blend = s.blendMode || 'screen';
-    const indent = hasBgBlend ? '    ' : '  ';
-    
+
     if (s.type === "radial") {
-      content += `${indent}<circle cx="${(s.x * width).toFixed(2)}" cy="${(s.y * height).toFixed(2)}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode:${blend}"/>\n`;
+      content += `<circle cx="${n(s.x * width)}" cy="${n(s.y * height)}" r="${s.size}" fill="url(#${id})" style="mix-blend-mode:${blend}"/>`;
     }
     else if (s.type === "linear") {
-      content += `${indent}<rect width="100%" height="100%" fill="url(#${id})" style="mix-blend-mode:${blend}"/>\n`;
+      content += `<rect width="100%" height="100%" fill="url(#${id})" style="mix-blend-mode:${blend}"/>`;
     }
     else if (s.type === "conic") {
-      const x = (s.x * 100).toFixed(2);
-      const y = (s.y * 100).toFixed(2);
-      const fixedStops = fixTransparentStops(s.stops);
-      const stopsCSS = fixedStops.map(cs => {
+      const x = n(s.x * 100);
+      const y = n(s.y * 100);
+      const stopsCSS = fixTransparentStops(s.stops).map(cs => {
         const c = hexToRgb(cs.color);
-        return `rgba(${c.r},${c.g},${c.b},${(cs.opacity/100).toFixed(3)}) ${cs.pos}%`;
+        return `rgba(${c.r},${c.g},${c.b},${n(cs.opacity / 100, 3)}) ${cs.pos}%`;
       }).join(',');
-      
-      content += `${indent}<foreignObject width="100%" height="100%">
-${indent}  <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%,${stopsCSS});mix-blend-mode:${blend}"></div>
-${indent}</foreignObject>\n`;
+
+      content += `<foreignObject width="100%" height="100%">` +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;background:conic-gradient(from ${s.startAngle}deg at ${x}% ${y}%,${stopsCSS});mix-blend-mode:${blend}"></div>` +
+        `</foreignObject>`;
     }
   });
-  
-  if (hasBgBlend) {
-    content += `  </g>\n`;
+
+  if (hasBgBlend || wrapFilter) {
+    content += `</g>`;
   }
 
-  // ========== 5. نویز ==========
+  // ========== 6. نویز ==========
   if (noiseState.enabled && noiseState.opacity > 0) {
-    content += `  <rect width="100%" height="100%" fill="white" filter="url(#noise)" opacity="${(noiseState.opacity / 100).toFixed(3)}" style="mix-blend-mode:${noiseState.blend}"/>\n`;
-  }
-
-  // ========== 6. اخطار فیلتر ==========
-  let filterNote = "";
-  if (hasActiveFilters()) {
-    filterNote = `
-  <!-- ⚠️ CSS Filters applied in editor: ${getFilterString()} -->
-  <!-- For accurate results, use PNG/JPG export or apply CSS filter to this SVG -->`;
+    content += `<rect width="100%" height="100%" fill="#fff" filter="url(#noise)" opacity="${n(noiseState.opacity / 100, 3)}" style="mix-blend-mode:${noiseState.blend}"/>`;
   }
 
   // ========== 7. SVG نهایی ==========
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" 
-     xmlns:xhtml="http://www.w3.org/1999/xhtml"
-     width="${width}" height="${height}" 
-     viewBox="0 0 ${width} ${height}">${filterNote}
-  <defs>${defs}
-  </defs>
-${content}</svg>`;
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+<defs>${defs}</defs>
+${content}
+</svg>`;
 
-  // Download
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `gradient-${width}x${height}.svg`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadFile(svg, "image/svg+xml;charset=utf-8", `gradient-${width}x${height}.svg`);
 }
-// ========== FIX: generateSVGFilterFromCSS ==========
+
+// ========== SVG Filter از CSS (فقط یکبار - بهینه) ==========
 function generateSVGFilterFromCSS() {
   if (!hasActiveFilters()) return '';
-  
-  let filterContent = '';
-  let lastResult = 'SourceGraphic';
-  let resultIndex = 0;
-  
+
+  let parts = [];
+  let last = 'SourceGraphic';
+  let idx = 0;
+
+  function nextResult(prefix) {
+    const r = `${prefix}${idx++}`;
+    return r;
+  }
+
   // 1. Brightness
   if (filterState.brightness !== 100) {
-    const brightness = filterState.brightness / 100;
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="brightness${resultIndex}">
-        <feFuncR type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
-        <feFuncG type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
-        <feFuncB type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
-      </feComponentTransfer>`;
-    lastResult = `brightness${resultIndex}`;
-    resultIndex++;
+    const v = n(filterState.brightness / 100, 3);
+    const r = nextResult('b');
+    parts.push(`<feComponentTransfer in="${last}" result="${r}">` +
+      `<feFuncR type="linear" slope="${v}" intercept="0"/>` +
+      `<feFuncG type="linear" slope="${v}" intercept="0"/>` +
+      `<feFuncB type="linear" slope="${v}" intercept="0"/>` +
+      `</feComponentTransfer>`);
+    last = r;
   }
-  
+
   // 2. Contrast
   if (filterState.contrast !== 100) {
-    const contrast = filterState.contrast / 100;
-    const intercept = (0.5 - 0.5 * contrast).toFixed(4);
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="contrast${resultIndex}">
-        <feFuncR type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept}"/>
-        <feFuncG type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept}"/>
-        <feFuncB type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept}"/>
-      </feComponentTransfer>`;
-    lastResult = `contrast${resultIndex}`;
-    resultIndex++;
+    const slope = n(filterState.contrast / 100, 3);
+    const intercept = n(0.5 - 0.5 * filterState.contrast / 100, 3);
+    const r = nextResult('c');
+    parts.push(`<feComponentTransfer in="${last}" result="${r}">` +
+      `<feFuncR type="linear" slope="${slope}" intercept="${intercept}"/>` +
+      `<feFuncG type="linear" slope="${slope}" intercept="${intercept}"/>` +
+      `<feFuncB type="linear" slope="${slope}" intercept="${intercept}"/>` +
+      `</feComponentTransfer>`);
+    last = r;
   }
-  
+
   // 3. Saturate
   if (filterState.saturate !== 100) {
-    filterContent += `
-      <feColorMatrix type="saturate" values="${(filterState.saturate / 100).toFixed(3)}" in="${lastResult}" result="sat${resultIndex}"/>`;
-    lastResult = `sat${resultIndex}`;
-    resultIndex++;
+    const r = nextResult('s');
+    parts.push(`<feColorMatrix type="saturate" values="${n(filterState.saturate / 100, 3)}" in="${last}" result="${r}"/>`);
+    last = r;
   }
-  
+
   // 4. Hue-rotate
   if (filterState.hue !== 0) {
-    filterContent += `
-      <feColorMatrix type="hueRotate" values="${filterState.hue}" in="${lastResult}" result="hue${resultIndex}"/>`;
-    lastResult = `hue${resultIndex}`;
-    resultIndex++;
+    const r = nextResult('h');
+    parts.push(`<feColorMatrix type="hueRotate" values="${filterState.hue}" in="${last}" result="${r}"/>`);
+    last = r;
   }
-  
+
   // 5. Grayscale
   if (filterState.grayscale > 0) {
     const g = 1 - filterState.grayscale / 100;
-    const matrix = [
-      (0.2126 + 0.7874 * g).toFixed(4), (0.7152 - 0.7152 * g).toFixed(4), (0.0722 - 0.0722 * g).toFixed(4), 0, 0,
-      (0.2126 - 0.2126 * g).toFixed(4), (0.7152 + 0.2848 * g).toFixed(4), (0.0722 - 0.0722 * g).toFixed(4), 0, 0,
-      (0.2126 - 0.2126 * g).toFixed(4), (0.7152 - 0.7152 * g).toFixed(4), (0.0722 + 0.9278 * g).toFixed(4), 0, 0,
-      0, 0, 0, 1, 0
-    ].join(' ');
-    
-    filterContent += `
-      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="gray${resultIndex}"/>`;
-    lastResult = `gray${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // 6. Sepia
-  if (filterState.sepia > 0) {
-    const s = 1 - filterState.sepia / 100;
-    const matrix = [
-      (0.393 + 0.607 * s).toFixed(4), (0.769 - 0.769 * s).toFixed(4), (0.189 - 0.189 * s).toFixed(4), 0, 0,
-      (0.349 - 0.349 * s).toFixed(4), (0.686 + 0.314 * s).toFixed(4), (0.168 - 0.168 * s).toFixed(4), 0, 0,
-      (0.272 - 0.272 * s).toFixed(4), (0.534 - 0.534 * s).toFixed(4), (0.131 + 0.869 * s).toFixed(4), 0, 0,
-      0, 0, 0, 1, 0
-    ].join(' ');
-    
-    filterContent += `
-      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="sepia${resultIndex}"/>`;
-    lastResult = `sepia${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // 7. Invert
-  if (filterState.invert > 0) {
-    const i = filterState.invert / 100;
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="inv${resultIndex}">
-        <feFuncR type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
-        <feFuncG type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
-        <feFuncB type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
-      </feComponentTransfer>`;
-    lastResult = `inv${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // 8. Blur
-  if (filterState.blur > 0) {
-    filterContent += `
-      <feGaussianBlur stdDeviation="${filterState.blur}" in="${lastResult}" result="blur${resultIndex}"/>`;
-    lastResult = `blur${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // Filter region extension for blur
-  const pad = filterState.blur > 0 ? Math.ceil(filterState.blur * 3 / 100 * 100) + 10 : 0;
-  
-  return `
-    <filter id="cssFilter" x="-${pad}%" y="-${pad}%" width="${100 + pad * 2}%" height="${100 + pad * 2}%">${filterContent}
-    </filter>`;
-}
-
-// ========== HELPER: Generate SVG Filter from CSS ==========
-function generateSVGFilterFromCSS() {
-  if (!hasActiveFilters()) return '';
-  
-  let filterContent = '';
-  let lastResult = 'SourceGraphic';
-  let resultIndex = 0;
-  
-  // ========== ترتیب صحیح - مطابق CSS ==========
-  
-  // 1. Brightness
-  if (filterState.brightness !== 100) {
-    const brightness = filterState.brightness / 100;
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="brightness${resultIndex}">
-        <feFuncR type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
-        <feFuncG type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
-        <feFuncB type="linear" slope="${brightness.toFixed(4)}" intercept="0"/>
-      </feComponentTransfer>`;
-    lastResult = `brightness${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // 2. Contrast
-  if (filterState.contrast !== 100) {
-    const contrast = filterState.contrast / 100;
-    const intercept = (-(0.5 * contrast) + 0.5);
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="contrast${resultIndex}">
-        <feFuncR type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
-        <feFuncG type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
-        <feFuncB type="linear" slope="${contrast.toFixed(4)}" intercept="${intercept.toFixed(4)}"/>
-      </feComponentTransfer>`;
-    lastResult = `contrast${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // 3. Saturate
-  if (filterState.saturate !== 100) {
-    filterContent += `
-      <feColorMatrix type="saturate" values="${(filterState.saturate / 100).toFixed(3)}" in="${lastResult}" result="sat${resultIndex}"/>`;
-    lastResult = `sat${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // 4. Hue-rotate
-  if (filterState.hue !== 0) {
-    filterContent += `
-      <feColorMatrix type="hueRotate" values="${filterState.hue}" in="${lastResult}" result="hue${resultIndex}"/>`;
-    lastResult = `hue${resultIndex}`;
-    resultIndex++;
-  }
-  
-  // 5. Grayscale
-  if (filterState.grayscale > 0) {
-    const g = 1 - filterState.grayscale / 100;
-    const matrix = [
+    const m = [
       0.2126 + 0.7874 * g, 0.7152 - 0.7152 * g, 0.0722 - 0.0722 * g, 0, 0,
       0.2126 - 0.2126 * g, 0.7152 + 0.2848 * g, 0.0722 - 0.0722 * g, 0, 0,
       0.2126 - 0.2126 * g, 0.7152 - 0.7152 * g, 0.0722 + 0.9278 * g, 0, 0,
       0, 0, 0, 1, 0
-    ].map(v => v.toFixed(4)).join(' ');
-    
-    filterContent += `
-      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="gray${resultIndex}"/>`;
-    lastResult = `gray${resultIndex}`;
-    resultIndex++;
+    ].map(v => n(v, 3)).join(' ');
+    const r = nextResult('gr');
+    parts.push(`<feColorMatrix type="matrix" values="${m}" in="${last}" result="${r}"/>`);
+    last = r;
   }
-  
+
   // 6. Sepia
   if (filterState.sepia > 0) {
     const s = 1 - filterState.sepia / 100;
-    const matrix = [
+    const m = [
       0.393 + 0.607 * s, 0.769 - 0.769 * s, 0.189 - 0.189 * s, 0, 0,
       0.349 - 0.349 * s, 0.686 + 0.314 * s, 0.168 - 0.168 * s, 0, 0,
       0.272 - 0.272 * s, 0.534 - 0.534 * s, 0.131 + 0.869 * s, 0, 0,
       0, 0, 0, 1, 0
-    ].map(v => v.toFixed(4)).join(' ');
-    
-    filterContent += `
-      <feColorMatrix type="matrix" values="${matrix}" in="${lastResult}" result="sepia${resultIndex}"/>`;
-    lastResult = `sepia${resultIndex}`;
-    resultIndex++;
+    ].map(v => n(v, 3)).join(' ');
+    const r = nextResult('sp');
+    parts.push(`<feColorMatrix type="matrix" values="${m}" in="${last}" result="${r}"/>`);
+    last = r;
   }
-  
-  // 7. Invert (قبل از blur)
+
+  // 7. Invert
   if (filterState.invert > 0) {
     const i = filterState.invert / 100;
-    filterContent += `
-      <feComponentTransfer in="${lastResult}" result="inv${resultIndex}">
-        <feFuncR type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
-        <feFuncG type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
-        <feFuncB type="table" tableValues="${(1-i).toFixed(3)} ${i.toFixed(3)}"/>
-      </feComponentTransfer>`;
-    lastResult = `inv${resultIndex}`;
-    resultIndex++;
+    const r = nextResult('i');
+    parts.push(`<feComponentTransfer in="${last}" result="${r}">` +
+      `<feFuncR type="table" tableValues="${n(1 - i, 3)} ${n(i, 3)}"/>` +
+      `<feFuncG type="table" tableValues="${n(1 - i, 3)} ${n(i, 3)}"/>` +
+      `<feFuncB type="table" tableValues="${n(1 - i, 3)} ${n(i, 3)}"/>` +
+      `</feComponentTransfer>`);
+    last = r;
   }
-  
-  // 8. Blur (آخر - چون سنگینه)
+
+  // 8. Blur
   if (filterState.blur > 0) {
-    filterContent += `
-      <feGaussianBlur stdDeviation="${filterState.blur}" in="${lastResult}" result="blur${resultIndex}"/>`;
-    lastResult = `blur${resultIndex}`;
-    resultIndex++;
+    const r = nextResult('bl');
+    parts.push(`<feGaussianBlur stdDeviation="${filterState.blur}" in="${last}" result="${r}"/>`);
+    last = r;
   }
-  
-  // Extend filter region for blur
-  const blurPadding = filterState.blur > 0 ? Math.ceil(filterState.blur * 3) : 0;
-  const padPercent = blurPadding > 0 ? (blurPadding / 100 * 100 + 10) : 0;
-  
-  return `
-    <filter id="cssFilter" x="-${padPercent}%" y="-${padPercent}%" width="${100 + padPercent * 2}%" height="${100 + padPercent * 2}%">${filterContent}
-    </filter>`;
+
+  const pad = filterState.blur > 0 ? Math.ceil(filterState.blur * 3) + 10 : 0;
+
+  return `<filter id="cssFilter" x="-${pad}%" y="-${pad}%" width="${100 + pad * 2}%" height="${100 + pad * 2}%">${parts.join('')}</filter>`;
 }
 
-// Make sure hasNonBlurFilters exists
 function hasNonBlurFilters() {
   return filterState.enabled && (
     filterState.brightness !== 100 ||

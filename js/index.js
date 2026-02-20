@@ -1,6 +1,6 @@
   // ========== CONFIG ==========
   const PRESETS_URL = "./presets.json";
-  const EDITOR_URL = "./Gradient-Designer.html";
+  const EDITOR_URL = "./editor.html";
   const DEFAULT_THUMBNAIL = "./thumbnails/default.webp"; // عکس پیش‌فرض
 
   // ========== GALLERY ==========

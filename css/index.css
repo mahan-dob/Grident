@@ -35,7 +35,6 @@
 }
 
 .header-name {
-  font-family: "Pacifico", cursive;
   font-size: 1.5rem;
   line-height: 3rem;
   font-weight: normal;
@@ -252,7 +251,6 @@
 }
 
 .hero-title {
-  font-family: "Pacifico", cursive;
   font-size: 5rem;
   line-height: 10rem;
   font-weight: normal;
@@ -1068,39 +1066,28 @@
     --header-height: 60px;
   }
   
-  /* Header Mobile */
   .header {
     padding: 0 16px;
   }
-  
-  .header-name {
-    display: none;
-  }
-  
-   /* Hero Container */
+
    .hero-section {
     padding: 20px 16px 100px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    
-    /* سبک‌تر کردن انیمیشن برای موبایل */
-    animation: 
+        animation: 
       moveGradients 35s ease-in-out infinite,
       pulseLight 8s ease-in-out infinite alternate;
   }
   
-  /* کاهش شدت فیلترها برای پرفورمنس بهتر */
   .hero-section {
     filter: brightness(var(--b)) contrast(120%) saturate(110%);
   }
 
-  /* Hero Content */
   .hero-content {
     padding: 0;
   }
 
-  /* Hero Header */
   .hero-header {
     display: flex;
     flex-direction: column;
@@ -1132,7 +1119,6 @@
     max-width: 280px;
   }
 
-  /* Features List - Compact Layout */
   .features-list {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1148,8 +1134,6 @@
     padding: 16px 12px;
     gap: 10px;
     border-radius: 16px;
-    
-    /* حذف انیمیشن slide-in برای موبایل */
     transform: none;
     opacity: 1;
     animation: fadeIn 0.4s ease forwards;
@@ -1186,13 +1170,11 @@
     line-height: 1.4;
   }
 
-  /* Tagline */
   .hero-tagline {
     text-align: center;
     font-size: 1.1rem;
     margin-top: 20px;
   }
-
 
   .btn-enter-editor {
     left: 12px;
@@ -1200,7 +1182,6 @@
     justify-content: center;
   }
 
-  /* Floating animation - کاهش حرکت برای موبایل */
   .floating {
     animation: float-mobile 4s ease-in-out infinite;
   }
@@ -1210,7 +1191,6 @@
     50% { transform: translateY(-5px); }
   }
   
-  /* Main Mobile */
   .main {
     padding: 40px 16px;
   }
@@ -1227,7 +1207,7 @@
   .site-footer{
     padding-block: 18px;
   }
-  /* Footer Mobile */
+
   .footer-content {
     grid-template-columns: 1fr;
     gap: 32px;
@@ -1285,11 +1265,16 @@
   }
 
   .feature-content p {
-    display: none; /* مخفی کردن توضیحات در حالت افقی */
+    display: none; 
   }
 }
 
 @media (max-width: 480px) {
+  
+  .header-name {
+    display: none;
+  }
+  
   .nav-list{
     gap: 12px;
   }
@@ -1312,7 +1297,6 @@
     max-width: 240px;
   }
 
-  /* Single Column Features برای صفحات خیلی کوچک */
   .features-list {
     grid-template-columns: 1fr;
     gap: 10px;

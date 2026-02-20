@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
-Sitemap: https://yourwebsite.com/sitemap.xml
+Sitemap: https://Olexion.com/sitemap.xml
 
 User-agent: *
 Disallow: /admin/
